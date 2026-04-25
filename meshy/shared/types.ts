@@ -15,6 +15,18 @@ export type TorrentStatus =
     | 'metadata-failed'
     | 'files-not-found';
 
+// ─── TorrentFileInfo ──────────────────────────────────────────────────────────
+
+/** Representação de um arquivo individual dentro de um torrent */
+export interface TorrentFileInfo {
+    index: number;        // índice no array torrent.files
+    name: string;         // nome do arquivo (ex: "video.mp4")
+    path: string;         // caminho relativo (ex: "Movie/video.mp4")
+    length: number;       // tamanho em bytes
+    downloaded: number;   // bytes já baixados
+    selected: boolean;    // se o arquivo está selecionado para download
+}
+
 // ─── DownloadItem ─────────────────────────────────────────────────────────────
 
 export interface DownloadItem {
@@ -33,6 +45,8 @@ export interface DownloadItem {
     addedAt: number;       // timestamp ms
     completedAt?: number;  // timestamp ms
     elapsedMs?: number;
+    selectedFileCount?: number;   // quantidade de arquivos selecionados
+    totalFileCount?: number;      // quantidade total de arquivos
 }
 
 // ─── PersistedDownloadItem ────────────────────────────────────────────────────
@@ -50,6 +64,7 @@ export interface PersistedDownloadItem {
     elapsedMs?: number;
     magnetUri?: string;
     torrentFilePath?: string;
+    selectedFileIndices?: number[];  // índices dos arquivos selecionados
 }
 
 // ─── AppSettings ──────────────────────────────────────────────────────────────
@@ -79,6 +94,9 @@ export interface MeshyAPI {
     getSettings(): Promise<IPCResponse<AppSettings>>;
     setSettings(partial: Partial<AppSettings>): Promise<IPCResponse<AppSettings>>;
     selectFolder(): Promise<IPCResponse<string>>;
+    // File selection
+    getFiles(infoHash: string): Promise<IPCResponse<TorrentFileInfo[]>>;
+    setFileSelection(infoHash: string, selectedIndices: number[]): Promise<IPCResponse<TorrentFileInfo[]>>;
     // Events
     onProgress(callback: (items: DownloadItem[]) => void): () => void;
     onError(callback: (data: { infoHash: string; message: string }) => void): () => void;

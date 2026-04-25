@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 import { existsSync, accessSync, constants as fsConstants } from 'fs';
 import type { TorrentEngine, TorrentInfo } from './torrentEngine';
 import type { SettingsManager } from './settingsManager';
-import type { DownloadItem, PersistedDownloadItem, TorrentStatus } from '../shared/types';
+import type { DownloadItem, PersistedDownloadItem, TorrentFileInfo, TorrentStatus } from '../shared/types';
 import { logger as defaultLogger } from './logger';
 import type { Logger } from './logger';
 
@@ -15,6 +15,7 @@ export interface DownloadManager {
     resume(infoHash: string): Promise<void>;
     remove(infoHash: string, deleteFiles: boolean): Promise<void>;
     getAll(): DownloadItem[];
+    setFileSelection(infoHash: string, selectedIndices: number[]): TorrentFileInfo[];
     restoreSession(): Promise<void>;
     persistSession(): void;
     on(event: 'update', listener: (item: DownloadItem) => void): void;
@@ -81,6 +82,8 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
     private readonly items = new Map<string, DownloadItem>();
     /** Pending metadata-resolution timers keyed by infoHash */
     private readonly metadataTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    /** Tracks selected file indices per torrent for persistence */
+    private readonly selectedFileIndicesMap = new Map<string, number[]>();
     private readonly engine: TorrentEngine;
     private readonly settings: SettingsManager;
     private readonly store: PersistedStore | undefined;
@@ -108,19 +111,45 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                 this._clearMetadataTimer(info.infoHash);
             }
 
+            // Recalculate progress and totalSize based on selected files
+            let totalSize = wasResolvingMetadata && isNowDownloading ? info.totalSize : existing.totalSize;
+            let downloadedSize = info.downloaded;
+            let progress = info.progress;
+            let selectedFileCount = existing.selectedFileCount;
+            let totalFileCount = existing.totalFileCount;
+
+            try {
+                const files = this.engine.getFiles(info.infoHash);
+                if (files.length > 0) {
+                    const selectedFiles = files.filter(f => f.selected);
+                    totalFileCount = files.length;
+                    selectedFileCount = selectedFiles.length;
+
+                    if (selectedFiles.length > 0) {
+                        totalSize = selectedFiles.reduce((sum, f) => sum + f.length, 0);
+                        downloadedSize = selectedFiles.reduce((sum, f) => sum + f.downloaded, 0);
+                        progress = totalSize > 0 ? downloadedSize / totalSize : 0;
+                    }
+                }
+            } catch {
+                // If getFiles fails (e.g., torrent not in engine yet), use engine values
+            }
+
             const updated: DownloadItem = {
                 ...existing,
-                // Update name and totalSize when metadata becomes available
+                // Update name when metadata becomes available
                 name: wasResolvingMetadata && isNowDownloading ? info.name : existing.name,
-                totalSize: wasResolvingMetadata && isNowDownloading ? info.totalSize : existing.totalSize,
-                downloadedSize: info.downloaded,
-                progress: info.progress,
+                totalSize,
+                downloadedSize,
+                progress,
                 downloadSpeed: info.downloadSpeed,
                 uploadSpeed: info.uploadSpeed,
                 numPeers: info.numPeers,
                 numSeeders: info.numSeeders,
                 timeRemaining: info.timeRemaining,
                 status: info.status,
+                selectedFileCount,
+                totalFileCount,
             };
             this.items.set(info.infoHash, updated);
             this.emit('update', updated);
@@ -261,18 +290,67 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
         }
     }
 
+    // ── setFileSelection ───────────────────────────────────────────────────────
+
+    setFileSelection(infoHash: string, selectedIndices: number[]): TorrentFileInfo[] {
+        const updatedFiles = this.engine.setFileSelection(infoHash, selectedIndices);
+
+        // Track selected indices for persistence
+        this.selectedFileIndicesMap.set(infoHash, [...selectedIndices]);
+
+        // Update the DownloadItem with file selection info
+        const existing = this.items.get(infoHash);
+        if (existing) {
+            const selectedFiles = updatedFiles.filter(f => f.selected);
+            const totalSize = selectedFiles.reduce((sum, f) => sum + f.length, 0);
+            const downloadedSize = selectedFiles.reduce((sum, f) => sum + f.downloaded, 0);
+            const progress = totalSize > 0 ? downloadedSize / totalSize : 0;
+
+            const updated: DownloadItem = {
+                ...existing,
+                totalSize,
+                downloadedSize,
+                progress,
+                selectedFileCount: selectedFiles.length,
+                totalFileCount: updatedFiles.length,
+            };
+            this.items.set(infoHash, updated);
+            this.emit('update', updated);
+        }
+
+        return updatedFiles;
+    }
+
     // ── remove ──────────────────────────────────────────────────────────────────
 
     async remove(infoHash: string, deleteFiles: boolean): Promise<void> {
         await this.engine.remove(infoHash, deleteFiles);
         this._clearMetadataTimer(infoHash);
+        this.selectedFileIndicesMap.delete(infoHash);
         this.items.delete(infoHash);
     }
 
     // ── getAll ──────────────────────────────────────────────────────────────────
 
     getAll(): DownloadItem[] {
-        return Array.from(this.items.values());
+        const items = Array.from(this.items.values());
+        return items.map(item => {
+            // Enrich with file count info if available
+            try {
+                const files = this.engine.getFiles(item.infoHash);
+                if (files.length > 0) {
+                    const selectedFiles = files.filter(f => f.selected);
+                    return {
+                        ...item,
+                        selectedFileCount: selectedFiles.length,
+                        totalFileCount: files.length,
+                    };
+                }
+            } catch {
+                // If getFiles fails, return item as-is
+            }
+            return item;
+        });
     }
 
     // ── restoreSession ──────────────────────────────────────────────────────────
@@ -313,6 +391,11 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             this.items.set(item.infoHash, item);
             this.emit('update', item);
 
+            // Restore selected file indices into the map for later persistence
+            if (persistedItem.selectedFileIndices) {
+                this.selectedFileIndicesMap.set(item.infoHash, [...persistedItem.selectedFileIndices]);
+            }
+
             // Auto-resume items that were downloading
             if (persistedItem.status === 'downloading' && folderExists) {
                 try {
@@ -322,6 +405,22 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                     } else if (persistedItem.torrentFilePath) {
                         await this.engine.addTorrentFile(persistedItem.torrentFilePath);
                     }
+
+                    // Reapply file selection if persisted (ignoring invalid indices)
+                    if (persistedItem.selectedFileIndices && persistedItem.selectedFileIndices.length > 0) {
+                        try {
+                            const files = this.engine.getFiles(item.infoHash);
+                            const maxIndex = files.length;
+                            const validIndices = persistedItem.selectedFileIndices.filter(idx => idx >= 0 && idx < maxIndex);
+                            if (validIndices.length > 0) {
+                                this.engine.setFileSelection(item.infoHash, validIndices);
+                                this.selectedFileIndicesMap.set(item.infoHash, validIndices);
+                            }
+                        } catch {
+                            // If reapplying selection fails, continue without it
+                        }
+                    }
+
                     // Update status to downloading after successful re-add
                     const updated: DownloadItem = { ...item, status: 'downloading' };
                     this.items.set(item.infoHash, updated);
@@ -353,6 +452,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             addedAt: item.addedAt,
             completedAt: item.completedAt,
             elapsedMs: item.elapsedMs,
+            selectedFileIndices: this.selectedFileIndicesMap.get(item.infoHash),
         }));
 
         this.store.set('downloads', persisted);

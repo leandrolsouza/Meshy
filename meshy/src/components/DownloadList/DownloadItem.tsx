@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import type { DownloadItem as DownloadItemType } from '../../../shared/types';
+import React, { useState, useCallback, useEffect } from 'react';
+import type { DownloadItem as DownloadItemType, TorrentFileInfo } from '../../../shared/types';
 import { ProgressBar } from '../common/ProgressBar';
 import { SpeedDisplay } from '../common/SpeedDisplay';
 import { formatBytes } from '../../utils/formatters';
 import { ConfirmDialog } from '../common/ConfirmDialog';
+import { FileSelector } from '../FileSelector/FileSelector';
 import styles from './DownloadItem.module.css';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -67,6 +68,74 @@ export function DownloadItem({
     const isCompleted = item.status === 'completed';
     const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
 
+    // ── File selector expansion state (Task 6.1) ─────────────────────────────
+    const [expanded, setExpanded] = useState(false);
+    const [files, setFiles] = useState<TorrentFileInfo[]>([]);
+    const [filesLoading, setFilesLoading] = useState(false);
+    const [filesError, setFilesError] = useState<string | null>(null);
+    const [selectionLoading, setSelectionLoading] = useState(false);
+    const [selectionError, setSelectionError] = useState<string | null>(null);
+
+    // Can expand when torrent is not in resolving-metadata state
+    const canExpand = item.status !== 'resolving-metadata' && item.status !== 'queued';
+
+    // ── Fetch files when expanded (Task 6.2) ─────────────────────────────────
+    useEffect(() => {
+        if (!expanded) return;
+
+        let cancelled = false;
+        setFilesLoading(true);
+        setFilesError(null);
+
+        window.meshy.getFiles(item.infoHash).then((response) => {
+            if (cancelled) return;
+            setFilesLoading(false);
+            if (response.success) {
+                setFiles(response.data);
+            } else {
+                setFilesError(response.error);
+            }
+        }).catch((err: unknown) => {
+            if (cancelled) return;
+            setFilesLoading(false);
+            setFilesError(err instanceof Error ? err.message : 'Erro ao buscar arquivos');
+        });
+
+        return () => { cancelled = true; };
+    }, [expanded, item.infoHash]);
+
+    // ── Handle selection change (Task 6.3) ───────────────────────────────────
+    const handleSelectionChange = useCallback(
+        (selectedIndices: number[]) => {
+            setSelectionLoading(true);
+            setSelectionError(null);
+
+            window.meshy.setFileSelection(item.infoHash, selectedIndices).then((response) => {
+                setSelectionLoading(false);
+                if (response.success) {
+                    setFiles(response.data);
+                } else {
+                    setSelectionError(response.error);
+                }
+            }).catch((err: unknown) => {
+                setSelectionLoading(false);
+                setSelectionError(err instanceof Error ? err.message : 'Erro ao aplicar seleção');
+            });
+        },
+        [item.infoHash],
+    );
+
+    // ── Toggle expand/collapse ───────────────────────────────────────────────
+    const handleToggleExpand = useCallback(() => {
+        setExpanded((prev) => !prev);
+    }, []);
+
+    // ── File count display (Task 6.4) ────────────────────────────────────────
+    const hasFileCount =
+        item.selectedFileCount !== undefined &&
+        item.totalFileCount !== undefined &&
+        item.totalFileCount > 0;
+
     return (
         <div className={styles.card}>
             {/* Name and status */}
@@ -74,9 +143,16 @@ export function DownloadItem({
                 <span className={styles.name} title={item.name}>
                     {item.name}
                 </span>
-                <span className={styles.status}>
-                    {statusLabel(item.status)}
-                </span>
+                <div className={styles.headerRight}>
+                    {hasFileCount && (
+                        <span className={styles.fileCount}>
+                            {item.selectedFileCount}/{item.totalFileCount} arquivos
+                        </span>
+                    )}
+                    <span className={styles.status}>
+                        {statusLabel(item.status)}
+                    </span>
+                </div>
             </div>
 
             {/* Progress bar */}
@@ -104,6 +180,16 @@ export function DownloadItem({
 
             {/* Actions */}
             <div className={styles.actions}>
+                {canExpand && (
+                    <button
+                        className="btn"
+                        onClick={handleToggleExpand}
+                        aria-label={expanded ? 'Recolher lista de arquivos' : 'Expandir lista de arquivos'}
+                        aria-expanded={expanded}
+                    >
+                        {expanded ? 'Recolher arquivos' : 'Arquivos'}
+                    </button>
+                )}
                 {item.status === 'downloading' && (
                     <button className="btn" onClick={() => onPause(item.infoHash)} aria-label={`Pausar ${item.name}`}>
                         Pausar
@@ -124,6 +210,30 @@ export function DownloadItem({
                     </button>
                 )}
             </div>
+
+            {/* Expanded file selector section (Task 6.2) */}
+            {expanded && (
+                <div className={styles.fileSelectorSection}>
+                    {filesLoading && !files.length && (
+                        <div className={styles.fileSelectorLoading} role="status" aria-live="polite">
+                            Carregando arquivos...
+                        </div>
+                    )}
+                    {filesError && (
+                        <div className={styles.fileSelectorError} role="alert">
+                            {filesError}
+                        </div>
+                    )}
+                    {files.length > 0 && (
+                        <FileSelector
+                            files={files}
+                            onSelectionChange={handleSelectionChange}
+                            loading={selectionLoading}
+                            error={selectionError}
+                        />
+                    )}
+                </div>
+            )}
 
             <ConfirmDialog
                 isOpen={isConfirmDialogOpen}

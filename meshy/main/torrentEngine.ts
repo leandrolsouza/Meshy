@@ -3,9 +3,10 @@ import { readFileSync } from 'fs';
 import WebTorrent from 'webtorrent';
 import type { Torrent } from 'webtorrent';
 import { isValidMagnetUri, hasTorrentMagicBytes } from './validators';
-import type { TorrentStatus } from '../shared/types';
+import type { TorrentStatus, TorrentFileInfo } from '../shared/types';
 
 export type { TorrentStatus } from '../shared/types';
+export type { TorrentFileInfo } from '../shared/types';
 
 // The @types/webtorrent package doesn't include throttleDownload/throttleUpload,
 // but they exist in the actual webtorrent@2.x library.
@@ -43,6 +44,10 @@ export interface TorrentEngine {
     setDownloadSpeedLimit(kbps: number): void;
     setUploadSpeedLimit(kbps: number): void;
     getAll(): TorrentInfo[];
+    /** Retorna a lista de arquivos de um torrent */
+    getFiles(infoHash: string): TorrentFileInfo[];
+    /** Aplica seleção de arquivos: seleciona os índices fornecidos, desseleciona os demais */
+    setFileSelection(infoHash: string, selectedIndices: number[]): TorrentFileInfo[];
     on(event: 'progress', listener: (info: TorrentInfo) => void): void;
     on(event: 'done', listener: (infoHash: string) => void): void;
     on(event: 'error', listener: (infoHash: string, err: Error) => void): void;
@@ -79,6 +84,8 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
     private readonly downloadPath: string;
     /** Tracks the current status for each infoHash */
     private readonly statusMap = new Map<string, TorrentStatus>();
+    /** Tracks selected file indices per torrent */
+    private readonly selectionMap = new Map<string, Set<number>>();
 
     constructor(options: TorrentEngineOptions, client?: WebTorrent.Instance) {
         super();
@@ -112,6 +119,7 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
 
             this.client.add(buffer, { path: this.downloadPath }, (torrent) => {
                 this.statusMap.set(torrent.infoHash, 'downloading');
+                this._initSelectionMap(torrent);
                 this._attachTorrentListeners(torrent);
                 resolve(torrentToInfo(torrent, 'downloading'));
             });
@@ -137,6 +145,7 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
                 // Once metadata is ready the torrent name/length become available
                 torrent.once('metadata', () => {
                     this.statusMap.set(torrent.infoHash, 'downloading');
+                    this._initSelectionMap(torrent);
                 });
 
                 resolve(torrentToInfo(torrent, 'resolving-metadata'));
@@ -206,6 +215,7 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
             if (!torrent) {
                 // Already removed — treat as success
                 this.statusMap.delete(infoHash);
+                this.selectionMap.delete(infoHash);
                 return resolve();
             }
 
@@ -214,6 +224,7 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
                     return reject(err instanceof Error ? err : new Error(String(err)));
                 }
                 this.statusMap.delete(infoHash);
+                this.selectionMap.delete(infoHash);
                 resolve();
             });
         });
@@ -251,10 +262,62 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
         return super.on(event, listener);
     }
 
+    // ── getFiles ────────────────────────────────────────────────────────────────
+
+    getFiles(infoHash: string): TorrentFileInfo[] {
+        const torrent = this._getTorrent(infoHash);
+        if (!torrent) {
+            throw new Error(`Torrent não encontrado: ${infoHash}`);
+        }
+
+        const selected = this.selectionMap.get(infoHash) ?? new Set<number>();
+
+        return torrent.files.map((file, index) => ({
+            index,
+            name: file.name,
+            path: file.path,
+            length: file.length,
+            downloaded: file.downloaded,
+            selected: selected.has(index),
+        }));
+    }
+
+    // ── setFileSelection ────────────────────────────────────────────────────────
+
+    setFileSelection(infoHash: string, selectedIndices: number[]): TorrentFileInfo[] {
+        const torrent = this._getTorrent(infoHash);
+        if (!torrent) {
+            throw new Error(`Torrent não encontrado: ${infoHash}`);
+        }
+
+        const selectedSet = new Set(selectedIndices);
+        this.selectionMap.set(infoHash, selectedSet);
+
+        for (let i = 0; i < torrent.files.length; i++) {
+            const file = torrent.files[i];
+            if (selectedSet.has(i)) {
+                file.select();
+            } else {
+                file.deselect();
+            }
+        }
+
+        return this.getFiles(infoHash);
+    }
+
     // ── Private helpers ─────────────────────────────────────────────────────────
 
     private _getTorrent(infoHash: string): Torrent | undefined {
         return this.client.torrents.find((t) => t.infoHash === infoHash);
+    }
+
+    /** Initializes the selection map with all file indices (all selected by default) */
+    private _initSelectionMap(torrent: Torrent): void {
+        const allIndices = new Set<number>();
+        for (let i = 0; i < torrent.files.length; i++) {
+            allIndices.add(i);
+        }
+        this.selectionMap.set(torrent.infoHash, allIndices);
     }
 
     private _attachTorrentListeners(torrent: Torrent): void {

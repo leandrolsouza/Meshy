@@ -67,6 +67,8 @@ function makeMockEngine(magnetInfo: TorrentInfo = makeTorrentInfo()): TorrentEng
         setDownloadSpeedLimit: jest.fn(),
         setUploadSpeedLimit: jest.fn(),
         getAll: jest.fn().mockReturnValue([]),
+        getFiles: jest.fn().mockReturnValue([]),
+        setFileSelection: jest.fn().mockReturnValue([]),
     });
 
     return engine;

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import type { DownloadItem, IPCResponse } from '../../shared/types';
+import type { DownloadItem, IPCResponse, TorrentFileInfo } from '../../shared/types';
 import { useDownloadStore } from '../store/downloadStore';
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -109,6 +109,23 @@ export function useDownloads() {
         return response;
     }
 
+    /**
+     * Retrieves the list of files for a torrent identified by infoHash.
+     */
+    async function getFiles(infoHash: string): Promise<IPCResponse<TorrentFileInfo[]>> {
+        return window.meshy.getFiles(infoHash);
+    }
+
+    /**
+     * Applies file selection for a torrent: selects the given indices, deselects the rest.
+     */
+    async function setFileSelection(
+        infoHash: string,
+        selectedIndices: number[],
+    ): Promise<IPCResponse<TorrentFileInfo[]>> {
+        return window.meshy.setFileSelection(infoHash, selectedIndices);
+    }
+
     return {
         items: useDownloadStore((state) => state.items),
         addTorrentFile,
@@ -116,5 +133,7 @@ export function useDownloads() {
         pause,
         resume,
         remove,
+        getFiles,
+        setFileSelection,
     };
 }

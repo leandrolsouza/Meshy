@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { DownloadItem, AppSettings, IPCResponse, MeshyAPI } from '../shared/types';
+import type { DownloadItem, AppSettings, IPCResponse, TorrentFileInfo, MeshyAPI } from '../shared/types';
 
 // ─── Expose API via contextBridge ────────────────────────────────────────────
 
@@ -40,6 +40,16 @@ const meshyAPI: MeshyAPI = {
 
     selectFolder(): Promise<IPCResponse<string>> {
         return ipcRenderer.invoke('settings:select-folder');
+    },
+
+    // ── File Selection ──────────────────────────────────────────────────────────
+
+    getFiles(infoHash: string): Promise<IPCResponse<TorrentFileInfo[]>> {
+        return ipcRenderer.invoke('torrent:get-files', { infoHash });
+    },
+
+    setFileSelection(infoHash: string, selectedIndices: number[]): Promise<IPCResponse<TorrentFileInfo[]>> {
+        return ipcRenderer.invoke('torrent:set-file-selection', { infoHash, selectedIndices });
     },
 
     // ── Events ──────────────────────────────────────────────────────────────────

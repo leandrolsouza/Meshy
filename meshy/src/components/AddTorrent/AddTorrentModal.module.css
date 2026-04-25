@@ -42,3 +42,48 @@
     gap: var(--space-sm);
     margin-top: 20px;
 }
+
+/* ─── Torrent File Section ────────────────────────────────────────────────── */
+
+.torrentFileSection {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-top: var(--space-lg);
+}
+
+.separator {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.torrentFileLabel {
+    display: inline-block;
+    padding: 6px 14px;
+    border-radius: 2px;
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text);
+    cursor: pointer;
+    font-size: var(--font-size-base);
+    transition: background-color var(--transition-fast);
+}
+
+.torrentFileLabel:hover {
+    background-color: var(--color-hover);
+}
+
+.torrentFileInput {
+    display: none;
+}
+
+/* ─── File Selection Section (FileSelector in modal) ──────────────────────── */
+
+.fileSelectionSection {
+    margin-top: var(--space-sm);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-sm);
+    max-height: 320px;
+    overflow-y: auto;
+}

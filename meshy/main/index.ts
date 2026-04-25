@@ -59,7 +59,7 @@ app.whenReady().then(async () => {
     }
 
     // Register IPC handlers ONCE (global — survives window close/reopen on macOS).
-    registerIpcHandlers(downloadManager, settingsManager)
+    registerIpcHandlers(downloadManager, settingsManager, torrentEngine)
 
     // Attach per-window resources (progress interval, error forwarding).
     attachWindowEvents(downloadManager, torrentEngine, mainWindow)

@@ -2,7 +2,7 @@ import { ipcMain, dialog, BrowserWindow } from 'electron';
 import type { DownloadManager } from './downloadManager';
 import type { SettingsManager } from './settingsManager';
 import type { TorrentEngine } from './torrentEngine';
-import type { DownloadItem, AppSettings, IPCResponse } from '../shared/types';
+import type { DownloadItem, AppSettings, IPCResponse, TorrentFileInfo } from '../shared/types';
 import { isValidSpeedLimit } from './validators';
 import { logger } from './logger';
 
@@ -80,6 +80,7 @@ export function attachWindowEvents(
 export function registerIpcHandlers(
     downloadManager: DownloadManager,
     settingsManager: SettingsManager,
+    torrentEngine?: TorrentEngine,
 ): void {
     // ── torrent:add-file ──────────────────────────────────────────────────────
     // payload: { filePath: string }
@@ -257,6 +258,106 @@ export function registerIpcHandlers(
             return ok(result.filePaths[0]);
         } catch (err) {
             return failWithLog('settings:select-folder', err);
+        }
+    });
+
+    // ── torrent:get-files ─────────────────────────────────────────────────────
+    // payload: { infoHash: string }
+    ipcMain.handle('torrent:get-files', async (_event, payload: unknown): Promise<IPCResponse<TorrentFileInfo[]>> => {
+        try {
+            if (
+                typeof payload !== 'object' ||
+                payload === null ||
+                typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
+                (payload as Record<string, unknown>).infoHash === ''
+            ) {
+                return fail('Parâmetros inválidos: infoHash deve ser uma string não-vazia');
+            }
+
+            const { infoHash } = payload as { infoHash: string };
+
+            // Check if torrent exists in the download manager
+            const allItems = downloadManager.getAll();
+            const item = allItems.find(i => i.infoHash === infoHash);
+
+            if (!item) {
+                return fail('Torrent não encontrado');
+            }
+
+            // If torrent is resolving metadata, return empty array
+            if (item.status === 'resolving-metadata') {
+                return ok([]);
+            }
+
+            if (!torrentEngine) {
+                return fail('TorrentEngine não disponível');
+            }
+
+            const files = torrentEngine.getFiles(infoHash);
+            return ok(files);
+        } catch (err) {
+            return failWithLog('torrent:get-files', err);
+        }
+    });
+
+    // ── torrent:set-file-selection ────────────────────────────────────────────
+    // payload: { infoHash: string, selectedIndices: number[] }
+    ipcMain.handle('torrent:set-file-selection', async (_event, payload: unknown): Promise<IPCResponse<TorrentFileInfo[]>> => {
+        try {
+            if (
+                typeof payload !== 'object' ||
+                payload === null ||
+                typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
+                (payload as Record<string, unknown>).infoHash === ''
+            ) {
+                return fail('Parâmetros inválidos: infoHash deve ser uma string não-vazia');
+            }
+
+            const { infoHash } = payload as { infoHash: string };
+            const rawIndices = (payload as Record<string, unknown>).selectedIndices;
+
+            // Validate selectedIndices is a non-empty array of non-negative integers
+            if (
+                !Array.isArray(rawIndices) ||
+                rawIndices.length === 0
+            ) {
+                return fail('Selecione ao menos um arquivo');
+            }
+
+            for (const idx of rawIndices) {
+                if (typeof idx !== 'number' || !Number.isInteger(idx) || idx < 0) {
+                    return fail('Índice de arquivo inválido');
+                }
+            }
+
+            const selectedIndices = rawIndices as number[];
+
+            // Check if torrent exists
+            const allItems = downloadManager.getAll();
+            const item = allItems.find(i => i.infoHash === infoHash);
+
+            if (!item) {
+                return fail('Torrent não encontrado');
+            }
+
+            if (!torrentEngine) {
+                return fail('TorrentEngine não disponível');
+            }
+
+            // Validate indices are within range by getting file count first
+            const currentFiles = torrentEngine.getFiles(infoHash);
+            const totalFiles = currentFiles.length;
+
+            for (const idx of selectedIndices) {
+                if (idx >= totalFiles) {
+                    return fail('Índice de arquivo inválido');
+                }
+            }
+
+            const updatedFiles = torrentEngine.setFileSelection(infoHash, selectedIndices);
+            return ok(updatedFiles);
+        } catch (err) {
+            return failWithLog('torrent:set-file-selection', err);
         }
     });
 }
