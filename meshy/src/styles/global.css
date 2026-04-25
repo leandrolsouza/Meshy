@@ -1,27 +1,53 @@
 /* ─── CSS Custom Properties (Design Tokens) ──────────────────────────────── */
 
 :root {
-    /* Colors — Primary */
-    --color-primary: #1976d2;
-    --color-primary-light: #e3f2fd;
-    --color-primary-dark: #1565c0;
+    /* Colors — Primary (VS Code Dark Theme) */
+    --color-primary: #007acc;
+    --color-primary-light: #264f78;
+    --color-primary-dark: #005a9e;
 
     /* Colors — Danger */
-    --color-danger: #c62828;
-    --color-danger-light: #ffebee;
+    --color-danger: #f44747;
+    --color-danger-light: rgba(244, 71, 71, 0.2);
 
     /* Colors — Neutral */
-    --color-bg: #f5f5f5;
-    --color-surface: #ffffff;
-    --color-border: #ddd;
-    --color-border-light: #e0e0e0;
-    --color-border-input: #ccc;
+    --color-bg: #1e1e1e;
+    --color-surface: #252526;
+    --color-border: #474747;
+    --color-border-light: #3c3c3c;
+    --color-border-input: #474747;
 
     /* Colors — Text */
-    --color-text: #222;
-    --color-text-secondary: #555;
-    --color-text-muted: #666;
-    --color-text-placeholder: #888;
+    --color-text: #cccccc;
+    --color-text-secondary: #969696;
+    --color-text-muted: #969696;
+    --color-text-placeholder: #6e6e6e;
+
+    /* Colors — Layout (VS Code structural areas) */
+    --color-titlebar-bg: #3c3c3c;
+    --color-activitybar-bg: #333333;
+    --color-statusbar-bg: #007acc;
+    --color-statusbar-text: #ffffff;
+
+    /* Colors — Interaction */
+    --color-hover: #2a2d2e;
+    --color-activitybar-hover: #505050;
+    --color-selection: #264f78;
+
+    /* Colors — Semantic */
+    --color-success: #89d185;
+
+    /* Colors — Input */
+    --color-input-bg: #3c3c3c;
+    --color-input-readonly-bg: #2d2d2d;
+
+    /* Colors — Scrollbar */
+    --color-scrollbar-thumb: #424242;
+    --color-scrollbar-thumb-hover: #4f4f4f;
+    --color-scrollbar-thumb-active: #5a5a5a;
+
+    /* Layout */
+    --activitybar-width: 48px;
 
     /* Spacing */
     --space-xs: 4px;
@@ -38,10 +64,10 @@
     --radius-lg: 8px;
 
     /* Typography */
-    --font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     --font-size-xs: 12px;
     --font-size-sm: 13px;
-    --font-size-base: 14px;
+    --font-size-base: 13px;
     --font-size-lg: 16px;
     --font-size-xl: 18px;
     --font-size-2xl: 22px;
@@ -51,11 +77,11 @@
     --shadow-dialog: 0 8px 32px rgba(0, 0, 0, 0.18);
 
     /* Transitions */
-    --transition-fast: 0.2s ease;
+    --transition-fast: 0.1s ease;
     --transition-normal: 0.3s ease;
 
     /* Progress bar */
-    --progress-height: 8px;
+    --progress-height: 4px;
 }
 
 /* ─── Reset & Base ────────────────────────────────────────────────────────── */
@@ -73,12 +99,12 @@ body {
     font-size: var(--font-size-base);
     color: var(--color-text);
     background-color: var(--color-bg);
-    line-height: 1.5;
+    line-height: 1.4;
     -webkit-font-smoothing: antialiased;
 }
 
 code {
-    font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+    font-family: "Cascadia Code", "Fira Code", Consolas, "Courier New", monospace;
     font-size: 0.9em;
     background-color: var(--color-border-light);
     padding: 1px 4px;
@@ -88,28 +114,30 @@ code {
 /* ─── Buttons ─────────────────────────────────────────────────────────────── */
 
 .btn {
-    padding: var(--space-sm) var(--space-lg);
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--color-border-input);
-    background: var(--color-surface);
+    padding: 6px 14px;
+    border-radius: 2px;
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text);
     cursor: pointer;
     font-size: var(--font-size-base);
     transition: background-color var(--transition-fast), border-color var(--transition-fast);
 }
 
 .btn:hover {
-    background-color: var(--color-border-light);
+    background-color: var(--color-hover);
 }
 
 .btn:focus-visible {
-    outline: 2px solid var(--color-primary);
-    outline-offset: 2px;
+    outline: 1px solid var(--color-primary);
+    outline-offset: 1px;
 }
 
 .btn--primary {
     background-color: var(--color-primary);
-    color: var(--color-surface);
+    color: #ffffff;
     border: none;
+    border-radius: 2px;
 }
 
 .btn--primary:hover {
@@ -117,38 +145,18 @@ code {
 }
 
 .btn--danger {
-    color: var(--color-danger);
-    border-color: var(--color-danger);
+    background-color: var(--color-danger);
+    color: #ffffff;
+    border: none;
+    border-radius: 2px;
 }
 
 .btn--danger:hover {
-    background-color: var(--color-danger-light);
-}
-
-.btn--danger-filled {
-    background-color: var(--color-danger);
-    color: var(--color-surface);
-    border: none;
-    font-weight: 600;
-}
-
-.btn--danger-filled:hover {
-    background-color: #b71c1c;
-}
-
-.btn--outline-primary {
-    border-color: var(--color-primary);
-    background: var(--color-primary-light);
-    color: var(--color-primary-dark);
-    font-weight: 600;
-}
-
-.btn--outline-primary:hover {
-    background-color: #bbdefb;
+    background-color: #d32f2f;
 }
 
 .btn:disabled {
-    opacity: 0.6;
+    opacity: 0.4;
     cursor: not-allowed;
 }
 
@@ -166,8 +174,9 @@ code {
 
 .modal {
     background-color: var(--color-surface);
-    border-radius: var(--radius-lg);
-    padding: var(--space-xl);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 20px;
     width: 100%;
     max-width: 480px;
     box-shadow: var(--shadow-modal);
@@ -175,8 +184,9 @@ code {
 
 .modal__title {
     margin: 0 0 var(--space-md);
-    font-size: var(--font-size-xl);
-    font-weight: 700;
+    color: var(--color-text);
+    font-size: 14px;
+    font-weight: 600;
 }
 
 .modal__error {
@@ -189,18 +199,24 @@ code {
 
 .input {
     width: 100%;
-    padding: var(--space-sm) 10px;
-    border-radius: var(--radius-sm);
+    background-color: var(--color-input-bg);
     border: 1px solid var(--color-border-input);
+    color: var(--color-text);
+    border-radius: 2px;
+    padding: 4px 8px;
     font-size: var(--font-size-base);
+    font-family: inherit;
     box-sizing: border-box;
     transition: border-color var(--transition-fast);
 }
 
+.input::placeholder {
+    color: var(--color-text-placeholder);
+}
+
 .input:focus {
-    outline: none;
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 2px var(--color-primary-light);
+    outline: 1px solid var(--color-primary);
 }
 
 .input--error {
@@ -208,11 +224,47 @@ code {
 }
 
 .input--readonly {
-    background-color: var(--color-bg);
+    background-color: var(--color-input-readonly-bg);
+    opacity: 0.7;
 }
 
 .label {
     display: block;
     margin-bottom: var(--space-sm);
     font-weight: 500;
+}
+
+/* ─── Scrollbars (VS Code style) ──────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: var(--color-scrollbar-thumb);
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-scrollbar-thumb-hover);
+}
+
+::-webkit-scrollbar-thumb:active {
+    background-color: var(--color-scrollbar-thumb-active);
+}
+
+/* ─── Reduced Motion ──────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        transition: none !important;
+        animation: none !important;
+    }
 }

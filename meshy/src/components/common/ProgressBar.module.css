@@ -1,12 +1,31 @@
 .container {
     width: 100%;
+    height: 4px;
     background-color: var(--color-border-light);
-    border-radius: var(--radius-sm);
+    border-radius: 2px;
     overflow: hidden;
 }
 
 .fill {
-    height: var(--progress-height);
-    background-color: var(--color-primary);
+    height: 4px;
+    border-radius: 2px;
     transition: width var(--transition-normal);
+}
+
+/* ─── Variant: default ────────────────────────────────────────────────────── */
+
+.fillDefault {
+    background-color: var(--color-primary);
+}
+
+/* ─── Variant: success ────────────────────────────────────────────────────── */
+
+.fillSuccess {
+    background-color: var(--color-success);
+}
+
+/* ─── Variant: error ──────────────────────────────────────────────────────── */
+
+.fillError {
+    background-color: var(--color-danger);
 }

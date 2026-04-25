@@ -1,23 +1,34 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useDownloadStore } from './store/downloadStore';
 import { DownloadList } from './components/DownloadList/DownloadList';
 import { DropZone } from './components/AddTorrent/DropZone';
 import { AddTorrentModal } from './components/AddTorrent/AddTorrentModal';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
+import { formatBytes } from './utils/formatters';
 import styles from './App.module.css';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type ActiveView = 'downloads' | 'add-torrent' | 'settings';
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 /**
- * Root application component.
+ * Root application component with VS Code-style layout.
+ *
+ * Layout structure:
+ * - Title Bar: application name "Meshy"
+ * - Activity Bar: navigation icons for downloads, add torrent, settings
+ * - Editor Area: conditional rendering based on activeView
+ * - Status Bar: active download count and aggregated speed
  *
  * On mount, calls `window.meshy.getAll()` to populate the store with the
  * current download state from the main process.
  */
 function App(): React.JSX.Element {
     const setItems = useDownloadStore((state) => state.setItems);
-    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const items = useDownloadStore((state) => state.items);
+    const [activeView, setActiveView] = useState<ActiveView>('downloads');
 
     useEffect(() => {
         async function loadInitialState(): Promise<void> {
@@ -34,42 +45,88 @@ function App(): React.JSX.Element {
         loadInitialState();
     }, [setItems]);
 
+    // ── Status Bar computations ───────────────────────────────────────────
+
+    const activeDownloadCount = useMemo(
+        () => items.filter((item) => item.status === 'downloading').length,
+        [items],
+    );
+
+    const totalDownloadSpeed = useMemo(
+        () => items.reduce((sum, item) => sum + item.downloadSpeed, 0),
+        [items],
+    );
+
+    const totalUploadSpeed = useMemo(
+        () => items.reduce((sum, item) => sum + item.uploadSpeed, 0),
+        [items],
+    );
+
+    // ── Render ────────────────────────────────────────────────────────────
+
     return (
         <div className={styles.app}>
-            <header className={styles.header}>
-                <h1 className={styles.title}>Meshy</h1>
-                <div className={styles.headerActions}>
-                    <button
-                        className="btn btn--primary"
-                        onClick={() => setIsAddModalOpen(true)}
-                        aria-label="Adicionar torrent via magnet link"
-                    >
-                        + Magnet Link
-                    </button>
-                    <button
-                        className="btn"
-                        onClick={() => setIsSettingsOpen(true)}
-                        aria-label="Abrir configurações"
-                    >
-                        ⚙ Configurações
-                    </button>
-                </div>
+            {/* ── Title Bar ─────────────────────────────────────────────── */}
+            <header className={styles.titleBar}>
+                <span className={styles.titleBarText}>Meshy</span>
             </header>
 
-            <DropZone />
+            {/* ── Activity Bar ──────────────────────────────────────────── */}
+            <nav className={styles.activityBar} aria-label="Navegação principal">
+                <button
+                    className={activeView === 'downloads' ? styles.activityIconActive : styles.activityIcon}
+                    onClick={() => setActiveView('downloads')}
+                    aria-label="Downloads"
+                    title="Downloads"
+                >
+                    ↓
+                </button>
+                <button
+                    className={activeView === 'add-torrent' ? styles.activityIconActive : styles.activityIcon}
+                    onClick={() => setActiveView('add-torrent')}
+                    aria-label="Adicionar torrent"
+                    title="Adicionar torrent"
+                >
+                    +
+                </button>
+                <button
+                    className={activeView === 'settings' ? styles.activityIconActive : styles.activityIcon}
+                    onClick={() => setActiveView('settings')}
+                    aria-label="Configurações"
+                    title="Configurações"
+                >
+                    ⚙
+                </button>
+            </nav>
 
-            <main className={styles.main}>
-                <DownloadList />
+            {/* ── Editor Area ───────────────────────────────────────────── */}
+            <main className={styles.editorArea}>
+                {activeView === 'downloads' && (
+                    <>
+                        <DropZone />
+                        <DownloadList />
+                    </>
+                )}
+                {activeView === 'add-torrent' && (
+                    <AddTorrentModal
+                        isOpen={true}
+                        onClose={() => setActiveView('downloads')}
+                        inline={true}
+                    />
+                )}
+                {activeView === 'settings' && (
+                    <SettingsPanel
+                        isOpen={true}
+                        onClose={() => setActiveView('downloads')}
+                    />
+                )}
             </main>
 
-            <AddTorrentModal
-                isOpen={isAddModalOpen}
-                onClose={() => setIsAddModalOpen(false)}
-            />
-            <SettingsPanel
-                isOpen={isSettingsOpen}
-                onClose={() => setIsSettingsOpen(false)}
-            />
+            {/* ── Status Bar ────────────────────────────────────────────── */}
+            <footer className={styles.statusBar}>
+                <span>{activeDownloadCount} {activeDownloadCount === 1 ? 'download ativo' : 'downloads ativos'}</span>
+                <span>↓ {formatBytes(totalDownloadSpeed)}/s · ↑ {formatBytes(totalUploadSpeed)}/s</span>
+            </footer>
         </div>
     );
 }

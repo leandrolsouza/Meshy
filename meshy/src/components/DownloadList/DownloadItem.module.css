@@ -1,9 +1,14 @@
 .card {
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
+    border-radius: 0px;
     padding: var(--space-md) var(--space-lg);
     margin-bottom: var(--space-sm);
     background-color: var(--color-surface);
+    transition: background-color var(--transition-fast);
+}
+
+.card:hover {
+    background-color: var(--color-hover);
 }
 
 .header {

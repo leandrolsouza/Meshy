@@ -46,10 +46,10 @@ export function ConfirmDialog({
                     <button className="btn" onClick={onCancel}>
                         Cancelar
                     </button>
-                    <button className="btn btn--outline-primary" onClick={onConfirmKeepFiles}>
+                    <button className="btn btn--primary" onClick={onConfirmKeepFiles}>
                         Manter arquivos
                     </button>
-                    <button className="btn btn--danger-filled" onClick={onConfirmDeleteFiles}>
+                    <button className="btn btn--danger" onClick={onConfirmDeleteFiles}>
                         Excluir arquivos
                     </button>
                 </div>

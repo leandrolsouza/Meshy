@@ -1,21 +1,21 @@
 .zone {
-    border: 2px dashed var(--color-border-input);
-    border-radius: var(--radius-lg);
+    border: 2px dashed var(--color-border);
+    border-radius: 4px;
     padding: var(--space-xl) var(--space-lg);
     text-align: center;
-    background-color: #fafafa;
+    background-color: var(--color-bg);
     transition: background-color var(--transition-fast), border-color var(--transition-fast);
     cursor: default;
 }
 
 .zone.active {
     border-color: var(--color-primary);
-    background-color: var(--color-primary-light);
+    background-color: rgba(38, 79, 120, 0.3);
 }
 
 .text {
     margin: 0;
-    color: var(--color-text-muted);
+    color: var(--color-text-secondary);
 }
 
 .zone.active .text {

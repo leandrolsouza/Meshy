@@ -26,6 +26,12 @@ function formatElapsed(ms: number): string {
     return `${seconds}s`;
 }
 
+function progressVariant(status: DownloadItemType['status']): 'default' | 'success' | 'error' {
+    if (status === 'completed') return 'success';
+    if (status === 'error' || status === 'metadata-failed' || status === 'files-not-found') return 'error';
+    return 'default';
+}
+
 function statusLabel(status: DownloadItemType['status']): string {
     const labels: Record<DownloadItemType['status'], string> = {
         queued: 'Na fila',
@@ -78,6 +84,7 @@ export function DownloadItem({
                 value={progressPercent}
                 max={100}
                 label={`Progresso de ${item.name}: ${progressPercent}%`}
+                variant={progressVariant(item.status)}
             />
 
             {/* Details */}

@@ -1,3 +1,41 @@
+/* ─── Inline Add Torrent Panel ────────────────────────────────────────────── */
+
+.addTorrentPanel {
+    max-width: 560px;
+}
+
+.panelTitle {
+    color: var(--color-text);
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: var(--space-lg);
+}
+
+/* ─── Command Palette Modal (future shortcut access) ─────────────────────── */
+
+.commandPaletteOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    z-index: 100;
+}
+
+.commandPalettePanel {
+    margin-top: 20%;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 20px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    width: 100%;
+    max-width: 560px;
+}
+
+/* ─── Actions ─────────────────────────────────────────────────────────────── */
+
 .actions {
     display: flex;
     justify-content: flex-end;

@@ -10,6 +10,8 @@ interface ProgressBarProps {
     max?: number;
     /** Accessible label describing what is being measured */
     label?: string;
+    /** Visual variant controlling the fill color */
+    variant?: 'default' | 'success' | 'error';
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -20,9 +22,16 @@ interface ProgressBarProps {
  * Uses `role="progressbar"` with `aria-valuenow`, `aria-valuemin`, and
  * `aria-valuemax` for screen-reader compatibility.
  */
-export function ProgressBar({ value, max = 100, label }: ProgressBarProps): React.JSX.Element {
+const variantClassMap: Record<string, string> = {
+    default: styles.fillDefault,
+    success: styles.fillSuccess,
+    error: styles.fillError,
+};
+
+export function ProgressBar({ value, max = 100, label, variant = 'default' }: ProgressBarProps): React.JSX.Element {
     const clampedValue = Math.min(Math.max(value, 0), max);
     const percentage = max > 0 ? (clampedValue / max) * 100 : 0;
+    const fillClass = `${styles.fill} ${variantClassMap[variant] ?? styles.fillDefault}`;
 
     return (
         <div
@@ -34,7 +43,7 @@ export function ProgressBar({ value, max = 100, label }: ProgressBarProps): Reac
             aria-label={label}
         >
             <div
-                className={styles.fill}
+                className={fillClass}
                 style={{ width: `${percentage}%` }}
             />
         </div>

@@ -1,29 +1,100 @@
+/* ─── VS Code Layout — CSS Grid Full-Bleed ────────────────────────────────── */
+
 .app {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 0 var(--space-lg) var(--space-2xl);
+    display: grid;
+    grid-template-areas:
+        "titlebar titlebar"
+        "activitybar editor"
+        "statusbar statusbar";
+    grid-template-columns: var(--activitybar-width) 1fr;
+    grid-template-rows: auto 1fr auto;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
 }
 
-.header {
+/* ─── Title Bar ───────────────────────────────────────────────────────────── */
+
+.titleBar {
+    grid-area: titlebar;
+    background-color: var(--color-titlebar-bg);
+    padding: 0 var(--space-lg);
+    display: flex;
+    align-items: center;
+    height: 30px;
+    -webkit-app-region: drag;
+}
+
+.titleBarText {
+    font-size: var(--font-size-xs);
+    color: var(--color-text);
+    font-weight: 400;
+    user-select: none;
+}
+
+/* ─── Activity Bar ────────────────────────────────────────────────────────── */
+
+.activityBar {
+    grid-area: activitybar;
+    background-color: var(--color-activitybar-bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: var(--space-sm);
+    gap: var(--space-xs);
+}
+
+.activityIcon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    background: none;
+    border: none;
+    border-left: 2px solid transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-size: var(--font-size-xl);
+    transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.activityIcon:hover {
+    background-color: var(--color-activitybar-hover);
+    color: var(--color-text);
+}
+
+.activityIcon:focus-visible {
+    outline: 1px solid var(--color-primary);
+    outline-offset: -1px;
+}
+
+.activityIconActive {
+    composes: activityIcon;
+    color: var(--color-text);
+    border-left: 2px solid var(--color-text);
+}
+
+/* ─── Editor Area ─────────────────────────────────────────────────────────── */
+
+.editorArea {
+    grid-area: editor;
+    background-color: var(--color-bg);
+    overflow-y: auto;
+    padding: var(--space-lg);
+}
+
+/* ─── Status Bar ──────────────────────────────────────────────────────────── */
+
+.statusBar {
+    grid-area: statusbar;
+    background-color: var(--color-statusbar-bg);
+    color: var(--color-statusbar-text);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--space-lg) 0;
-    border-bottom: 1px solid var(--color-border-light);
-    margin-bottom: var(--space-lg);
-}
-
-.title {
-    margin: 0;
-    font-size: var(--font-size-2xl);
-    font-weight: 700;
-}
-
-.headerActions {
-    display: flex;
-    gap: var(--space-sm);
-}
-
-.main {
-    margin-top: var(--space-lg);
+    padding: 0 var(--space-lg);
+    height: 22px;
+    font-size: var(--font-size-xs);
+    user-select: none;
 }

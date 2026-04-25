@@ -7,17 +7,23 @@ import styles from './AddTorrentModal.module.css';
 interface AddTorrentModalProps {
     isOpen: boolean;
     onClose: () => void;
+    /** When true, renders inline in the Editor Area without overlay (Activity Bar access). */
+    inline?: boolean;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 /**
- * Modal dialog for adding a torrent via magnet link.
+ * Panel for adding a torrent via magnet link.
+ *
+ * Renders inline in the Editor Area when accessed via the Activity Bar
+ * (`inline` prop). When rendered as a modal (future shortcut access),
+ * positions itself as a Command Palette: top-aligned with margin-top.
  *
  * Validates the magnet URI client-side before sending to the main process.
  * Displays a descriptive error message for invalid formats.
  */
-export function AddTorrentModal({ isOpen, onClose }: AddTorrentModalProps): React.JSX.Element | null {
+export function AddTorrentModal({ isOpen, onClose, inline = false }: AddTorrentModalProps): React.JSX.Element | null {
     const [magnetUri, setMagnetUri] = useState('');
     const [validationError, setValidationError] = useState<string | null>(null);
     const [submitError, setSubmitError] = useState<string | null>(null);
@@ -75,51 +81,71 @@ export function AddTorrentModal({ isOpen, onClose }: AddTorrentModalProps): Reac
 
     const inputClass = validationError ? 'input input--error' : 'input';
 
-    return (
-        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="add-torrent-modal-title">
-            <div className="modal">
-                <h2 id="add-torrent-modal-title" className="modal__title">
+    // ── Form content shared between inline and modal rendering ────────────
+
+    const formContent = (
+        <form onSubmit={handleSubmit} noValidate>
+            <label htmlFor="magnet-input" className="label">
+                Magnet Link
+            </label>
+            <input
+                id="magnet-input"
+                type="text"
+                className={inputClass}
+                value={magnetUri}
+                onChange={handleChange}
+                placeholder="magnet:?xt=urn:btih:..."
+                aria-describedby={validationError ? 'magnet-error' : undefined}
+                aria-invalid={validationError !== null}
+                disabled={isSubmitting}
+                autoFocus
+            />
+
+            {validationError && (
+                <p id="magnet-error" role="alert" className="modal__error">
+                    {validationError}
+                </p>
+            )}
+
+            {submitError && (
+                <p role="alert" className="modal__error">
+                    {submitError}
+                </p>
+            )}
+
+            <div className={styles.actions}>
+                <button type="button" className="btn" onClick={handleClose} disabled={isSubmitting}>
+                    Cancelar
+                </button>
+                <button type="submit" className="btn btn--primary" disabled={isSubmitting}>
+                    {isSubmitting ? 'Adicionando...' : 'Adicionar'}
+                </button>
+            </div>
+        </form>
+    );
+
+    // ── Inline rendering (Activity Bar navigation) ────────────────────────
+
+    if (inline) {
+        return (
+            <section className={styles.addTorrentPanel} aria-labelledby="add-torrent-panel-title">
+                <h2 id="add-torrent-panel-title" className={styles.panelTitle}>
                     Adicionar Torrent
                 </h2>
+                {formContent}
+            </section>
+        );
+    }
 
-                <form onSubmit={handleSubmit} noValidate>
-                    <label htmlFor="magnet-input" className="label">
-                        Magnet Link
-                    </label>
-                    <input
-                        id="magnet-input"
-                        type="text"
-                        className={inputClass}
-                        value={magnetUri}
-                        onChange={handleChange}
-                        placeholder="magnet:?xt=urn:btih:..."
-                        aria-describedby={validationError ? 'magnet-error' : undefined}
-                        aria-invalid={validationError !== null}
-                        disabled={isSubmitting}
-                        autoFocus
-                    />
+    // ── Command Palette modal rendering (future shortcut access) ──────────
 
-                    {validationError && (
-                        <p id="magnet-error" role="alert" className="modal__error">
-                            {validationError}
-                        </p>
-                    )}
-
-                    {submitError && (
-                        <p role="alert" className="modal__error">
-                            {submitError}
-                        </p>
-                    )}
-
-                    <div className={styles.actions}>
-                        <button type="button" className="btn" onClick={handleClose} disabled={isSubmitting}>
-                            Cancelar
-                        </button>
-                        <button type="submit" className="btn btn--primary" disabled={isSubmitting}>
-                            {isSubmitting ? 'Adicionando...' : 'Adicionar'}
-                        </button>
-                    </div>
-                </form>
+    return (
+        <div className={styles.commandPaletteOverlay} role="dialog" aria-modal="true" aria-labelledby="add-torrent-modal-title">
+            <div className={styles.commandPalettePanel}>
+                <h2 id="add-torrent-modal-title" className={styles.panelTitle}>
+                    Adicionar Torrent
+                </h2>
+                {formContent}
             </div>
         </div>
     );

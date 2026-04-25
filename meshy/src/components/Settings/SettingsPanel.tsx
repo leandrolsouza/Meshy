@@ -14,6 +14,10 @@ interface SettingsPanelProps {
 
 /**
  * Settings panel for configuring destination folder and speed limits.
+ *
+ * Renders inline in the Editor Area when accessed via the Activity Bar.
+ * Accepts `isOpen` and `onClose` props for compatibility — when `isOpen`
+ * is false the component returns null.
  */
 export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JSX.Element | null {
     const { settings, loading, error, updateSettings, selectFolder } = useSettings();
@@ -83,99 +87,103 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
     const dlInputClass = downloadLimitError ? 'input input--error' : 'input';
     const ulInputClass = uploadLimitError ? 'input input--error' : 'input';
 
+    // ── Form content shared between inline and modal rendering ────────────
+
+    const formContent = (
+        <>
+            {loading && <p>Carregando configurações...</p>}
+            {error && (
+                <p role="alert" className="modal__error">
+                    Erro ao carregar configurações: {error}
+                </p>
+            )}
+
+            {settings && (
+                <form onSubmit={handleSave} noValidate>
+                    {/* Destination folder */}
+                    <div className={styles.fieldGroup}>
+                        <label htmlFor="destination-folder" className="label">
+                            Pasta de destino
+                        </label>
+                        <div className={styles.folderRow}>
+                            <input
+                                id="destination-folder"
+                                type="text"
+                                className={`input input--readonly ${styles.folderInput}`}
+                                value={settings.destinationFolder}
+                                readOnly
+                            />
+                            <button type="button" className="btn" onClick={handleSelectFolder}>
+                                Selecionar pasta
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Download speed limit */}
+                    <div className={styles.fieldGroup}>
+                        <label htmlFor="download-speed-limit" className="label">
+                            Limite de download (KB/s, 0 = sem limite)
+                        </label>
+                        <input
+                            id="download-speed-limit"
+                            type="number"
+                            min={0}
+                            step={1}
+                            className={dlInputClass}
+                            value={downloadLimit}
+                            onChange={handleDownloadLimitChange}
+                            aria-describedby={downloadLimitError ? 'download-limit-error' : undefined}
+                            aria-invalid={downloadLimitError !== null}
+                        />
+                        {downloadLimitError && (
+                            <p id="download-limit-error" role="alert" className="modal__error">
+                                {downloadLimitError}
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Upload speed limit */}
+                    <div className={styles.fieldGroupLast}>
+                        <label htmlFor="upload-speed-limit" className="label">
+                            Limite de upload (KB/s, 0 = sem limite)
+                        </label>
+                        <input
+                            id="upload-speed-limit"
+                            type="number"
+                            min={0}
+                            step={1}
+                            className={ulInputClass}
+                            value={uploadLimit}
+                            onChange={handleUploadLimitChange}
+                            aria-describedby={uploadLimitError ? 'upload-limit-error' : undefined}
+                            aria-invalid={uploadLimitError !== null}
+                        />
+                        {uploadLimitError && (
+                            <p id="upload-limit-error" role="alert" className="modal__error">
+                                {uploadLimitError}
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className={styles.actions}>
+                        <button type="submit" className="btn btn--primary" disabled={isSaving}>
+                            {isSaving ? 'Salvando...' : 'Salvar'}
+                        </button>
+                    </div>
+                </form>
+            )}
+        </>
+    );
+
+    // ── Inline rendering (Activity Bar navigation) ────────────────────────
+
     return (
-        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="settings-panel-title">
-            <div className="modal">
-                <h2 id="settings-panel-title" className="modal__title">
-                    Configurações
-                </h2>
-
-                {loading && <p>Carregando configurações...</p>}
-                {error && (
-                    <p role="alert" className="modal__error">
-                        Erro ao carregar configurações: {error}
-                    </p>
-                )}
-
-                {settings && (
-                    <form onSubmit={handleSave} noValidate>
-                        {/* Destination folder */}
-                        <div className={styles.fieldGroup}>
-                            <label htmlFor="destination-folder" className="label">
-                                Pasta de destino
-                            </label>
-                            <div className={styles.folderRow}>
-                                <input
-                                    id="destination-folder"
-                                    type="text"
-                                    className={`input input--readonly ${styles.folderInput}`}
-                                    value={settings.destinationFolder}
-                                    readOnly
-                                />
-                                <button type="button" className="btn" onClick={handleSelectFolder}>
-                                    Selecionar pasta
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Download speed limit */}
-                        <div className={styles.fieldGroup}>
-                            <label htmlFor="download-speed-limit" className="label">
-                                Limite de download (KB/s, 0 = sem limite)
-                            </label>
-                            <input
-                                id="download-speed-limit"
-                                type="number"
-                                min={0}
-                                step={1}
-                                className={dlInputClass}
-                                value={downloadLimit}
-                                onChange={handleDownloadLimitChange}
-                                aria-describedby={downloadLimitError ? 'download-limit-error' : undefined}
-                                aria-invalid={downloadLimitError !== null}
-                            />
-                            {downloadLimitError && (
-                                <p id="download-limit-error" role="alert" className="modal__error">
-                                    {downloadLimitError}
-                                </p>
-                            )}
-                        </div>
-
-                        {/* Upload speed limit */}
-                        <div className={styles.fieldGroupLast}>
-                            <label htmlFor="upload-speed-limit" className="label">
-                                Limite de upload (KB/s, 0 = sem limite)
-                            </label>
-                            <input
-                                id="upload-speed-limit"
-                                type="number"
-                                min={0}
-                                step={1}
-                                className={ulInputClass}
-                                value={uploadLimit}
-                                onChange={handleUploadLimitChange}
-                                aria-describedby={uploadLimitError ? 'upload-limit-error' : undefined}
-                                aria-invalid={uploadLimitError !== null}
-                            />
-                            {uploadLimitError && (
-                                <p id="upload-limit-error" role="alert" className="modal__error">
-                                    {uploadLimitError}
-                                </p>
-                            )}
-                        </div>
-
-                        {/* Actions */}
-                        <div className={styles.actions}>
-                            <button type="button" className="btn" onClick={onClose} disabled={isSaving}>
-                                Fechar
-                            </button>
-                            <button type="submit" className="btn btn--primary" disabled={isSaving}>
-                                {isSaving ? 'Salvando...' : 'Salvar'}
-                            </button>
-                        </div>
-                    </form>
-                )}
-            </div>
-        </div>
+        <section className={styles.settingsPanel} aria-labelledby="settings-panel-title">
+            <h2 id="settings-panel-title" className={styles.panelTitle}>
+                Configurações
+            </h2>
+            {formContent}
+        </section>
     );
 }

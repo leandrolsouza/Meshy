@@ -1,3 +1,18 @@
+/* ─── Inline Settings Panel ───────────────────────────────────────────────── */
+
+.settingsPanel {
+    max-width: 560px;
+}
+
+.panelTitle {
+    color: var(--color-text);
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: var(--space-lg);
+}
+
+/* ─── Form Fields ─────────────────────────────────────────────────────────── */
+
 .fieldGroup {
     margin-bottom: var(--space-lg);
 }
@@ -17,6 +32,6 @@
 
 .actions {
     display: flex;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: var(--space-sm);
 }
