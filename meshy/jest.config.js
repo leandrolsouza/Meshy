@@ -5,8 +5,11 @@ const config = {
     roots: ['<rootDir>/tests', '<rootDir>/main', '<rootDir>/src'],
     testMatch: [
         '**/__tests__/**/*.ts',
+        '**/__tests__/**/*.tsx',
         '**/*.test.ts',
-        '**/*.spec.ts'
+        '**/*.test.tsx',
+        '**/*.spec.ts',
+        '**/*.spec.tsx'
     ],
     transform: {
         '^.+\\.tsx?$': [
@@ -17,6 +20,7 @@ const config = {
         ]
     },
     moduleNameMapper: {
+        '\\.module\\.css$': 'identity-obj-proxy',
         '^@renderer/(.*)$': '<rootDir>/src/$1'
     },
     collectCoverageFrom: [
