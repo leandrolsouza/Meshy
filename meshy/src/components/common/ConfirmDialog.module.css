@@ -1,0 +1,28 @@
+.panel {
+    background-color: var(--color-surface);
+    border-radius: var(--radius-lg);
+    padding: var(--space-xl) 28px;
+    min-width: 320px;
+    max-width: 480px;
+    box-shadow: var(--shadow-dialog);
+}
+
+.title {
+    margin: 0 0 var(--space-md);
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+}
+
+.message {
+    margin: 0 0 var(--space-xl);
+    font-size: var(--font-size-base);
+    color: #444;
+    line-height: 1.5;
+}
+
+.actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}

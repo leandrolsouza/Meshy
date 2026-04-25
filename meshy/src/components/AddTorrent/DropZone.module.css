@@ -1,0 +1,29 @@
+.zone {
+    border: 2px dashed var(--color-border-input);
+    border-radius: var(--radius-lg);
+    padding: var(--space-xl) var(--space-lg);
+    text-align: center;
+    background-color: #fafafa;
+    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+    cursor: default;
+}
+
+.zone.active {
+    border-color: var(--color-primary);
+    background-color: var(--color-primary-light);
+}
+
+.text {
+    margin: 0;
+    color: var(--color-text-muted);
+}
+
+.zone.active .text {
+    color: var(--color-primary);
+}
+
+.error {
+    color: var(--color-danger);
+    margin-top: var(--space-sm);
+    font-size: var(--font-size-sm);
+}

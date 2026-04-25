@@ -1,0 +1,17 @@
+.list {
+    padding: var(--space-sm) 0;
+}
+
+.empty {
+    text-align: center;
+    padding: var(--space-3xl) var(--space-lg);
+    color: var(--color-text-placeholder);
+}
+
+.emptyTitle {
+    font-size: var(--font-size-lg);
+}
+
+.emptyHint {
+    font-size: var(--font-size-sm);
+}

@@ -1,0 +1,12 @@
+.container {
+    width: 100%;
+    background-color: var(--color-border-light);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.fill {
+    height: var(--progress-height);
+    background-color: var(--color-primary);
+    transition: width var(--transition-normal);
+}

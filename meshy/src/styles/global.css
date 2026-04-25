@@ -1,0 +1,218 @@
+/* ─── CSS Custom Properties (Design Tokens) ──────────────────────────────── */
+
+:root {
+    /* Colors — Primary */
+    --color-primary: #1976d2;
+    --color-primary-light: #e3f2fd;
+    --color-primary-dark: #1565c0;
+
+    /* Colors — Danger */
+    --color-danger: #c62828;
+    --color-danger-light: #ffebee;
+
+    /* Colors — Neutral */
+    --color-bg: #f5f5f5;
+    --color-surface: #ffffff;
+    --color-border: #ddd;
+    --color-border-light: #e0e0e0;
+    --color-border-input: #ccc;
+
+    /* Colors — Text */
+    --color-text: #222;
+    --color-text-secondary: #555;
+    --color-text-muted: #666;
+    --color-text-placeholder: #888;
+
+    /* Spacing */
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 12px;
+    --space-lg: 16px;
+    --space-xl: 24px;
+    --space-2xl: 32px;
+    --space-3xl: 48px;
+
+    /* Border radius */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+
+    /* Typography */
+    --font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --font-size-xs: 12px;
+    --font-size-sm: 13px;
+    --font-size-base: 14px;
+    --font-size-lg: 16px;
+    --font-size-xl: 18px;
+    --font-size-2xl: 22px;
+
+    /* Shadows */
+    --shadow-modal: 0 4px 24px rgba(0, 0, 0, 0.2);
+    --shadow-dialog: 0 8px 32px rgba(0, 0, 0, 0.18);
+
+    /* Transitions */
+    --transition-fast: 0.2s ease;
+    --transition-normal: 0.3s ease;
+
+    /* Progress bar */
+    --progress-height: 8px;
+}
+
+/* ─── Reset & Base ────────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
+    color: var(--color-text);
+    background-color: var(--color-bg);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+code {
+    font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+    font-size: 0.9em;
+    background-color: var(--color-border-light);
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+
+/* ─── Buttons ─────────────────────────────────────────────────────────────── */
+
+.btn {
+    padding: var(--space-sm) var(--space-lg);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border-input);
+    background: var(--color-surface);
+    cursor: pointer;
+    font-size: var(--font-size-base);
+    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.btn:hover {
+    background-color: var(--color-border-light);
+}
+
+.btn:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.btn--primary {
+    background-color: var(--color-primary);
+    color: var(--color-surface);
+    border: none;
+}
+
+.btn--primary:hover {
+    background-color: var(--color-primary-dark);
+}
+
+.btn--danger {
+    color: var(--color-danger);
+    border-color: var(--color-danger);
+}
+
+.btn--danger:hover {
+    background-color: var(--color-danger-light);
+}
+
+.btn--danger-filled {
+    background-color: var(--color-danger);
+    color: var(--color-surface);
+    border: none;
+    font-weight: 600;
+}
+
+.btn--danger-filled:hover {
+    background-color: #b71c1c;
+}
+
+.btn--outline-primary {
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
+    color: var(--color-primary-dark);
+    font-weight: 600;
+}
+
+.btn--outline-primary:hover {
+    background-color: #bbdefb;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ─── Modal overlay ───────────────────────────────────────────────────────── */
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal {
+    background-color: var(--color-surface);
+    border-radius: var(--radius-lg);
+    padding: var(--space-xl);
+    width: 100%;
+    max-width: 480px;
+    box-shadow: var(--shadow-modal);
+}
+
+.modal__title {
+    margin: 0 0 var(--space-md);
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+}
+
+.modal__error {
+    color: var(--color-danger);
+    font-size: var(--font-size-sm);
+    margin-top: var(--space-sm);
+}
+
+/* ─── Form inputs ─────────────────────────────────────────────────────────── */
+
+.input {
+    width: 100%;
+    padding: var(--space-sm) 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border-input);
+    font-size: var(--font-size-base);
+    box-sizing: border-box;
+    transition: border-color var(--transition-fast);
+}
+
+.input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px var(--color-primary-light);
+}
+
+.input--error {
+    border-color: var(--color-danger);
+}
+
+.input--readonly {
+    background-color: var(--color-bg);
+}
+
+.label {
+    display: block;
+    margin-bottom: var(--space-sm);
+    font-weight: 500;
+}

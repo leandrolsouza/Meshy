@@ -1,0 +1,22 @@
+.fieldGroup {
+    margin-bottom: var(--space-lg);
+}
+
+.fieldGroupLast {
+    margin-bottom: 20px;
+}
+
+.folderRow {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+.folderInput {
+    flex: 1;
+}
+
+.actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+}
