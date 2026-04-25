@@ -44,7 +44,9 @@
     font-size: 14px;
     line-height: 1;
     cursor: pointer;
-    transition: color var(--transition-fast), background-color var(--transition-fast);
+    transition:
+        color var(--transition-fast),
+        background-color var(--transition-fast);
 }
 
 .clearButton:hover {

@@ -84,109 +84,129 @@ export function registerIpcHandlers(
 ): void {
     // ── torrent:add-file ──────────────────────────────────────────────────────
     // payload: { filePath: string }
-    ipcMain.handle('torrent:add-file', async (_event, payload: unknown): Promise<IPCResponse<DownloadItem>> => {
-        try {
-            if (
-                typeof payload !== 'object' ||
-                payload === null ||
-                typeof (payload as Record<string, unknown>).filePath !== 'string' ||
-                (payload as Record<string, unknown>).filePath === ''
-            ) {
-                return fail('Parâmetros inválidos: filePath deve ser uma string não-vazia');
-            }
+    ipcMain.handle(
+        'torrent:add-file',
+        async (_event, payload: unknown): Promise<IPCResponse<DownloadItem>> => {
+            try {
+                if (
+                    typeof payload !== 'object' ||
+                    payload === null ||
+                    typeof (payload as Record<string, unknown>).filePath !== 'string' ||
+                    (payload as Record<string, unknown>).filePath === ''
+                ) {
+                    return fail('Parâmetros inválidos: filePath deve ser uma string não-vazia');
+                }
 
-            const { filePath } = payload as { filePath: string };
-            const item = await downloadManager.addTorrentFile(filePath);
-            return ok(item);
-        } catch (err) {
-            return failWithLog('torrent:add-file', err);
-        }
-    });
+                const { filePath } = payload as { filePath: string };
+                const item = await downloadManager.addTorrentFile(filePath);
+                return ok(item);
+            } catch (err) {
+                return failWithLog('torrent:add-file', err);
+            }
+        },
+    );
 
     // ── torrent:add-magnet ────────────────────────────────────────────────────
     // payload: { magnetUri: string }
-    ipcMain.handle('torrent:add-magnet', async (_event, payload: unknown): Promise<IPCResponse<DownloadItem>> => {
-        try {
-            if (
-                typeof payload !== 'object' ||
-                payload === null ||
-                typeof (payload as Record<string, unknown>).magnetUri !== 'string' ||
-                (payload as Record<string, unknown>).magnetUri === ''
-            ) {
-                return fail('Parâmetros inválidos: magnetUri deve ser uma string não-vazia');
-            }
+    ipcMain.handle(
+        'torrent:add-magnet',
+        async (_event, payload: unknown): Promise<IPCResponse<DownloadItem>> => {
+            try {
+                if (
+                    typeof payload !== 'object' ||
+                    payload === null ||
+                    typeof (payload as Record<string, unknown>).magnetUri !== 'string' ||
+                    (payload as Record<string, unknown>).magnetUri === ''
+                ) {
+                    return fail('Parâmetros inválidos: magnetUri deve ser uma string não-vazia');
+                }
 
-            const { magnetUri } = payload as { magnetUri: string };
-            const item = await downloadManager.addMagnetLink(magnetUri);
-            return ok(item);
-        } catch (err) {
-            return failWithLog('torrent:add-magnet', err);
-        }
-    });
+                const { magnetUri } = payload as { magnetUri: string };
+                const item = await downloadManager.addMagnetLink(magnetUri);
+                return ok(item);
+            } catch (err) {
+                return failWithLog('torrent:add-magnet', err);
+            }
+        },
+    );
 
     // ── torrent:pause ─────────────────────────────────────────────────────────
     // payload: { infoHash: string }
-    ipcMain.handle('torrent:pause', async (_event, payload: unknown): Promise<IPCResponse<void>> => {
-        try {
-            if (
-                typeof payload !== 'object' ||
-                payload === null ||
-                typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
-                (payload as Record<string, unknown>).infoHash === ''
-            ) {
-                return fail('Parâmetros inválidos: infoHash deve ser uma string não-vazia');
-            }
+    ipcMain.handle(
+        'torrent:pause',
+        async (_event, payload: unknown): Promise<IPCResponse<void>> => {
+            try {
+                if (
+                    typeof payload !== 'object' ||
+                    payload === null ||
+                    typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
+                    (payload as Record<string, unknown>).infoHash === ''
+                ) {
+                    return fail('Parâmetros inválidos: infoHash deve ser uma string não-vazia');
+                }
 
-            const { infoHash } = payload as { infoHash: string };
-            await downloadManager.pause(infoHash);
-            return ok(undefined);
-        } catch (err) {
-            return failWithLog('torrent:pause', err);
-        }
-    });
+                const { infoHash } = payload as { infoHash: string };
+                await downloadManager.pause(infoHash);
+                return ok(undefined);
+            } catch (err) {
+                return failWithLog('torrent:pause', err);
+            }
+        },
+    );
 
     // ── torrent:resume ────────────────────────────────────────────────────────
     // payload: { infoHash: string }
-    ipcMain.handle('torrent:resume', async (_event, payload: unknown): Promise<IPCResponse<void>> => {
-        try {
-            if (
-                typeof payload !== 'object' ||
-                payload === null ||
-                typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
-                (payload as Record<string, unknown>).infoHash === ''
-            ) {
-                return fail('Parâmetros inválidos: infoHash deve ser uma string não-vazia');
-            }
+    ipcMain.handle(
+        'torrent:resume',
+        async (_event, payload: unknown): Promise<IPCResponse<void>> => {
+            try {
+                if (
+                    typeof payload !== 'object' ||
+                    payload === null ||
+                    typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
+                    (payload as Record<string, unknown>).infoHash === ''
+                ) {
+                    return fail('Parâmetros inválidos: infoHash deve ser uma string não-vazia');
+                }
 
-            const { infoHash } = payload as { infoHash: string };
-            await downloadManager.resume(infoHash);
-            return ok(undefined);
-        } catch (err) {
-            return failWithLog('torrent:resume', err);
-        }
-    });
+                const { infoHash } = payload as { infoHash: string };
+                await downloadManager.resume(infoHash);
+                return ok(undefined);
+            } catch (err) {
+                return failWithLog('torrent:resume', err);
+            }
+        },
+    );
 
     // ── torrent:remove ────────────────────────────────────────────────────────
     // payload: { infoHash: string; deleteFiles: boolean }
-    ipcMain.handle('torrent:remove', async (_event, payload: unknown): Promise<IPCResponse<void>> => {
-        try {
-            if (
-                typeof payload !== 'object' ||
-                payload === null ||
-                typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
-                (payload as Record<string, unknown>).infoHash === '' ||
-                typeof (payload as Record<string, unknown>).deleteFiles !== 'boolean'
-            ) {
-                return fail('Parâmetros inválidos: infoHash deve ser uma string não-vazia e deleteFiles deve ser um booleano');
-            }
+    ipcMain.handle(
+        'torrent:remove',
+        async (_event, payload: unknown): Promise<IPCResponse<void>> => {
+            try {
+                if (
+                    typeof payload !== 'object' ||
+                    payload === null ||
+                    typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
+                    (payload as Record<string, unknown>).infoHash === '' ||
+                    typeof (payload as Record<string, unknown>).deleteFiles !== 'boolean'
+                ) {
+                    return fail(
+                        'Parâmetros inválidos: infoHash deve ser uma string não-vazia e deleteFiles deve ser um booleano',
+                    );
+                }
 
-            const { infoHash, deleteFiles } = payload as { infoHash: string; deleteFiles: boolean };
-            await downloadManager.remove(infoHash, deleteFiles);
-            return ok(undefined);
-        } catch (err) {
-            return failWithLog('torrent:remove', err);
-        }
-    });
+                const { infoHash, deleteFiles } = payload as {
+                    infoHash: string;
+                    deleteFiles: boolean;
+                };
+                await downloadManager.remove(infoHash, deleteFiles);
+                return ok(undefined);
+            } catch (err) {
+                return failWithLog('torrent:remove', err);
+            }
+        },
+    );
 
     // ── torrent:get-all ───────────────────────────────────────────────────────
     // payload: void
@@ -212,57 +232,81 @@ export function registerIpcHandlers(
 
     // ── settings:set ──────────────────────────────────────────────────────────
     // payload: Partial<AppSettings>
-    ipcMain.handle('settings:set', async (_event, payload: unknown): Promise<IPCResponse<AppSettings>> => {
-        try {
-            if (typeof payload !== 'object' || payload === null) {
-                return fail('Parâmetros inválidos: payload deve ser um objeto');
+    ipcMain.handle(
+        'settings:set',
+        async (_event, payload: unknown): Promise<IPCResponse<AppSettings>> => {
+            try {
+                if (typeof payload !== 'object' || payload === null) {
+                    return fail('Parâmetros inválidos: payload deve ser um objeto');
+                }
+
+                const partial = payload as Partial<AppSettings>;
+
+                // Validate downloadSpeedLimit if provided
+                if (
+                    partial.downloadSpeedLimit !== undefined &&
+                    !isValidSpeedLimit(partial.downloadSpeedLimit)
+                ) {
+                    return fail(
+                        'Valor inválido: downloadSpeedLimit deve ser um inteiro não-negativo',
+                    );
+                }
+
+                // Validate uploadSpeedLimit if provided
+                if (
+                    partial.uploadSpeedLimit !== undefined &&
+                    !isValidSpeedLimit(partial.uploadSpeedLimit)
+                ) {
+                    return fail(
+                        'Valor inválido: uploadSpeedLimit deve ser um inteiro não-negativo',
+                    );
+                }
+
+                // Validate destinationFolder if provided
+                if (
+                    partial.destinationFolder !== undefined &&
+                    typeof partial.destinationFolder !== 'string'
+                ) {
+                    return fail('Parâmetros inválidos: destinationFolder deve ser uma string');
+                }
+
+                // Validate maxConcurrentDownloads if provided
+                if (
+                    partial.maxConcurrentDownloads !== undefined &&
+                    !isValidMaxConcurrentDownloads(partial.maxConcurrentDownloads)
+                ) {
+                    return fail(
+                        'Valor inválido: maxConcurrentDownloads deve ser um inteiro entre 1 e 10',
+                    );
+                }
+
+                // Validate notificationsEnabled if provided
+                if (
+                    partial.notificationsEnabled !== undefined &&
+                    typeof partial.notificationsEnabled !== 'boolean'
+                ) {
+                    return fail('Valor inválido: notificationsEnabled deve ser um booleano');
+                }
+
+                // Validate theme if provided
+                if (partial.theme !== undefined && !isValidThemeId(partial.theme)) {
+                    return fail('Tema inválido: deve ser uma string não-vazia');
+                }
+
+                settingsManager.set(partial);
+
+                // Notificar o downloadManager sobre a mudança no limite de downloads simultâneos
+                if (partial.maxConcurrentDownloads !== undefined) {
+                    downloadManager.setMaxConcurrentDownloads(partial.maxConcurrentDownloads);
+                }
+
+                const updated = settingsManager.get();
+                return ok(updated);
+            } catch (err) {
+                return failWithLog('settings:set', err);
             }
-
-            const partial = payload as Partial<AppSettings>;
-
-            // Validate downloadSpeedLimit if provided
-            if (partial.downloadSpeedLimit !== undefined && !isValidSpeedLimit(partial.downloadSpeedLimit)) {
-                return fail('Valor inválido: downloadSpeedLimit deve ser um inteiro não-negativo');
-            }
-
-            // Validate uploadSpeedLimit if provided
-            if (partial.uploadSpeedLimit !== undefined && !isValidSpeedLimit(partial.uploadSpeedLimit)) {
-                return fail('Valor inválido: uploadSpeedLimit deve ser um inteiro não-negativo');
-            }
-
-            // Validate destinationFolder if provided
-            if (partial.destinationFolder !== undefined && typeof partial.destinationFolder !== 'string') {
-                return fail('Parâmetros inválidos: destinationFolder deve ser uma string');
-            }
-
-            // Validate maxConcurrentDownloads if provided
-            if (partial.maxConcurrentDownloads !== undefined && !isValidMaxConcurrentDownloads(partial.maxConcurrentDownloads)) {
-                return fail('Valor inválido: maxConcurrentDownloads deve ser um inteiro entre 1 e 10');
-            }
-
-            // Validate notificationsEnabled if provided
-            if (partial.notificationsEnabled !== undefined && typeof partial.notificationsEnabled !== 'boolean') {
-                return fail('Valor inválido: notificationsEnabled deve ser um booleano');
-            }
-
-            // Validate theme if provided
-            if (partial.theme !== undefined && !isValidThemeId(partial.theme)) {
-                return fail('Tema inválido: deve ser uma string não-vazia');
-            }
-
-            settingsManager.set(partial);
-
-            // Notificar o downloadManager sobre a mudança no limite de downloads simultâneos
-            if (partial.maxConcurrentDownloads !== undefined) {
-                downloadManager.setMaxConcurrentDownloads(partial.maxConcurrentDownloads);
-            }
-
-            const updated = settingsManager.get();
-            return ok(updated);
-        } catch (err) {
-            return failWithLog('settings:set', err);
-        }
-    });
+        },
+    );
 
     // ── settings:select-folder ────────────────────────────────────────────────
     // payload: void
@@ -284,101 +328,104 @@ export function registerIpcHandlers(
 
     // ── torrent:get-files ─────────────────────────────────────────────────────
     // payload: { infoHash: string }
-    ipcMain.handle('torrent:get-files', async (_event, payload: unknown): Promise<IPCResponse<TorrentFileInfo[]>> => {
-        try {
-            if (
-                typeof payload !== 'object' ||
-                payload === null ||
-                typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
-                (payload as Record<string, unknown>).infoHash === ''
-            ) {
-                return fail('Parâmetros inválidos: infoHash deve ser uma string não-vazia');
+    ipcMain.handle(
+        'torrent:get-files',
+        async (_event, payload: unknown): Promise<IPCResponse<TorrentFileInfo[]>> => {
+            try {
+                if (
+                    typeof payload !== 'object' ||
+                    payload === null ||
+                    typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
+                    (payload as Record<string, unknown>).infoHash === ''
+                ) {
+                    return fail('Parâmetros inválidos: infoHash deve ser uma string não-vazia');
+                }
+
+                const { infoHash } = payload as { infoHash: string };
+
+                // Check if torrent exists in the download manager
+                const allItems = downloadManager.getAll();
+                const item = allItems.find((i) => i.infoHash === infoHash);
+
+                if (!item) {
+                    return fail('Torrent não encontrado');
+                }
+
+                // If torrent is resolving metadata, return empty array
+                if (item.status === 'resolving-metadata') {
+                    return ok([]);
+                }
+
+                if (!torrentEngine) {
+                    return fail('TorrentEngine não disponível');
+                }
+
+                const files = torrentEngine.getFiles(infoHash);
+                return ok(files);
+            } catch (err) {
+                return failWithLog('torrent:get-files', err);
             }
-
-            const { infoHash } = payload as { infoHash: string };
-
-            // Check if torrent exists in the download manager
-            const allItems = downloadManager.getAll();
-            const item = allItems.find(i => i.infoHash === infoHash);
-
-            if (!item) {
-                return fail('Torrent não encontrado');
-            }
-
-            // If torrent is resolving metadata, return empty array
-            if (item.status === 'resolving-metadata') {
-                return ok([]);
-            }
-
-            if (!torrentEngine) {
-                return fail('TorrentEngine não disponível');
-            }
-
-            const files = torrentEngine.getFiles(infoHash);
-            return ok(files);
-        } catch (err) {
-            return failWithLog('torrent:get-files', err);
-        }
-    });
+        },
+    );
 
     // ── torrent:set-file-selection ────────────────────────────────────────────
     // payload: { infoHash: string, selectedIndices: number[] }
-    ipcMain.handle('torrent:set-file-selection', async (_event, payload: unknown): Promise<IPCResponse<TorrentFileInfo[]>> => {
-        try {
-            if (
-                typeof payload !== 'object' ||
-                payload === null ||
-                typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
-                (payload as Record<string, unknown>).infoHash === ''
-            ) {
-                return fail('Parâmetros inválidos: infoHash deve ser uma string não-vazia');
-            }
-
-            const { infoHash } = payload as { infoHash: string };
-            const rawIndices = (payload as Record<string, unknown>).selectedIndices;
-
-            // Validate selectedIndices is a non-empty array of non-negative integers
-            if (
-                !Array.isArray(rawIndices) ||
-                rawIndices.length === 0
-            ) {
-                return fail('Selecione ao menos um arquivo');
-            }
-
-            for (const idx of rawIndices) {
-                if (typeof idx !== 'number' || !Number.isInteger(idx) || idx < 0) {
-                    return fail('Índice de arquivo inválido');
+    ipcMain.handle(
+        'torrent:set-file-selection',
+        async (_event, payload: unknown): Promise<IPCResponse<TorrentFileInfo[]>> => {
+            try {
+                if (
+                    typeof payload !== 'object' ||
+                    payload === null ||
+                    typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
+                    (payload as Record<string, unknown>).infoHash === ''
+                ) {
+                    return fail('Parâmetros inválidos: infoHash deve ser uma string não-vazia');
                 }
-            }
 
-            const selectedIndices = rawIndices as number[];
+                const { infoHash } = payload as { infoHash: string };
+                const rawIndices = (payload as Record<string, unknown>).selectedIndices;
 
-            // Check if torrent exists
-            const allItems = downloadManager.getAll();
-            const item = allItems.find(i => i.infoHash === infoHash);
-
-            if (!item) {
-                return fail('Torrent não encontrado');
-            }
-
-            if (!torrentEngine) {
-                return fail('TorrentEngine não disponível');
-            }
-
-            // Validate indices are within range by getting file count first
-            const currentFiles = torrentEngine.getFiles(infoHash);
-            const totalFiles = currentFiles.length;
-
-            for (const idx of selectedIndices) {
-                if (idx >= totalFiles) {
-                    return fail('Índice de arquivo inválido');
+                // Validate selectedIndices is a non-empty array of non-negative integers
+                if (!Array.isArray(rawIndices) || rawIndices.length === 0) {
+                    return fail('Selecione ao menos um arquivo');
                 }
-            }
 
-            const updatedFiles = torrentEngine.setFileSelection(infoHash, selectedIndices);
-            return ok(updatedFiles);
-        } catch (err) {
-            return failWithLog('torrent:set-file-selection', err);
-        }
-    });
+                for (const idx of rawIndices) {
+                    if (typeof idx !== 'number' || !Number.isInteger(idx) || idx < 0) {
+                        return fail('Índice de arquivo inválido');
+                    }
+                }
+
+                const selectedIndices = rawIndices as number[];
+
+                // Check if torrent exists
+                const allItems = downloadManager.getAll();
+                const item = allItems.find((i) => i.infoHash === infoHash);
+
+                if (!item) {
+                    return fail('Torrent não encontrado');
+                }
+
+                if (!torrentEngine) {
+                    return fail('TorrentEngine não disponível');
+                }
+
+                // Validate indices are within range by getting file count first
+                const currentFiles = torrentEngine.getFiles(infoHash);
+                const totalFiles = currentFiles.length;
+
+                for (const idx of selectedIndices) {
+                    if (idx >= totalFiles) {
+                        return fail('Índice de arquivo inválido');
+                    }
+                }
+
+                const updatedFiles = torrentEngine.setFileSelection(infoHash, selectedIndices);
+                return ok(updatedFiles);
+            } catch (err) {
+                return failWithLog('torrent:set-file-selection', err);
+            }
+        },
+    );
 }

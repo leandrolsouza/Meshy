@@ -1,16 +1,20 @@
 .zone {
     border: 2px dashed var(--color-border);
-    border-radius: 4px;
-    padding: var(--space-xl) var(--space-lg);
+    border-radius: var(--radius-lg);
+    padding: var(--space-2xl) var(--space-lg);
     text-align: center;
-    background-color: var(--color-bg);
-    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+    background-color: var(--color-surface);
+    transition:
+        background-color var(--transition-normal),
+        border-color var(--transition-normal),
+        transform var(--transition-fast);
     cursor: default;
 }
 
 .zone.active {
     border-color: var(--color-primary);
-    background-color: rgba(38, 79, 120, 0.3);
+    background-color: rgba(38, 79, 120, 0.25);
+    transform: scale(1.005);
 }
 
 .zone.loading {
@@ -19,9 +23,22 @@
     opacity: 0.8;
 }
 
+.icon {
+    font-size: 28px;
+    color: var(--color-text-placeholder);
+    margin-bottom: var(--space-sm);
+    opacity: 0.6;
+}
+
+.zone.active .icon {
+    color: var(--color-primary);
+    opacity: 1;
+}
+
 .text {
     margin: 0;
     color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
 }
 
 .zone.active .text {
@@ -31,8 +48,8 @@
 .hint {
     margin: var(--space-xs) 0 0;
     color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
-    opacity: 0.7;
+    font-size: var(--font-size-xs);
+    opacity: 0.5;
 }
 
 .error {

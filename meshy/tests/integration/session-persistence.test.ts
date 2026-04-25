@@ -56,9 +56,9 @@ function makeMockEngine(): TorrentEngine & EventEmitter {
 
     const engine: TorrentEngine & EventEmitter = Object.assign(emitter, {
         addTorrentFile: jest.fn().mockResolvedValue(makeTorrentInfo()),
-        addMagnetLink: jest.fn().mockResolvedValue(
-            makeTorrentInfo({ status: 'resolving-metadata' as TorrentStatus }),
-        ),
+        addMagnetLink: jest
+            .fn()
+            .mockResolvedValue(makeTorrentInfo({ status: 'resolving-metadata' as TorrentStatus })),
         pause: jest.fn().mockResolvedValue(undefined),
         resume: jest.fn().mockResolvedValue(undefined),
         remove: jest.fn().mockResolvedValue(undefined),
@@ -101,7 +101,6 @@ function makeMockSettingsStore(initialFolder = '/downloads'): SettingsStore {
         set: jest.fn().mockImplementation((key: string, value: unknown) => data.set(key, value)),
     };
 }
-
 
 // ─── Integration Tests ───────────────────────────────────────────────────────
 
@@ -265,8 +264,8 @@ describe('Integration: Session Persistence (Requirements 7.1, 7.2, 7.3, 7.4)', (
             const restored = manager2.getAll();
             expect(restored).toHaveLength(2);
 
-            const restoredTorrent = restored.find(i => i.infoHash === torrentHash);
-            const restoredMagnet = restored.find(i => i.infoHash === magnetHash);
+            const restoredTorrent = restored.find((i) => i.infoHash === torrentHash);
+            const restoredMagnet = restored.find((i) => i.infoHash === magnetHash);
 
             expect(restoredTorrent).toBeDefined();
             expect(restoredTorrent!.name).toBe('Torrent File Download');
@@ -308,7 +307,10 @@ describe('Integration: Session Persistence (Requirements 7.1, 7.2, 7.3, 7.4)', (
 
             // Configure engine to accept the re-add
             (engine.addMagnetLink as jest.Mock).mockResolvedValue(
-                makeTorrentInfo({ infoHash: downloadingHash, status: 'downloading' as TorrentStatus }),
+                makeTorrentInfo({
+                    infoHash: downloadingHash,
+                    status: 'downloading' as TorrentStatus,
+                }),
             );
 
             const manager = createDownloadManager(engine, settings, store);
@@ -350,7 +352,10 @@ describe('Integration: Session Persistence (Requirements 7.1, 7.2, 7.3, 7.4)', (
             const engine = makeMockEngine();
 
             (engine.addTorrentFile as jest.Mock).mockResolvedValue(
-                makeTorrentInfo({ infoHash: downloadingHash, status: 'downloading' as TorrentStatus }),
+                makeTorrentInfo({
+                    infoHash: downloadingHash,
+                    status: 'downloading' as TorrentStatus,
+                }),
             );
 
             const manager = createDownloadManager(engine, settings, store);
@@ -419,9 +424,11 @@ describe('Integration: Session Persistence (Requirements 7.1, 7.2, 7.3, 7.4)', (
 
             const all = manager.getAll();
             expect(all).toHaveLength(3);
-            expect(all.find(i => i.infoHash === 'pppp'.padEnd(40, '0'))!.status).toBe('paused');
-            expect(all.find(i => i.infoHash === 'cccc'.padEnd(40, '0'))!.status).toBe('completed');
-            expect(all.find(i => i.infoHash === 'eeee'.padEnd(40, '0'))!.status).toBe('error');
+            expect(all.find((i) => i.infoHash === 'pppp'.padEnd(40, '0'))!.status).toBe('paused');
+            expect(all.find((i) => i.infoHash === 'cccc'.padEnd(40, '0'))!.status).toBe(
+                'completed',
+            );
+            expect(all.find((i) => i.infoHash === 'eeee'.padEnd(40, '0'))!.status).toBe('error');
         });
     });
 
@@ -616,7 +623,10 @@ describe('Integration: Session Persistence (Requirements 7.1, 7.2, 7.3, 7.4)', (
 
             // Configure engine for the downloading item's auto-resume
             (engine.addMagnetLink as jest.Mock).mockResolvedValue(
-                makeTorrentInfo({ infoHash: downloadingHash, status: 'downloading' as TorrentStatus }),
+                makeTorrentInfo({
+                    infoHash: downloadingHash,
+                    status: 'downloading' as TorrentStatus,
+                }),
             );
 
             // existsSync: return true for /downloads, false for /nonexistent/folder
@@ -631,7 +641,7 @@ describe('Integration: Session Persistence (Requirements 7.1, 7.2, 7.3, 7.4)', (
             expect(all).toHaveLength(5);
 
             // Downloading item: auto-resumed → status downloading
-            const downloading = all.find(i => i.infoHash === downloadingHash);
+            const downloading = all.find((i) => i.infoHash === downloadingHash);
             expect(downloading).toBeDefined();
             expect(downloading!.status).toBe('downloading');
             expect(engine.addMagnetLink).toHaveBeenCalledWith(
@@ -639,24 +649,24 @@ describe('Integration: Session Persistence (Requirements 7.1, 7.2, 7.3, 7.4)', (
             );
 
             // Paused item: stays paused (folder exists)
-            const paused = all.find(i => i.infoHash === pausedHash);
+            const paused = all.find((i) => i.infoHash === pausedHash);
             expect(paused).toBeDefined();
             expect(paused!.status).toBe('paused');
 
             // Completed item: stays completed
-            const completed = all.find(i => i.infoHash === completedHash);
+            const completed = all.find((i) => i.infoHash === completedHash);
             expect(completed).toBeDefined();
             expect(completed!.status).toBe('completed');
             expect(completed!.completedAt).toBe(3_500_000);
             expect(completed!.elapsedMs).toBe(500_000);
 
             // Error item: stays error (folder exists)
-            const errorItem = all.find(i => i.infoHash === errorHash);
+            const errorItem = all.find((i) => i.infoHash === errorHash);
             expect(errorItem).toBeDefined();
             expect(errorItem!.status).toBe('error');
 
             // Missing folder item: becomes files-not-found
-            const missingFolder = all.find(i => i.infoHash === missingFolderHash);
+            const missingFolder = all.find((i) => i.infoHash === missingFolderHash);
             expect(missingFolder).toBeDefined();
             expect(missingFolder!.status).toBe('files-not-found');
         });
@@ -749,13 +759,13 @@ describe('Integration: Session Persistence (Requirements 7.1, 7.2, 7.3, 7.4)', (
             const restored = manager2.getAll();
             expect(restored).toHaveLength(2);
 
-            const restoredPaused = restored.find(i => i.infoHash === pausedHash);
+            const restoredPaused = restored.find((i) => i.infoHash === pausedHash);
             expect(restoredPaused).toBeDefined();
             expect(restoredPaused!.name).toBe('Paused Torrent');
             expect(restoredPaused!.status).toBe('paused');
             expect(restoredPaused!.progress).toBe(0.4);
 
-            const restoredCompleted = restored.find(i => i.infoHash === completedHash);
+            const restoredCompleted = restored.find((i) => i.infoHash === completedHash);
             expect(restoredCompleted).toBeDefined();
             expect(restoredCompleted!.name).toBe('Completed Torrent');
             expect(restoredCompleted!.status).toBe('completed');

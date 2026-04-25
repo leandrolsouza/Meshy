@@ -4,26 +4,16 @@
         "target": "ES2022",
         "module": "ES2022",
         "moduleResolution": "bundler",
-        "lib": [
-            "ES2022"
-        ],
+        "lib": ["ES2022"],
         "strict": true,
         "esModuleInterop": true,
         "allowSyntheticDefaultImports": true,
         "resolveJsonModule": true,
         "skipLibCheck": true,
         "outDir": "out/main",
-        "types": [
-            "electron-vite/node",
-            "node"
-        ],
+        "types": ["electron-vite/node", "node"],
         "baseUrl": ".",
         "paths": {}
     },
-    "include": [
-        "electron.vite.config.*",
-        "main/**/*",
-        "electron/**/*",
-        "shared/**/*"
-    ]
+    "include": ["electron.vite.config.*", "main/**/*", "electron/**/*", "shared/**/*"]
 }

@@ -9,29 +9,24 @@ const config = {
         '**/*.test.ts',
         '**/*.test.tsx',
         '**/*.spec.ts',
-        '**/*.spec.tsx'
+        '**/*.spec.tsx',
     ],
     transform: {
         '^.+\\.tsx?$': [
             'ts-jest',
             {
-                tsconfig: 'tsconfig.jest.json'
-            }
-        ]
+                tsconfig: 'tsconfig.jest.json',
+            },
+        ],
     },
     moduleNameMapper: {
         '\\.module\\.css$': 'identity-obj-proxy',
-        '^@renderer/(.*)$': '<rootDir>/src/$1'
+        '^@renderer/(.*)$': '<rootDir>/src/$1',
     },
-    collectCoverageFrom: [
-        'main/**/*.ts',
-        'src/**/*.ts',
-        '!**/*.d.ts',
-        '!**/index.ts'
-    ],
+    collectCoverageFrom: ['main/**/*.ts', 'src/**/*.ts', '!**/*.d.ts', '!**/index.ts'],
     coverageDirectory: 'coverage',
     coverageReporters: ['text', 'lcov', 'html'],
-    setupFiles: ['<rootDir>/tests/setup.ts']
-}
+    setupFiles: ['<rootDir>/tests/setup.ts'],
+};
 
-module.exports = config
+module.exports = config;

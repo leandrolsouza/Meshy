@@ -63,10 +63,10 @@ function makeMockSettingsManager(): SettingsManager {
 /**
  * Extrai a função handler registrada para um canal IPC específico.
  */
-function getHandler(channel: string): ((_event: unknown, payload?: unknown) => Promise<unknown>) | undefined {
-    const call = mockIpcMain.handle.mock.calls.find(
-        (c: unknown[]) => c[0] === channel,
-    );
+function getHandler(
+    channel: string,
+): ((_event: unknown, payload?: unknown) => Promise<unknown>) | undefined {
+    const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
     return call ? (call[1] as (_event: unknown, payload?: unknown) => Promise<unknown>) : undefined;
 }
 
@@ -90,13 +90,11 @@ describe('Feature: theme-switcher, Property 5: Validação rejeita tema inválid
 
         await fc.assert(
             fc.asyncProperty(
-                fc.oneof(
-                    fc.constant(''),
-                    fc.constant(null),
-                    fc.integer(),
-                ),
+                fc.oneof(fc.constant(''), fc.constant(null), fc.integer()),
                 async (invalidTheme) => {
-                    const response = (await handler(null, { theme: invalidTheme })) as IPCResponse<AppSettings>;
+                    const response = (await handler(null, {
+                        theme: invalidTheme,
+                    })) as IPCResponse<AppSettings>;
 
                     expect(response.success).toBe(false);
                     expect(response).toHaveProperty('error');

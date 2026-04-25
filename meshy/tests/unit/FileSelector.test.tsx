@@ -29,10 +29,12 @@ const torrentFileInfoArb = (index: number): fc.Arbitrary<TorrentFileInfo> =>
     fc.record({
         index: fc.constant(index),
         name: fileNameArb,
-        path: fc.tuple(
-            fc.stringMatching(/^[a-zA-Z0-9_-]{1,15}$/).filter((s) => s.length > 0),
-            fileNameArb,
-        ).map(([dir, name]) => `${dir}/${name}`),
+        path: fc
+            .tuple(
+                fc.stringMatching(/^[a-zA-Z0-9_-]{1,15}$/).filter((s) => s.length > 0),
+                fileNameArb,
+            )
+            .map(([dir, name]) => `${dir}/${name}`),
         length: fc.nat({ max: 10_000_000 }),
         downloaded: fc.nat({ max: 10_000_000 }),
         selected: fc.boolean(),
@@ -40,19 +42,23 @@ const torrentFileInfoArb = (index: number): fc.Arbitrary<TorrentFileInfo> =>
 
 /** Generates an array of 1..15 TorrentFileInfo with sequential indices */
 const fileArrayArb = (minLength = 1, maxLength = 15): fc.Arbitrary<TorrentFileInfo[]> =>
-    fc.integer({ min: minLength, max: maxLength }).chain((n) =>
-        fc.tuple(...Array.from({ length: n }, (_, i) => torrentFileInfoArb(i))),
-    ).map((tuple) => [...tuple]);
+    fc
+        .integer({ min: minLength, max: maxLength })
+        .chain((n) => fc.tuple(...Array.from({ length: n }, (_, i) => torrentFileInfoArb(i))))
+        .map((tuple) => [...tuple]);
 
 /** Generates an array where ALL files are selected */
 const allSelectedFileArrayArb = (minLength = 2, maxLength = 15): fc.Arbitrary<TorrentFileInfo[]> =>
-    fc.integer({ min: minLength, max: maxLength }).chain((n) =>
-        fc.tuple(
-            ...Array.from({ length: n }, (_, i) =>
-                torrentFileInfoArb(i).map((f) => ({ ...f, selected: true })),
+    fc
+        .integer({ min: minLength, max: maxLength })
+        .chain((n) =>
+            fc.tuple(
+                ...Array.from({ length: n }, (_, i) =>
+                    torrentFileInfoArb(i).map((f) => ({ ...f, selected: true })),
+                ),
             ),
-        ),
-    ).map((tuple) => [...tuple]);
+        )
+        .map((tuple) => [...tuple]);
 
 // ─── Property 3: FileSelector renderiza informações completas e acessíveis ────
 
@@ -117,10 +123,7 @@ describe('Feature: torrent-file-selection, Property 4: Estado indeterminado do "
         fc.assert(
             fc.property(
                 allSelectedFileArrayArb(2, 10).chain((files) =>
-                    fc.tuple(
-                        fc.constant(files),
-                        fc.integer({ min: 0, max: files.length - 1 }),
-                    ),
+                    fc.tuple(fc.constant(files), fc.integer({ min: 0, max: files.length - 1 })),
                 ),
                 ([files, deselectedIndex]) => {
                     // Deselect exactly one file

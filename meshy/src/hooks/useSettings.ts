@@ -53,24 +53,21 @@ export function useSettings() {
      * Persists a partial settings update via `window.meshy.setSettings(partial)`.
      * On success, merges the returned settings into local state.
      */
-    const updateSettings = useCallback(
-        async (partial: Partial<AppSettings>): Promise<boolean> => {
-            try {
-                const response = await window.meshy.setSettings(partial);
-                if (response.success) {
-                    setSettings(response.data);
-                    return true;
-                } else {
-                    setError(response.error);
-                    return false;
-                }
-            } catch (err) {
-                setError(err instanceof Error ? err.message : String(err));
+    const updateSettings = useCallback(async (partial: Partial<AppSettings>): Promise<boolean> => {
+        try {
+            const response = await window.meshy.setSettings(partial);
+            if (response.success) {
+                setSettings(response.data);
+                return true;
+            } else {
+                setError(response.error);
                 return false;
             }
-        },
-        [],
-    );
+        } catch (err) {
+            setError(err instanceof Error ? err.message : String(err));
+            return false;
+        }
+    }, []);
 
     // ── selectFolder ──────────────────────────────────────────────────────────
 

@@ -118,11 +118,10 @@ describe('Propriedade 7: Validação rejeita tokens incompletos', () => {
                 maxLength: REQUIRED_TOKEN_KEYS.length,
             }),
             // Gera subarray de índices para remover (pelo menos 1 chave removida)
-            indicesToRemove: fc
-                .subarray(
-                    Array.from({ length: REQUIRED_TOKEN_KEYS.length }, (_, i) => i),
-                    { minLength: 1 },
-                ),
+            indicesToRemove: fc.subarray(
+                Array.from({ length: REQUIRED_TOKEN_KEYS.length }, (_, i) => i),
+                { minLength: 1 },
+            ),
         })
         .map(({ id, displayName, tokenValues, indicesToRemove }) => {
             const tokens: Record<string, string> = {};

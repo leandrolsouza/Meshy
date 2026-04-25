@@ -97,10 +97,10 @@ function makeMockSettingsManager(): SettingsManager {
 /**
  * Extract the handler function registered for a given IPC channel.
  */
-function getHandler(channel: string): ((_event: unknown, payload?: unknown) => Promise<unknown>) | undefined {
-    const call = mockIpcMain.handle.mock.calls.find(
-        (c: unknown[]) => c[0] === channel,
-    );
+function getHandler(
+    channel: string,
+): ((_event: unknown, payload?: unknown) => Promise<unknown>) | undefined {
+    const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
     return call ? (call[1] as (_event: unknown, payload?: unknown) => Promise<unknown>) : undefined;
 }
 
@@ -133,7 +133,9 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
 
         it('torrent:add-file responds with { success: true } for valid payload', async () => {
             const handler = getHandler('torrent:add-file')!;
-            const response = (await handler(null, { filePath: '/path/to/file.torrent' })) as IPCResponse<DownloadItem>;
+            const response = (await handler(null, {
+                filePath: '/path/to/file.torrent',
+            })) as IPCResponse<DownloadItem>;
 
             expect(response.success).toBe(true);
             expect(response).toHaveProperty('data');
@@ -151,14 +153,18 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
 
         it('torrent:pause responds with { success: true } for valid payload', async () => {
             const handler = getHandler('torrent:pause')!;
-            const response = (await handler(null, { infoHash: 'a'.repeat(40) })) as IPCResponse<void>;
+            const response = (await handler(null, {
+                infoHash: 'a'.repeat(40),
+            })) as IPCResponse<void>;
 
             expect(response.success).toBe(true);
         });
 
         it('torrent:resume responds with { success: true } for valid payload', async () => {
             const handler = getHandler('torrent:resume')!;
-            const response = (await handler(null, { infoHash: 'a'.repeat(40) })) as IPCResponse<void>;
+            const response = (await handler(null, {
+                infoHash: 'a'.repeat(40),
+            })) as IPCResponse<void>;
 
             expect(response.success).toBe(true);
         });
@@ -197,7 +203,9 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
 
         it('settings:set responds with { success: true } for valid partial settings', async () => {
             const handler = getHandler('settings:set')!;
-            const response = (await handler(null, { downloadSpeedLimit: 500 })) as IPCResponse<AppSettings>;
+            const response = (await handler(null, {
+                downloadSpeedLimit: 500,
+            })) as IPCResponse<AppSettings>;
 
             expect(response.success).toBe(true);
             expect(settingsManager.set).toHaveBeenCalledWith({ downloadSpeedLimit: 500 });
@@ -452,7 +460,9 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
             (settingsManager.get as jest.Mock).mockReturnValue(updatedSettings);
 
             const handler = getHandler('settings:set')!;
-            const response = (await handler(null, { downloadSpeedLimit: 1024 })) as IPCResponse<AppSettings>;
+            const response = (await handler(null, {
+                downloadSpeedLimit: 1024,
+            })) as IPCResponse<AppSettings>;
 
             expect(response.success).toBe(true);
             if (response.success) {
@@ -473,7 +483,9 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
             (settingsManager.get as jest.Mock).mockReturnValue(updatedSettings);
 
             const handler = getHandler('settings:set')!;
-            const response = (await handler(null, { uploadSpeedLimit: 512 })) as IPCResponse<AppSettings>;
+            const response = (await handler(null, {
+                uploadSpeedLimit: 512,
+            })) as IPCResponse<AppSettings>;
 
             expect(response.success).toBe(true);
             if (response.success) {
@@ -494,7 +506,9 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
             (settingsManager.get as jest.Mock).mockReturnValue(updatedSettings);
 
             const handler = getHandler('settings:set')!;
-            const response = (await handler(null, { destinationFolder: '/new/folder' })) as IPCResponse<AppSettings>;
+            const response = (await handler(null, {
+                destinationFolder: '/new/folder',
+            })) as IPCResponse<AppSettings>;
 
             expect(response.success).toBe(true);
             if (response.success) {
@@ -549,7 +563,9 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
             );
 
             const handler = getHandler('torrent:add-file')!;
-            const response = (await handler(null, { filePath: '/bad/file.torrent' })) as IPCResponse<never>;
+            const response = (await handler(null, {
+                filePath: '/bad/file.torrent',
+            })) as IPCResponse<never>;
 
             expect(response.success).toBe(false);
             if (!response.success) {
@@ -579,7 +595,9 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
             );
 
             const handler = getHandler('torrent:pause')!;
-            const response = (await handler(null, { infoHash: 'a'.repeat(40) })) as IPCResponse<never>;
+            const response = (await handler(null, {
+                infoHash: 'a'.repeat(40),
+            })) as IPCResponse<never>;
 
             expect(response.success).toBe(false);
             if (!response.success) {

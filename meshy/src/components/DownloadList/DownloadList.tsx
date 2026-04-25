@@ -62,12 +62,11 @@ export function DownloadList(): React.JSX.Element {
         filteredItems.length === 0
             ? 'Nenhum download encontrado'
             : filteredItems.length === 1
-                ? '1 download encontrado'
-                : `${filteredItems.length} downloads encontrados`;
+              ? '1 download encontrado'
+              : `${filteredItems.length} downloads encontrados`;
 
     // Verifica se algum filtro está ativo
-    const hasActiveFilters =
-        searchTerm.trim() !== '' || selectedStatuses.length > 0;
+    const hasActiveFilters = searchTerm.trim() !== '' || selectedStatuses.length > 0;
 
     return (
         <div className={styles.container}>
@@ -138,8 +137,14 @@ export function DownloadList(): React.JSX.Element {
                 isOpen={isConfirmOpen}
                 title="Limpar downloads concluídos"
                 message={`Deseja remover ${completedCount === 1 ? '1 download concluído' : `${completedCount} downloads concluídos`} da lista? Os arquivos baixados podem ser mantidos ou excluídos do disco.`}
-                onConfirmKeepFiles={() => { setIsConfirmOpen(false); handleClearCompleted(false); }}
-                onConfirmDeleteFiles={() => { setIsConfirmOpen(false); handleClearCompleted(true); }}
+                onConfirmKeepFiles={() => {
+                    setIsConfirmOpen(false);
+                    handleClearCompleted(false);
+                }}
+                onConfirmDeleteFiles={() => {
+                    setIsConfirmOpen(false);
+                    handleClearCompleted(true);
+                }}
                 onCancel={() => setIsConfirmOpen(false)}
             />
         </div>

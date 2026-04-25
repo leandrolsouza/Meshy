@@ -4,10 +4,7 @@
         "module": "CommonJS",
         "moduleResolution": "node",
         "jsx": "react-jsx",
-        "lib": [
-            "ES2020",
-            "dom"
-        ],
+        "lib": ["ES2020", "dom"],
         "strict": true,
         "esModuleInterop": true,
         "allowSyntheticDefaultImports": true,
@@ -15,20 +12,8 @@
         "outDir": "dist-jest",
         "rootDir": ".",
         "skipLibCheck": true,
-        "types": [
-            "jest",
-            "node"
-        ]
+        "types": ["jest", "node"]
     },
-    "include": [
-        "main/**/*",
-        "src/**/*",
-        "tests/**/*",
-        "electron/**/*",
-        "shared/**/*"
-    ],
-    "exclude": [
-        "node_modules",
-        "out"
-    ]
+    "include": ["main/**/*", "src/**/*", "tests/**/*", "electron/**/*", "shared/**/*"],
+    "exclude": ["node_modules", "out"]
 }

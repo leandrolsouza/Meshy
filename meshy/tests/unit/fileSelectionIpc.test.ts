@@ -57,9 +57,30 @@ function makeMockSettingsManager(): SettingsManager {
 }
 
 const SAMPLE_FILES: TorrentFileInfo[] = [
-    { index: 0, name: 'video.mp4', path: 'Movie/video.mp4', length: 1000000, downloaded: 500000, selected: true },
-    { index: 1, name: 'subs.srt', path: 'Movie/subs.srt', length: 50000, downloaded: 50000, selected: true },
-    { index: 2, name: 'readme.txt', path: 'Movie/readme.txt', length: 1000, downloaded: 0, selected: false },
+    {
+        index: 0,
+        name: 'video.mp4',
+        path: 'Movie/video.mp4',
+        length: 1000000,
+        downloaded: 500000,
+        selected: true,
+    },
+    {
+        index: 1,
+        name: 'subs.srt',
+        path: 'Movie/subs.srt',
+        length: 50000,
+        downloaded: 50000,
+        selected: true,
+    },
+    {
+        index: 2,
+        name: 'readme.txt',
+        path: 'Movie/readme.txt',
+        length: 1000,
+        downloaded: 0,
+        selected: false,
+    },
 ];
 
 function makeMockTorrentEngine(files: TorrentFileInfo[] = SAMPLE_FILES): TorrentEngine {
@@ -101,10 +122,10 @@ function makeDownloadItem(overrides: Partial<DownloadItem> = {}): DownloadItem {
 /**
  * Helper: extract the handler function registered for a given channel.
  */
-function getHandler(channel: string): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
-    const call = mockIpcMain.handle.mock.calls.find(
-        (c: unknown[]) => c[0] === channel,
-    );
+function getHandler(
+    channel: string,
+): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
+    const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
     return call ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>) : undefined;
 }
 
@@ -126,11 +147,15 @@ describe('torrent:get-files handler', () => {
         const handler = getHandler('torrent:get-files');
         expect(handler).toBeDefined();
 
-        const response = await handler!(null, { infoHash: 'abc123' }) as { success: boolean; data?: TorrentFileInfo[]; error?: string };
+        const response = (await handler!(null, { infoHash: 'abc123' })) as {
+            success: boolean;
+            data?: TorrentFileInfo[];
+            error?: string;
+        };
 
         expect(response.success).toBe(true);
         expect(response.data).toEqual(SAMPLE_FILES);
-        expect((engine.getFiles as jest.Mock)).toHaveBeenCalledWith('abc123');
+        expect(engine.getFiles as jest.Mock).toHaveBeenCalledWith('abc123');
     });
 
     it('returns error when torrent is not found', async () => {
@@ -141,7 +166,10 @@ describe('torrent:get-files handler', () => {
         registerIpcHandlers(dm, sm, engine);
 
         const handler = getHandler('torrent:get-files');
-        const response = await handler!(null, { infoHash: 'nonexistent' }) as { success: boolean; error?: string };
+        const response = (await handler!(null, { infoHash: 'nonexistent' })) as {
+            success: boolean;
+            error?: string;
+        };
 
         expect(response.success).toBe(false);
         expect(response.error).toBe('Torrent não encontrado');
@@ -156,11 +184,14 @@ describe('torrent:get-files handler', () => {
         registerIpcHandlers(dm, sm, engine);
 
         const handler = getHandler('torrent:get-files');
-        const response = await handler!(null, { infoHash: 'abc123' }) as { success: boolean; data?: TorrentFileInfo[] };
+        const response = (await handler!(null, { infoHash: 'abc123' })) as {
+            success: boolean;
+            data?: TorrentFileInfo[];
+        };
 
         expect(response.success).toBe(true);
         expect(response.data).toEqual([]);
-        expect((engine.getFiles as jest.Mock)).not.toHaveBeenCalled();
+        expect(engine.getFiles as jest.Mock).not.toHaveBeenCalled();
     });
 
     it('returns error for null payload', async () => {
@@ -171,7 +202,7 @@ describe('torrent:get-files handler', () => {
         registerIpcHandlers(dm, sm, engine);
 
         const handler = getHandler('torrent:get-files');
-        const response = await handler!(null, null) as { success: boolean; error?: string };
+        const response = (await handler!(null, null)) as { success: boolean; error?: string };
 
         expect(response.success).toBe(false);
         expect(response.error).toContain('infoHash');
@@ -185,7 +216,10 @@ describe('torrent:get-files handler', () => {
         registerIpcHandlers(dm, sm, engine);
 
         const handler = getHandler('torrent:get-files');
-        const response = await handler!(null, { infoHash: '' }) as { success: boolean; error?: string };
+        const response = (await handler!(null, { infoHash: '' })) as {
+            success: boolean;
+            error?: string;
+        };
 
         expect(response.success).toBe(false);
         expect(response.error).toContain('infoHash');
@@ -199,7 +233,10 @@ describe('torrent:get-files handler', () => {
         registerIpcHandlers(dm, sm, engine);
 
         const handler = getHandler('torrent:get-files');
-        const response = await handler!(null, { infoHash: 123 }) as { success: boolean; error?: string };
+        const response = (await handler!(null, { infoHash: 123 })) as {
+            success: boolean;
+            error?: string;
+        };
 
         expect(response.success).toBe(false);
         expect(response.error).toContain('infoHash');
@@ -217,7 +254,7 @@ describe('torrent:set-file-selection handler', () => {
         const item = makeDownloadItem({ infoHash: 'abc123', status: 'downloading' });
         const dm = makeMockDownloadManager([item]);
         const sm = makeMockSettingsManager();
-        const updatedFiles = SAMPLE_FILES.map(f => ({ ...f, selected: f.index === 0 }));
+        const updatedFiles = SAMPLE_FILES.map((f) => ({ ...f, selected: f.index === 0 }));
         const engine = makeMockTorrentEngine();
         (engine.setFileSelection as jest.Mock).mockReturnValue(updatedFiles);
 
@@ -226,11 +263,14 @@ describe('torrent:set-file-selection handler', () => {
         const handler = getHandler('torrent:set-file-selection');
         expect(handler).toBeDefined();
 
-        const response = await handler!(null, { infoHash: 'abc123', selectedIndices: [0] }) as { success: boolean; data?: TorrentFileInfo[] };
+        const response = (await handler!(null, { infoHash: 'abc123', selectedIndices: [0] })) as {
+            success: boolean;
+            data?: TorrentFileInfo[];
+        };
 
         expect(response.success).toBe(true);
         expect(response.data).toEqual(updatedFiles);
-        expect((engine.setFileSelection as jest.Mock)).toHaveBeenCalledWith('abc123', [0]);
+        expect(engine.setFileSelection as jest.Mock).toHaveBeenCalledWith('abc123', [0]);
     });
 
     it('returns error when torrent is not found', async () => {
@@ -241,7 +281,10 @@ describe('torrent:set-file-selection handler', () => {
         registerIpcHandlers(dm, sm, engine);
 
         const handler = getHandler('torrent:set-file-selection');
-        const response = await handler!(null, { infoHash: 'nonexistent', selectedIndices: [0] }) as { success: boolean; error?: string };
+        const response = (await handler!(null, {
+            infoHash: 'nonexistent',
+            selectedIndices: [0],
+        })) as { success: boolean; error?: string };
 
         expect(response.success).toBe(false);
         expect(response.error).toBe('Torrent não encontrado');
@@ -256,7 +299,10 @@ describe('torrent:set-file-selection handler', () => {
         registerIpcHandlers(dm, sm, engine);
 
         const handler = getHandler('torrent:set-file-selection');
-        const response = await handler!(null, { infoHash: 'abc123', selectedIndices: [] }) as { success: boolean; error?: string };
+        const response = (await handler!(null, { infoHash: 'abc123', selectedIndices: [] })) as {
+            success: boolean;
+            error?: string;
+        };
 
         expect(response.success).toBe(false);
         expect(response.error).toBe('Selecione ao menos um arquivo');
@@ -271,7 +317,10 @@ describe('torrent:set-file-selection handler', () => {
         registerIpcHandlers(dm, sm, engine);
 
         const handler = getHandler('torrent:set-file-selection');
-        const response = await handler!(null, { infoHash: 'abc123', selectedIndices: [-1] }) as { success: boolean; error?: string };
+        const response = (await handler!(null, { infoHash: 'abc123', selectedIndices: [-1] })) as {
+            success: boolean;
+            error?: string;
+        };
 
         expect(response.success).toBe(false);
         expect(response.error).toBe('Índice de arquivo inválido');
@@ -286,7 +335,10 @@ describe('torrent:set-file-selection handler', () => {
         registerIpcHandlers(dm, sm, engine);
 
         const handler = getHandler('torrent:set-file-selection');
-        const response = await handler!(null, { infoHash: 'abc123', selectedIndices: [1.5] }) as { success: boolean; error?: string };
+        const response = (await handler!(null, { infoHash: 'abc123', selectedIndices: [1.5] })) as {
+            success: boolean;
+            error?: string;
+        };
 
         expect(response.success).toBe(false);
         expect(response.error).toBe('Índice de arquivo inválido');
@@ -302,7 +354,10 @@ describe('torrent:set-file-selection handler', () => {
         registerIpcHandlers(dm, sm, engine);
 
         const handler = getHandler('torrent:set-file-selection');
-        const response = await handler!(null, { infoHash: 'abc123', selectedIndices: [5] }) as { success: boolean; error?: string };
+        const response = (await handler!(null, { infoHash: 'abc123', selectedIndices: [5] })) as {
+            success: boolean;
+            error?: string;
+        };
 
         expect(response.success).toBe(false);
         expect(response.error).toBe('Índice de arquivo inválido');
@@ -316,7 +371,7 @@ describe('torrent:set-file-selection handler', () => {
         registerIpcHandlers(dm, sm, engine);
 
         const handler = getHandler('torrent:set-file-selection');
-        const response = await handler!(null, null) as { success: boolean; error?: string };
+        const response = (await handler!(null, null)) as { success: boolean; error?: string };
 
         expect(response.success).toBe(false);
         expect(response.error).toContain('infoHash');
@@ -330,7 +385,10 @@ describe('torrent:set-file-selection handler', () => {
         registerIpcHandlers(dm, sm, engine);
 
         const handler = getHandler('torrent:set-file-selection');
-        const response = await handler!(null, { infoHash: '', selectedIndices: [0] }) as { success: boolean; error?: string };
+        const response = (await handler!(null, { infoHash: '', selectedIndices: [0] })) as {
+            success: boolean;
+            error?: string;
+        };
 
         expect(response.success).toBe(false);
         expect(response.error).toContain('infoHash');
@@ -345,7 +403,10 @@ describe('torrent:set-file-selection handler', () => {
         registerIpcHandlers(dm, sm, engine);
 
         const handler = getHandler('torrent:set-file-selection');
-        const response = await handler!(null, { infoHash: 'abc123', selectedIndices: 'not-array' }) as { success: boolean; error?: string };
+        const response = (await handler!(null, {
+            infoHash: 'abc123',
+            selectedIndices: 'not-array',
+        })) as { success: boolean; error?: string };
 
         expect(response.success).toBe(false);
         expect(response.error).toBe('Selecione ao menos um arquivo');
@@ -360,7 +421,10 @@ describe('torrent:set-file-selection handler', () => {
         registerIpcHandlers(dm, sm, engine);
 
         const handler = getHandler('torrent:set-file-selection');
-        const response = await handler!(null, { infoHash: 'abc123', selectedIndices: ['a'] }) as { success: boolean; error?: string };
+        const response = (await handler!(null, { infoHash: 'abc123', selectedIndices: ['a'] })) as {
+            success: boolean;
+            error?: string;
+        };
 
         expect(response.success).toBe(false);
         expect(response.error).toBe('Índice de arquivo inválido');

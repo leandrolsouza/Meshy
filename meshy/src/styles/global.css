@@ -36,6 +36,7 @@
 
     /* Colors — Semantic */
     --color-success: #89d185;
+    --color-warning: #cca700;
 
     /* Colors — Input */
     --color-input-bg: #3c3c3c;
@@ -64,7 +65,7 @@
     --radius-lg: 8px;
 
     /* Typography */
-    --font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
     --font-size-xs: 12px;
     --font-size-sm: 13px;
     --font-size-base: 13px;
@@ -81,7 +82,11 @@
     --transition-normal: 0.3s ease;
 
     /* Progress bar */
-    --progress-height: 4px;
+    --progress-height: 6px;
+
+    /* Card */
+    --card-radius: 6px;
+    --card-hover-border: #555555;
 }
 
 /* ─── Reset & Base ────────────────────────────────────────────────────────── */
@@ -104,7 +109,7 @@ body {
 }
 
 code {
-    font-family: "Cascadia Code", "Fira Code", Consolas, "Courier New", monospace;
+    font-family: 'Cascadia Code', 'Fira Code', Consolas, 'Courier New', monospace;
     font-size: 0.9em;
     background-color: var(--color-border-light);
     padding: 1px 4px;
@@ -114,18 +119,27 @@ code {
 /* ─── Buttons ─────────────────────────────────────────────────────────────── */
 
 .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     padding: 6px 14px;
-    border-radius: 2px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--color-border);
     background: transparent;
     color: var(--color-text);
     cursor: pointer;
     font-size: var(--font-size-base);
-    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+    font-family: inherit;
+    line-height: 1.4;
+    transition:
+        background-color var(--transition-fast),
+        border-color var(--transition-fast),
+        box-shadow var(--transition-fast);
 }
 
 .btn:hover {
     background-color: var(--color-hover);
+    border-color: var(--card-hover-border);
 }
 
 .btn:focus-visible {
@@ -136,8 +150,7 @@ code {
 .btn--primary {
     background-color: var(--color-primary);
     color: #ffffff;
-    border: none;
-    border-radius: 2px;
+    border: 1px solid transparent;
 }
 
 .btn--primary:hover {
@@ -145,14 +158,25 @@ code {
 }
 
 .btn--danger {
-    background-color: var(--color-danger);
-    color: #ffffff;
-    border: none;
-    border-radius: 2px;
+    background-color: transparent;
+    color: var(--color-danger);
+    border: 1px solid var(--color-danger);
 }
 
 .btn--danger:hover {
-    background-color: #d32f2f;
+    background-color: var(--color-danger);
+    color: #ffffff;
+}
+
+.btn--ghost {
+    border: none;
+    padding: 6px 10px;
+    color: var(--color-text-secondary);
+}
+
+.btn--ghost:hover {
+    background-color: var(--color-hover);
+    color: var(--color-text);
 }
 
 .btn:disabled {
@@ -202,12 +226,14 @@ code {
     background-color: var(--color-input-bg);
     border: 1px solid var(--color-border-input);
     color: var(--color-text);
-    border-radius: 2px;
-    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    padding: 5px 10px;
     font-size: var(--font-size-base);
     font-family: inherit;
     box-sizing: border-box;
-    transition: border-color var(--transition-fast);
+    transition:
+        border-color var(--transition-fast),
+        box-shadow var(--transition-fast);
 }
 
 .input::placeholder {
@@ -260,7 +286,6 @@ code {
 /* ─── Reduced Motion ──────────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
-
     *,
     *::before,
     *::after {

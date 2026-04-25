@@ -133,7 +133,8 @@ export function FileSelector({
                                     <div className={styles.fileNameRow}>
                                         <span className={styles.fileName}>{file.name}</span>
                                         <span className={styles.fileSize}>
-                                            {formatBytes(file.downloaded)} / {formatBytes(file.length)}
+                                            {formatBytes(file.downloaded)} /{' '}
+                                            {formatBytes(file.length)}
                                         </span>
                                     </div>
                                     {file.selected && (

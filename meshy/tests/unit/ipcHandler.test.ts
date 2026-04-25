@@ -96,7 +96,7 @@ describe('registerIpcHandlers — IPC channel registration (Requirement 8.1)', (
         registerIpcHandlers(downloadManager, settingsManager);
 
         const registeredChannels = mockIpcMain.handle.mock.calls.map(
-            (call: unknown[]) => call[0] as string
+            (call: unknown[]) => call[0] as string,
         );
 
         for (const channel of EXPECTED_CHANNELS) {
@@ -120,7 +120,7 @@ describe('registerIpcHandlers — IPC channel registration (Requirement 8.1)', (
         registerIpcHandlers(downloadManager, settingsManager);
 
         const registeredChannels = mockIpcMain.handle.mock.calls.map(
-            (call: unknown[]) => call[0] as string
+            (call: unknown[]) => call[0] as string,
         );
         expect(registeredChannels).toContain(channel);
     });
@@ -159,11 +159,13 @@ describe('registerIpcHandlers — invalid payload returns structured error (Requ
      * Helper: extract the handler function registered for a given channel.
      * ipcMain.handle is called as: ipcMain.handle(channel, handlerFn)
      */
-    function getHandler(channel: string): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
-        const call = mockIpcMain.handle.mock.calls.find(
-            (c: unknown[]) => c[0] === channel
-        );
-        return call ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>) : undefined;
+    function getHandler(
+        channel: string,
+    ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
+        const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
+        return call
+            ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
+            : undefined;
     }
 
     beforeEach(() => {
@@ -179,7 +181,7 @@ describe('registerIpcHandlers — invalid payload returns structured error (Requ
         const handler = getHandler('torrent:add-file');
         expect(handler).toBeDefined();
 
-        const response = await handler!(null, null) as { success: boolean; error?: string };
+        const response = (await handler!(null, null)) as { success: boolean; error?: string };
 
         expect(response.success).toBe(false);
         expect(typeof response.error).toBe('string');
@@ -188,7 +190,7 @@ describe('registerIpcHandlers — invalid payload returns structured error (Requ
 
     it('torrent:add-file with empty object payload returns { success: false, error: string }', async () => {
         const handler = getHandler('torrent:add-file');
-        const response = await handler!(null, {}) as { success: boolean; error?: string };
+        const response = (await handler!(null, {})) as { success: boolean; error?: string };
 
         expect(response.success).toBe(false);
         expect(typeof response.error).toBe('string');
@@ -196,7 +198,10 @@ describe('registerIpcHandlers — invalid payload returns structured error (Requ
 
     it('torrent:add-file with empty filePath returns { success: false, error: string }', async () => {
         const handler = getHandler('torrent:add-file');
-        const response = await handler!(null, { filePath: '' }) as { success: boolean; error?: string };
+        const response = (await handler!(null, { filePath: '' })) as {
+            success: boolean;
+            error?: string;
+        };
 
         expect(response.success).toBe(false);
         expect(typeof response.error).toBe('string');
@@ -206,7 +211,7 @@ describe('registerIpcHandlers — invalid payload returns structured error (Requ
         const handler = getHandler('torrent:add-magnet');
         expect(handler).toBeDefined();
 
-        const response = await handler!(null, null) as { success: boolean; error?: string };
+        const response = (await handler!(null, null)) as { success: boolean; error?: string };
 
         expect(response.success).toBe(false);
         expect(typeof response.error).toBe('string');
@@ -216,7 +221,7 @@ describe('registerIpcHandlers — invalid payload returns structured error (Requ
         const handler = getHandler('torrent:pause');
         expect(handler).toBeDefined();
 
-        const response = await handler!(null, null) as { success: boolean; error?: string };
+        const response = (await handler!(null, null)) as { success: boolean; error?: string };
 
         expect(response.success).toBe(false);
         expect(typeof response.error).toBe('string');
@@ -226,7 +231,7 @@ describe('registerIpcHandlers — invalid payload returns structured error (Requ
         const handler = getHandler('torrent:resume');
         expect(handler).toBeDefined();
 
-        const response = await handler!(null, null) as { success: boolean; error?: string };
+        const response = (await handler!(null, null)) as { success: boolean; error?: string };
 
         expect(response.success).toBe(false);
         expect(typeof response.error).toBe('string');
@@ -236,7 +241,7 @@ describe('registerIpcHandlers — invalid payload returns structured error (Requ
         const handler = getHandler('torrent:remove');
         expect(handler).toBeDefined();
 
-        const response = await handler!(null, null) as { success: boolean; error?: string };
+        const response = (await handler!(null, null)) as { success: boolean; error?: string };
 
         expect(response.success).toBe(false);
         expect(typeof response.error).toBe('string');
@@ -244,7 +249,10 @@ describe('registerIpcHandlers — invalid payload returns structured error (Requ
 
     it('torrent:remove with missing deleteFiles field returns { success: false, error: string }', async () => {
         const handler = getHandler('torrent:remove');
-        const response = await handler!(null, { infoHash: 'a'.repeat(40) }) as { success: boolean; error?: string };
+        const response = (await handler!(null, { infoHash: 'a'.repeat(40) })) as {
+            success: boolean;
+            error?: string;
+        };
 
         expect(response.success).toBe(false);
         expect(typeof response.error).toBe('string');
@@ -254,7 +262,7 @@ describe('registerIpcHandlers — invalid payload returns structured error (Requ
         const handler = getHandler('settings:set');
         expect(handler).toBeDefined();
 
-        const response = await handler!(null, null) as { success: boolean; error?: string };
+        const response = (await handler!(null, null)) as { success: boolean; error?: string };
 
         expect(response.success).toBe(false);
         expect(typeof response.error).toBe('string');
@@ -262,7 +270,10 @@ describe('registerIpcHandlers — invalid payload returns structured error (Requ
 
     it('settings:set with invalid downloadSpeedLimit returns { success: false, error: string }', async () => {
         const handler = getHandler('settings:set');
-        const response = await handler!(null, { downloadSpeedLimit: -1 }) as { success: boolean; error?: string };
+        const response = (await handler!(null, { downloadSpeedLimit: -1 })) as {
+            success: boolean;
+            error?: string;
+        };
 
         expect(response.success).toBe(false);
         expect(typeof response.error).toBe('string');
@@ -270,7 +281,10 @@ describe('registerIpcHandlers — invalid payload returns structured error (Requ
 
     it('settings:set with invalid uploadSpeedLimit returns { success: false, error: string }', async () => {
         const handler = getHandler('settings:set');
-        const response = await handler!(null, { uploadSpeedLimit: 1.5 }) as { success: boolean; error?: string };
+        const response = (await handler!(null, { uploadSpeedLimit: 1.5 })) as {
+            success: boolean;
+            error?: string;
+        };
 
         expect(response.success).toBe(false);
         expect(typeof response.error).toBe('string');
@@ -301,11 +315,13 @@ describe('Property 18: Resposta IPC sempre tem forma estruturada', () => {
     /**
      * Helper: extract the handler function registered for a given channel.
      */
-    function getHandler(channel: string): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
-        const call = mockIpcMain.handle.mock.calls.find(
-            (c: unknown[]) => c[0] === channel
-        );
-        return call ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>) : undefined;
+    function getHandler(
+        channel: string,
+    ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
+        const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
+        return call
+            ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
+            : undefined;
     }
 
     /**
@@ -333,15 +349,15 @@ describe('Property 18: Resposta IPC sempre tem forma estruturada', () => {
                     expect(handler).toBeDefined();
 
                     // The handler must never throw — it must always return a structured response
-                    const response = await handler!(null, payload) as Record<string, unknown>;
+                    const response = (await handler!(null, payload)) as Record<string, unknown>;
 
                     expect(response).toBeDefined();
                     expect(typeof response).toBe('object');
                     expect(response).not.toBeNull();
                     expect(typeof response.success).toBe('boolean');
-                }
+                },
             ),
-            { numRuns: 100 }
+            { numRuns: 100 },
         );
     });
 
@@ -384,22 +400,22 @@ describe('Property 18: Resposta IPC sempre tem forma estruturada', () => {
                     const handler = getHandler(channel);
                     expect(handler).toBeDefined();
 
-                    const response = await handler!(null, payload) as Record<string, unknown>;
+                    const response = (await handler!(null, payload)) as Record<string, unknown>;
 
                     expect(response).toBeDefined();
                     expect(response.success).toBe(false);
                     expect(typeof response.error).toBe('string');
                     expect((response.error as string).length).toBeGreaterThan(0);
-                }
+                },
             ),
-            { numRuns: 100 }
+            { numRuns: 100 },
         );
     });
 
     it('settings:set with invalid speed limit values returns { success: false, error: string }', async () => {
         // Generate payloads where speed limits are invalid (negative, float, non-number)
         const invalidSpeedLimitArb = fc.oneof(
-            fc.double().filter(v => v < 0 || !Number.isInteger(v)),
+            fc.double().filter((v) => v < 0 || !Number.isInteger(v)),
             fc.constant(-1),
             fc.constant(1.5),
             fc.constant(-0.1),
@@ -418,19 +434,18 @@ describe('Property 18: Resposta IPC sempre tem forma estruturada', () => {
                     expect(handler).toBeDefined();
 
                     const payload = { [field]: invalidValue };
-                    const response = await handler!(null, payload) as Record<string, unknown>;
+                    const response = (await handler!(null, payload)) as Record<string, unknown>;
 
                     expect(response).toBeDefined();
                     expect(response.success).toBe(false);
                     expect(typeof response.error).toBe('string');
                     expect((response.error as string).length).toBeGreaterThan(0);
-                }
+                },
             ),
-            { numRuns: 100 }
+            { numRuns: 100 },
         );
     });
 });
-
 
 // ─── Property 19 — Evento de progresso IPC contém todos os itens ativos ───────
 // Feature: meshy-torrent-client, Property 19: Evento de progresso IPC contém todos os itens ativos
@@ -453,7 +468,7 @@ describe('Property 19: Evento de progresso IPC contém todos os itens ativos', (
     const ACTIVE_STATUSES: ReadonlySet<string> = new Set(['downloading', 'resolving-metadata']);
 
     /** Generate a hex string of exactly 40 chars (simulates an infoHash). */
-    const infoHashArb = fc.hexaString({ minLength: 40, maxLength: 40 }).map(s => s.toLowerCase());
+    const infoHashArb = fc.hexaString({ minLength: 40, maxLength: 40 }).map((s) => s.toLowerCase());
 
     /** Generate a single DownloadItem with a given infoHash. */
     const downloadItemArb = (hash: string) =>
@@ -480,10 +495,12 @@ describe('Property 19: Evento de progresso IPC contém todos os itens ativos', (
      */
     const downloadItemsArb = fc
         .uniqueArray(infoHashArb, { minLength: 0, maxLength: 10 })
-        .chain(hashes =>
+        .chain((hashes) =>
             hashes.length === 0
                 ? fc.constant([])
-                : fc.tuple(...hashes.map(h => downloadItemArb(h))).map(items => items as DownloadItem[])
+                : fc
+                      .tuple(...hashes.map((h) => downloadItemArb(h)))
+                      .map((items) => items as DownloadItem[]),
         );
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -524,11 +541,7 @@ describe('Property 19: Evento de progresso IPC contém todos os itens ativos', (
 
                 // Import and call attachWindowEvents
                 const { attachWindowEvents } = require('../../main/ipcHandler');
-                attachWindowEvents(
-                    downloadManager,
-                    torrentEngine,
-                    mockWindow,
-                );
+                attachWindowEvents(downloadManager, torrentEngine, mockWindow);
 
                 // ── Act ──────────────────────────────────────────────────────
                 // Advance the timer by 1 second to trigger the progress interval
@@ -537,7 +550,7 @@ describe('Property 19: Evento de progresso IPC contém todos os itens ativos', (
                 // ── Assert ───────────────────────────────────────────────────
                 // The progress event should have been sent
                 const sendCalls = mockWebContents.send.mock.calls.filter(
-                    (call: unknown[]) => call[0] === 'torrent:progress'
+                    (call: unknown[]) => call[0] === 'torrent:progress',
                 );
                 expect(sendCalls.length).toBe(1);
 
@@ -546,15 +559,15 @@ describe('Property 19: Evento de progresso IPC contém todos os itens ativos', (
                 // Extract active items from the original items array
                 const expectedActiveHashes = new Set(
                     items
-                        .filter(item => ACTIVE_STATUSES.has(item.status))
-                        .map(item => item.infoHash)
+                        .filter((item) => ACTIVE_STATUSES.has(item.status))
+                        .map((item) => item.infoHash),
                 );
 
                 // Extract active items from the payload
                 const payloadActiveHashes = new Set(
                     payload
-                        .filter(item => ACTIVE_STATUSES.has(item.status))
-                        .map(item => item.infoHash)
+                        .filter((item) => ACTIVE_STATUSES.has(item.status))
+                        .map((item) => item.infoHash),
                 );
 
                 // The active infoHashes in the payload must match exactly
@@ -562,13 +575,13 @@ describe('Property 19: Evento de progresso IPC contém todos os itens ativos', (
 
                 // Clean up: clear the interval by triggering the 'closed' callback
                 const closedCallback = mockWindow.on.mock.calls.find(
-                    (call: unknown[]) => call[0] === 'closed'
+                    (call: unknown[]) => call[0] === 'closed',
                 );
                 if (closedCallback) {
                     (closedCallback[1] as () => void)();
                 }
             }),
-            { numRuns: 100 }
+            { numRuns: 100 },
         );
     });
 });

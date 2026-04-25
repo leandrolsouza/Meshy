@@ -155,7 +155,7 @@ describe('TorrentEngine.pause() — timeout (Requirement 4.6)', () => {
         const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
 
         await expect(engine.pause('nonexistent'.padEnd(40, '0'))).rejects.toThrow(
-            /Torrent não encontrado/
+            /Torrent não encontrado/,
         );
     });
 });
@@ -245,7 +245,6 @@ describe('TorrentEngine speed limits — applied synchronously (Requirement 6.5)
         expect(mockClient.throttleUpload).not.toHaveBeenCalled();
     });
 });
-
 
 // ─── Property-Based Tests ─────────────────────────────────────────────────────
 

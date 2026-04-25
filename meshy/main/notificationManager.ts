@@ -1,4 +1,4 @@
-import { Notification } from 'electron';
+import { Notification, BrowserWindow } from 'electron';
 import type { DownloadManager } from './downloadManager';
 import type { SettingsManager } from './settingsManager';
 import type { DownloadItem } from '../shared/types';
@@ -10,6 +10,13 @@ import type { Logger } from './logger';
 export interface NotificationManager {
     /** Para de escutar eventos do DownloadManager */
     dispose(): void;
+}
+
+export interface CreateNotificationManagerOptions {
+    /** Janela principal — usada para focar o app ao clicar na notificação */
+    mainWindow?: BrowserWindow;
+    /** Logger injetável (padrão: electron-log) */
+    log?: Logger;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -25,6 +32,36 @@ function formatBytes(bytes: number): string {
     return `${value.toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
 }
 
+/**
+ * Formata duração em milissegundos para uma string legível (ex: "2 min 30 s").
+ */
+function formatDuration(ms: number): string {
+    const totalSeconds = Math.floor(ms / 1000);
+    if (totalSeconds < 60) return `${totalSeconds} s`;
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    if (minutes < 60) {
+        return seconds > 0 ? `${minutes} min ${seconds} s` : `${minutes} min`;
+    }
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return remainingMinutes > 0 ? `${hours} h ${remainingMinutes} min` : `${hours} h`;
+}
+
+/**
+ * Foca/restaura a janela principal do app.
+ * Trata janela minimizada, oculta ou em segundo plano.
+ */
+function focusMainWindow(mainWindow: BrowserWindow | undefined): void {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+
+    if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+    }
+    mainWindow.show();
+    mainWindow.focus();
+}
+
 // ─── Factory ──────────────────────────────────────────────────────────────────
 
 /**
@@ -32,13 +69,16 @@ function formatBytes(bytes: number): string {
  * e exibe notificações nativas do OS quando um download completa ou falha.
  *
  * Respeita a configuração `notificationsEnabled` do SettingsManager.
+ *
+ * Ao clicar na notificação, a janela principal do app é focada/restaurada.
  */
 export function createNotificationManager(
     downloadManager: DownloadManager,
     settings: SettingsManager,
-    log?: Logger,
+    options: CreateNotificationManagerOptions = {},
 ): NotificationManager {
-    const _log = log ?? defaultLogger;
+    const _log = options.log ?? defaultLogger;
+    const mainWindow = options.mainWindow;
 
     // Rastrear status anterior para detectar transições
     const previousStatus = new Map<string, string>();
@@ -61,11 +101,13 @@ export function createNotificationManager(
 
         if (item.status === 'completed') {
             const sizeStr = formatBytes(item.totalSize);
+            const durationStr = item.elapsedMs ? ` em ${formatDuration(item.elapsedMs)}` : '';
             const notification = new Notification({
                 title: 'Download concluído',
-                body: `${item.name} (${sizeStr})`,
+                body: `${item.name} (${sizeStr})${durationStr}`,
                 silent: false,
             });
+            notification.on('click', () => focusMainWindow(mainWindow));
             notification.show();
             _log.info(`[NotificationManager] Notificação: download concluído — ${item.name}`);
         }
@@ -76,6 +118,7 @@ export function createNotificationManager(
                 body: `Falha ao baixar "${item.name}"`,
                 silent: false,
             });
+            notification.on('click', () => focusMainWindow(mainWindow));
             notification.show();
             _log.info(`[NotificationManager] Notificação: erro no download — ${item.name}`);
         }
@@ -86,18 +129,24 @@ export function createNotificationManager(
                 body: `Não foi possível obter metadados de "${item.name}"`,
                 silent: false,
             });
+            notification.on('click', () => focusMainWindow(mainWindow));
             notification.show();
-            _log.info(
-                `[NotificationManager] Notificação: falha nos metadados — ${item.name}`,
-            );
+            _log.info(`[NotificationManager] Notificação: falha nos metadados — ${item.name}`);
         }
     };
 
+    // Limpar o rastreamento de status quando um torrent é removido
+    const onRemove = (infoHash: string): void => {
+        previousStatus.delete(infoHash);
+    };
+
     downloadManager.on('update', onUpdate);
+    downloadManager.on('remove', onRemove);
 
     return {
         dispose(): void {
             (downloadManager as NodeJS.EventEmitter).removeListener('update', onUpdate);
+            (downloadManager as NodeJS.EventEmitter).removeListener('remove', onRemove);
             previousStatus.clear();
         },
     };

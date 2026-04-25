@@ -497,9 +497,10 @@ export function deserializeTheme(json: string): ThemeDefinition {
  * Valida se uma ThemeDefinition possui todos os tokens obrigatórios.
  * Retorna um objeto indicando se é válido e quais chaves estão faltando.
  */
-export function validateThemeTokens(
-    theme: ThemeDefinition,
-): { valid: boolean; missingKeys: string[] } {
+export function validateThemeTokens(theme: ThemeDefinition): {
+    valid: boolean;
+    missingKeys: string[];
+} {
     const missingKeys = REQUIRED_TOKEN_KEYS.filter((key) => {
         const value = theme.tokens[key];
         return typeof value !== 'string' || value.length === 0;

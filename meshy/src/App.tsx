@@ -109,7 +109,9 @@ function App(): React.JSX.Element {
             {/* ── Activity Bar ──────────────────────────────────────────── */}
             <nav className={styles.activityBar} aria-label="Navegação principal">
                 <button
-                    className={activeView === 'downloads' ? styles.activityIconActive : styles.activityIcon}
+                    className={
+                        activeView === 'downloads' ? styles.activityIconActive : styles.activityIcon
+                    }
                     onClick={() => setActiveView('downloads')}
                     aria-label="Downloads"
                     title="Downloads"
@@ -117,7 +119,9 @@ function App(): React.JSX.Element {
                     <VscCloudDownload />
                 </button>
                 <button
-                    className={isFilterSidebarOpen ? styles.activityIconActive : styles.activityIcon}
+                    className={
+                        isFilterSidebarOpen ? styles.activityIconActive : styles.activityIcon
+                    }
                     onClick={() => setIsFilterSidebarOpen((prev) => !prev)}
                     aria-label="Buscar e filtrar"
                     title="Buscar e filtrar"
@@ -126,7 +130,11 @@ function App(): React.JSX.Element {
                     <VscSearch />
                 </button>
                 <button
-                    className={activeView === 'add-torrent' ? styles.activityIconActive : styles.activityIcon}
+                    className={
+                        activeView === 'add-torrent'
+                            ? styles.activityIconActive
+                            : styles.activityIcon
+                    }
                     onClick={() => setActiveView('add-torrent')}
                     aria-label="Adicionar torrent"
                     title="Adicionar torrent"
@@ -134,7 +142,9 @@ function App(): React.JSX.Element {
                     <VscAdd />
                 </button>
                 <button
-                    className={activeView === 'settings' ? styles.activityIconActive : styles.activityIcon}
+                    className={
+                        activeView === 'settings' ? styles.activityIconActive : styles.activityIcon
+                    }
                     onClick={() => setActiveView('settings')}
                     aria-label="Configurações"
                     title="Configurações"
@@ -153,10 +163,10 @@ function App(): React.JSX.Element {
             {/* ── Editor Area ───────────────────────────────────────────── */}
             <main className={styles.editorArea}>
                 {activeView === 'downloads' && (
-                    <>
+                    <div className={styles.downloadsView}>
                         <DropZone />
                         <DownloadList />
-                    </>
+                    </div>
                 )}
                 {activeView === 'add-torrent' && (
                     <AddTorrentModal
@@ -166,17 +176,23 @@ function App(): React.JSX.Element {
                     />
                 )}
                 {activeView === 'settings' && (
-                    <SettingsPanel
-                        isOpen={true}
-                        onClose={() => setActiveView('downloads')}
-                    />
+                    <SettingsPanel isOpen={true} onClose={() => setActiveView('downloads')} />
                 )}
             </main>
 
             {/* ── Status Bar ────────────────────────────────────────────── */}
             <footer className={styles.statusBar}>
-                <span>{activeDownloadCount} {activeDownloadCount === 1 ? 'download ativo' : 'downloads ativos'}</span>
-                <span><VscArrowDown /> {formatBytes(totalDownloadSpeed)}/s · <VscArrowUp /> {formatBytes(totalUploadSpeed)}/s</span>
+                <span>
+                    {activeDownloadCount}{' '}
+                    {activeDownloadCount === 1 ? 'download ativo' : 'downloads ativos'}
+                </span>
+                <span>
+                    <VscArrowDown style={{ verticalAlign: 'middle' }} />{' '}
+                    {formatBytes(totalDownloadSpeed)}/s
+                    {' · '}
+                    <VscArrowUp style={{ verticalAlign: 'middle' }} />{' '}
+                    {formatBytes(totalUploadSpeed)}/s
+                </span>
             </footer>
         </div>
     );

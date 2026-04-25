@@ -112,10 +112,7 @@ const fileNameArb = fc.stringMatching(/^[a-zA-Z0-9_.-]{1,50}$/).filter((s) => s.
 
 /** Generates a non-empty file path */
 const filePathArb = fc
-    .tuple(
-        fc.stringMatching(/^[a-zA-Z0-9_-]{1,20}$/),
-        fileNameArb,
-    )
+    .tuple(fc.stringMatching(/^[a-zA-Z0-9_-]{1,20}$/), fileNameArb)
     .map(([dir, name]) => `${dir}/${name}`);
 
 /** Generates a single fake file descriptor */
@@ -211,53 +208,48 @@ describe('Feature: torrent-file-selection, Property 2: Aplicação correta de se
         const testDataArb = fileArrayArb.chain((fileDescs) => {
             const n = fileDescs.length;
             // Generate a non-empty subset of [0, n-1]
-            const subsetArb = fc
-                .subarray(
-                    Array.from({ length: n }, (_, i) => i),
-                    { minLength: 1, maxLength: n },
-                );
+            const subsetArb = fc.subarray(
+                Array.from({ length: n }, (_, i) => i),
+                { minLength: 1, maxLength: n },
+            );
             return fc.tuple(fc.constant(fileDescs), subsetArb);
         });
 
         fc.assert(
-            fc.property(
-                infoHashArb,
-                testDataArb,
-                (infoHash, [fileDescs, selectedIndices]) => {
-                    const n = fileDescs.length;
+            fc.property(infoHashArb, testDataArb, (infoHash, [fileDescs, selectedIndices]) => {
+                const n = fileDescs.length;
 
-                    const mockClient = makeMockClient();
-                    const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+                const mockClient = makeMockClient();
+                const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
 
-                    const fakeFiles = fileDescs.map((desc) => makeFakeFile(desc));
-                    const fakeTorrent = makeFakeTorrent(infoHash, fakeFiles);
-                    mockClient.torrents.push(fakeTorrent);
+                const fakeFiles = fileDescs.map((desc) => makeFakeFile(desc));
+                const fakeTorrent = makeFakeTorrent(infoHash, fakeFiles);
+                mockClient.torrents.push(fakeTorrent);
 
-                    // Apply selection
-                    const result = engine.setFileSelection(infoHash, selectedIndices);
+                // Apply selection
+                const result = engine.setFileSelection(infoHash, selectedIndices);
 
-                    expect(result).toHaveLength(n);
+                expect(result).toHaveLength(n);
 
-                    const selectedSet = new Set(selectedIndices);
-                    for (let i = 0; i < n; i++) {
-                        if (selectedSet.has(i)) {
-                            expect(result[i].selected).toBe(true);
-                        } else {
-                            expect(result[i].selected).toBe(false);
-                        }
+                const selectedSet = new Set(selectedIndices);
+                for (let i = 0; i < n; i++) {
+                    if (selectedSet.has(i)) {
+                        expect(result[i].selected).toBe(true);
+                    } else {
+                        expect(result[i].selected).toBe(false);
                     }
+                }
 
-                    // Verify file.select() / file.deselect() were called correctly
-                    for (let i = 0; i < n; i++) {
-                        const file = fakeFiles[i];
-                        if (selectedSet.has(i)) {
-                            expect(file.select).toHaveBeenCalled();
-                        } else {
-                            expect(file.deselect).toHaveBeenCalled();
-                        }
+                // Verify file.select() / file.deselect() were called correctly
+                for (let i = 0; i < n; i++) {
+                    const file = fakeFiles[i];
+                    if (selectedSet.has(i)) {
+                        expect(file.select).toHaveBeenCalled();
+                    } else {
+                        expect(file.deselect).toHaveBeenCalled();
                     }
-                },
-            ),
+                }
+            }),
             { numRuns: 100 },
         );
     });
@@ -298,8 +290,7 @@ describe('Feature: torrent-file-selection, Property 2: Aplicação correta de se
                     mockClient.torrents.push(fakeTorrent);
 
                     // Pick a single index deterministically
-                    const singleIndex =
-                        infoHash.charCodeAt(0) % fileDescs.length;
+                    const singleIndex = infoHash.charCodeAt(0) % fileDescs.length;
                     const result = engine.setFileSelection(infoHash, [singleIndex]);
 
                     expect(result).toHaveLength(fileDescs.length);
@@ -312,7 +303,6 @@ describe('Feature: torrent-file-selection, Property 2: Aplicação correta de se
         );
     });
 });
-
 
 // ─── DownloadManager file selection tests ─────────────────────────────────────
 
@@ -393,16 +383,18 @@ function makeDMMockStore(initial: PersistedDownloadItem[] = []): PersistedStore 
 // ─── Arbitraries for DownloadManager tests ────────────────────────────────────
 
 /** Generates a file with length and downloaded amounts */
-const dmFileArb = fc.record({
-    name: fc.stringMatching(/^[a-zA-Z0-9_.-]{1,30}$/).filter(s => s.length > 0),
-    path: fc.stringMatching(/^[a-zA-Z0-9_.-]{1,30}$/).filter(s => s.length > 0),
-    length: fc.integer({ min: 1, max: 10_000_000 }),
-    downloaded: fc.integer({ min: 0, max: 10_000_000 }),
-}).map(f => ({
-    ...f,
-    // Ensure downloaded <= length
-    downloaded: Math.min(f.downloaded, f.length),
-}));
+const dmFileArb = fc
+    .record({
+        name: fc.stringMatching(/^[a-zA-Z0-9_.-]{1,30}$/).filter((s) => s.length > 0),
+        path: fc.stringMatching(/^[a-zA-Z0-9_.-]{1,30}$/).filter((s) => s.length > 0),
+        length: fc.integer({ min: 1, max: 10_000_000 }),
+        downloaded: fc.integer({ min: 0, max: 10_000_000 }),
+    })
+    .map((f) => ({
+        ...f,
+        // Ensure downloaded <= length
+        downloaded: Math.min(f.downloaded, f.length),
+    }));
 
 /** Generates an array of 1..15 files */
 const dmFileArrayArb = fc.array(dmFileArb, { minLength: 1, maxLength: 15 });
@@ -421,7 +413,7 @@ const dmFileArrayArb = fc.array(dmFileArb, { minLength: 1, maxLength: 15 });
 describe('Feature: torrent-file-selection, Property 6: Progresso e totalSize refletem apenas arquivos selecionados', () => {
     it('after setFileSelection, totalSize equals sum of selected file lengths and progress equals sum(downloaded)/sum(length)', async () => {
         // Generate files, then derive a non-empty subset of valid indices
-        const testDataArb = dmFileArrayArb.chain(files => {
+        const testDataArb = dmFileArrayArb.chain((files) => {
             const n = files.length;
             const subsetArb = fc.subarray(
                 Array.from({ length: n }, (_, i) => i),
@@ -473,15 +465,19 @@ describe('Feature: torrent-file-selection, Property 6: Progresso e totalSize ref
 
                     // Get the updated item
                     const all = manager.getAll();
-                    const item = all.find(i => i.infoHash === infoHash);
+                    const item = all.find((i) => i.infoHash === infoHash);
 
                     if (!item) return false;
 
                     // Calculate expected values
                     const selectedFiles = fileDescs.filter((_, i) => selectedSet.has(i));
                     const expectedTotalSize = selectedFiles.reduce((sum, f) => sum + f.length, 0);
-                    const expectedDownloaded = selectedFiles.reduce((sum, f) => sum + f.downloaded, 0);
-                    const expectedProgress = expectedTotalSize > 0 ? expectedDownloaded / expectedTotalSize : 0;
+                    const expectedDownloaded = selectedFiles.reduce(
+                        (sum, f) => sum + f.downloaded,
+                        0,
+                    );
+                    const expectedProgress =
+                        expectedTotalSize > 0 ? expectedDownloaded / expectedTotalSize : 0;
 
                     // Verify totalSize
                     if (item.totalSize !== expectedTotalSize) return false;
@@ -511,12 +507,14 @@ describe('Feature: torrent-file-selection, Property 6: Progresso e totalSize ref
 describe('Feature: torrent-file-selection, Property 7: Round-trip de persistência de seleção', () => {
     it('persist then restore preserves selectedFileIndices, filtering out invalid indices', async () => {
         // Generate a file count and an array of indices (some possibly out of range)
-        const testDataArb = fc.integer({ min: 1, max: 20 }).chain(fileCount => {
+        const testDataArb = fc.integer({ min: 1, max: 20 }).chain((fileCount) => {
             // Generate indices that may include some out-of-range values
-            const indicesArb = fc.array(
-                fc.integer({ min: 0, max: fileCount + 5 }),
-                { minLength: 1, maxLength: fileCount + 5 },
-            ).map(indices => [...new Set(indices)]); // deduplicate
+            const indicesArb = fc
+                .array(fc.integer({ min: 0, max: fileCount + 5 }), {
+                    minLength: 1,
+                    maxLength: fileCount + 5,
+                })
+                .map((indices) => [...new Set(indices)]); // deduplicate
 
             return fc.tuple(fc.constant(fileCount), indicesArb);
         });
@@ -531,17 +529,22 @@ describe('Feature: torrent-file-selection, Property 7: Round-trip de persistênc
                     (accessSync as jest.Mock).mockReturnValue(undefined);
 
                     // Build fake files for the engine
-                    const fakeFiles: TorrentFileInfoType[] = Array.from({ length: fileCount }, (_, i) => ({
-                        index: i,
-                        name: `file${i}.dat`,
-                        path: `dir/file${i}.dat`,
-                        length: 1000 * (i + 1),
-                        downloaded: 0,
-                        selected: true,
-                    }));
+                    const fakeFiles: TorrentFileInfoType[] = Array.from(
+                        { length: fileCount },
+                        (_, i) => ({
+                            index: i,
+                            name: `file${i}.dat`,
+                            path: `dir/file${i}.dat`,
+                            length: 1000 * (i + 1),
+                            downloaded: 0,
+                            selected: true,
+                        }),
+                    );
 
                     // Filter to valid indices for the initial selection
-                    const validIndices = selectedIndices.filter(idx => idx >= 0 && idx < fileCount);
+                    const validIndices = selectedIndices.filter(
+                        (idx) => idx >= 0 && idx < fileCount,
+                    );
                     if (validIndices.length === 0) return true; // skip if no valid indices
 
                     // ── Manager 1: add torrent, set selection, persist ──
@@ -558,7 +561,7 @@ describe('Feature: torrent-file-selection, Property 7: Round-trip de persistênc
 
                     // setFileSelection returns files with updated selection
                     const selectedSet = new Set(validIndices);
-                    const updatedFiles = fakeFiles.map(f => ({
+                    const updatedFiles = fakeFiles.map((f) => ({
                         ...f,
                         selected: selectedSet.has(f.index),
                     }));
@@ -571,8 +574,9 @@ describe('Feature: torrent-file-selection, Property 7: Round-trip de persistênc
                     manager1.persistSession();
 
                     // Verify the persisted data contains selectedFileIndices
-                    const persistedData = (store.set as jest.Mock).mock.calls[0][1] as PersistedDownloadItem[];
-                    const persistedItem = persistedData.find(p => p.infoHash === infoHash);
+                    const persistedData = (store.set as jest.Mock).mock
+                        .calls[0][1] as PersistedDownloadItem[];
+                    const persistedItem = persistedData.find((p) => p.infoHash === infoHash);
                     if (!persistedItem) return false;
 
                     // The persisted indices should match what was passed to setFileSelection

@@ -39,7 +39,9 @@ export function ConfirmDialog({
                 aria-labelledby={titleId}
                 onClick={(e) => e.stopPropagation()}
             >
-                <h2 id={titleId} className={styles.title}>{title}</h2>
+                <h2 id={titleId} className={styles.title}>
+                    {title}
+                </h2>
                 <p className={styles.message}>{message}</p>
 
                 <div className={styles.actions}>

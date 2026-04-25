@@ -40,7 +40,11 @@ interface FileSelectionState {
  * For .torrent files: adds the torrent, fetches file metadata, shows FileSelector
  * for the user to adjust selection, then applies the selection on confirm.
  */
-export function AddTorrentModal({ isOpen, onClose, inline = false }: AddTorrentModalProps): React.JSX.Element | null {
+export function AddTorrentModal({
+    isOpen,
+    onClose,
+    inline = false,
+}: AddTorrentModalProps): React.JSX.Element | null {
     const [magnetUri, setMagnetUri] = useState('');
     const [validationError, setValidationError] = useState<string | null>(null);
     const [submitError, setSubmitError] = useState<string | null>(null);
@@ -202,8 +206,7 @@ export function AddTorrentModal({ isOpen, onClose, inline = false }: AddTorrentM
 
     // ── Determine if the add button should be disabled (Task 7.2) ─────────
     const isAddDisabled =
-        isSubmitting ||
-        (fileSelection !== null && fileSelection.selectedIndices.length === 0);
+        isSubmitting || (fileSelection !== null && fileSelection.selectedIndices.length === 0);
 
     const inputClass = validationError ? 'input input--error' : 'input';
 
@@ -328,7 +331,12 @@ export function AddTorrentModal({ isOpen, onClose, inline = false }: AddTorrentM
     // ── Command Palette modal rendering (future shortcut access) ──────────
 
     return (
-        <div className={styles.commandPaletteOverlay} role="dialog" aria-modal="true" aria-labelledby="add-torrent-modal-title">
+        <div
+            className={styles.commandPaletteOverlay}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-torrent-modal-title"
+        >
             <div className={styles.commandPalettePanel}>
                 <h2 id="add-torrent-modal-title" className={styles.panelTitle}>
                     Adicionar Torrent

@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSettings } from '../../hooks/useSettings';
-import { isValidSpeedLimit, isValidMaxConcurrentDownloads, MIN_CONCURRENT_DOWNLOADS, MAX_CONCURRENT_DOWNLOADS } from '../../../shared/validators';
+import {
+    isValidSpeedLimit,
+    isValidMaxConcurrentDownloads,
+    MIN_CONCURRENT_DOWNLOADS,
+    MAX_CONCURRENT_DOWNLOADS,
+} from '../../../shared/validators';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { applyTheme } from '../../themes/themeApplier';
 import { isValidThemeId, DEFAULT_THEME_ID } from '../../themes/themeRegistry';
@@ -206,7 +211,9 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
                             className={dlInputClass}
                             value={downloadLimit}
                             onChange={handleDownloadLimitChange}
-                            aria-describedby={downloadLimitError ? 'download-limit-error' : undefined}
+                            aria-describedby={
+                                downloadLimitError ? 'download-limit-error' : undefined
+                            }
                             aria-invalid={downloadLimitError !== null}
                         />
                         {downloadLimitError && (
@@ -253,7 +260,9 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
                             className={mcInputClass}
                             value={maxConcurrent}
                             onChange={handleMaxConcurrentChange}
-                            aria-describedby={maxConcurrentError ? 'max-concurrent-error' : undefined}
+                            aria-describedby={
+                                maxConcurrentError ? 'max-concurrent-error' : undefined
+                            }
                             aria-invalid={maxConcurrentError !== null}
                         />
                         {maxConcurrentError && (

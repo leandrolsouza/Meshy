@@ -18,20 +18,20 @@ interface WebTorrentInstanceWithThrottle extends WebTorrent.Instance {
 export interface TorrentEngineOptions {
     downloadPath: string;
     downloadSpeedLimit: number; // KB/s, 0 = sem limite
-    uploadSpeedLimit: number;   // KB/s, 0 = sem limite
+    uploadSpeedLimit: number; // KB/s, 0 = sem limite
 }
 
 export interface TorrentInfo {
     infoHash: string;
     name: string;
-    totalSize: number;       // bytes
-    progress: number;        // 0.0 – 1.0
-    downloadSpeed: number;   // bytes/s
-    uploadSpeed: number;     // bytes/s
+    totalSize: number; // bytes
+    progress: number; // 0.0 – 1.0
+    downloadSpeed: number; // bytes/s
+    uploadSpeed: number; // bytes/s
     numPeers: number;
     numSeeders: number;
-    timeRemaining: number;   // ms, Infinity se desconhecido
-    downloaded: number;      // bytes
+    timeRemaining: number; // ms, Infinity se desconhecido
+    downloaded: number; // bytes
     status: TorrentStatus;
 }
 
@@ -110,11 +110,17 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
             try {
                 buffer = readFileSync(filePath);
             } catch (err) {
-                return reject(new Error(`Não foi possível ler o arquivo: ${(err as Error).message}`));
+                return reject(
+                    new Error(`Não foi possível ler o arquivo: ${(err as Error).message}`),
+                );
             }
 
             if (!hasTorrentMagicBytes(buffer)) {
-                return reject(new Error('Arquivo inválido: não é um arquivo .torrent válido (magic bytes incorretos)'));
+                return reject(
+                    new Error(
+                        'Arquivo inválido: não é um arquivo .torrent válido (magic bytes incorretos)',
+                    ),
+                );
             }
 
             this.client.add(buffer, { path: this.downloadPath }, (torrent) => {
@@ -135,7 +141,9 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
     addMagnetLink(magnetUri: string): Promise<TorrentInfo> {
         return new Promise((resolve, reject) => {
             if (!isValidMagnetUri(magnetUri)) {
-                return reject(new Error('Formato inválido. Esperado: magnet:?xt=urn:btih:<40 hex chars>'));
+                return reject(
+                    new Error('Formato inválido. Esperado: magnet:?xt=urn:btih:<40 hex chars>'),
+                );
             }
 
             // Para magnet links, precisamos escutar o evento 'metadata' ANTES
@@ -217,6 +225,19 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
 
             try {
                 torrent.pause();
+
+                // O torrent.pause() do WebTorrent apenas para de buscar novos peers,
+                // mas NÃO desconecta os peers já conectados — o download continua.
+                // Para realmente parar a transferência, destruímos todos os wires.
+                // O @types/webtorrent não declara 'wires', mas a propriedade existe
+                // em runtime no WebTorrent 2.x.
+                const wires = (torrent as unknown as { wires?: { destroy(): void }[] }).wires;
+                if (wires && Array.isArray(wires)) {
+                    for (const wire of [...wires]) {
+                        wire.destroy();
+                    }
+                }
+
                 clearTimeout(timer);
                 this.statusMap.set(infoHash, 'paused');
                 resolve();

@@ -23,7 +23,11 @@ interface SpeedDisplayProps {
  * <SpeedDisplay speedBytesPerSec={1572864} icon={<VscArrowDown />} />
  * // renderiza: [↓ icon] 1.50 MB/s
  */
-export function SpeedDisplay({ speedBytesPerSec, icon, label }: SpeedDisplayProps): React.JSX.Element {
+export function SpeedDisplay({
+    speedBytesPerSec,
+    icon,
+    label,
+}: SpeedDisplayProps): React.JSX.Element {
     const formatted = `${formatBytes(speedBytesPerSec)}/s`;
 
     return (

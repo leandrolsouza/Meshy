@@ -86,9 +86,9 @@ describe('formatBytes — property tests', () => {
                     const numericPart = parseFloat(result);
                     const roundedExpected = parseFloat(expectedValue.toFixed(2));
                     return Math.abs(numericPart - roundedExpected) < 0.005;
-                }
+                },
             ),
-            { numRuns: 100 }
+            { numRuns: 100 },
         );
     });
 });

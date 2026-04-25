@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { VscCloudUpload } from 'react-icons/vsc';
 import { isValidMagnetUri } from '../../../shared/validators';
 import { useDownloadStore } from '../../store/downloadStore';
 import styles from './DropZone.module.css';
@@ -143,8 +144,8 @@ export function DropZone(): React.JSX.Element {
     const zoneClass = isDragOver
         ? `${styles.zone} ${styles.active}`
         : isLoading
-            ? `${styles.zone} ${styles.loading}`
-            : styles.zone;
+          ? `${styles.zone} ${styles.loading}`
+          : styles.zone;
 
     return (
         <div
@@ -160,12 +161,13 @@ export function DropZone(): React.JSX.Element {
                 <p className={styles.text}>Adicionando magnet link…</p>
             ) : (
                 <>
+                    <div className={styles.icon}>
+                        <VscCloudUpload />
+                    </div>
                     <p className={styles.text}>
                         Arraste um arquivo <code>.torrent</code> ou magnet link aqui
                     </p>
-                    <p className={styles.hint}>
-                        Você também pode colar um magnet link (Ctrl+V)
-                    </p>
+                    <p className={styles.hint}>Você também pode colar um magnet link (Ctrl+V)</p>
                 </>
             )}
             {error && (

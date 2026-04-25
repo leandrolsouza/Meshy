@@ -19,12 +19,12 @@ export type TorrentStatus =
 
 /** Representação de um arquivo individual dentro de um torrent */
 export interface TorrentFileInfo {
-    index: number;        // índice no array torrent.files
-    name: string;         // nome do arquivo (ex: "video.mp4")
-    path: string;         // caminho relativo (ex: "Movie/video.mp4")
-    length: number;       // tamanho em bytes
-    downloaded: number;   // bytes já baixados
-    selected: boolean;    // se o arquivo está selecionado para download
+    index: number; // índice no array torrent.files
+    name: string; // nome do arquivo (ex: "video.mp4")
+    path: string; // caminho relativo (ex: "Movie/video.mp4")
+    length: number; // tamanho em bytes
+    downloaded: number; // bytes já baixados
+    selected: boolean; // se o arquivo está selecionado para download
 }
 
 // ─── DownloadItem ─────────────────────────────────────────────────────────────
@@ -42,11 +42,11 @@ export interface DownloadItem {
     timeRemaining: number;
     status: TorrentStatus;
     destinationFolder: string;
-    addedAt: number;       // timestamp ms
-    completedAt?: number;  // timestamp ms
+    addedAt: number; // timestamp ms
+    completedAt?: number; // timestamp ms
     elapsedMs?: number;
-    selectedFileCount?: number;   // quantidade de arquivos selecionados
-    totalFileCount?: number;      // quantidade total de arquivos
+    selectedFileCount?: number; // quantidade de arquivos selecionados
+    totalFileCount?: number; // quantidade total de arquivos
 }
 
 // ─── PersistedDownloadItem ────────────────────────────────────────────────────
@@ -64,7 +64,7 @@ export interface PersistedDownloadItem {
     elapsedMs?: number;
     magnetUri?: string;
     torrentFilePath?: string;
-    selectedFileIndices?: number[];  // índices dos arquivos selecionados
+    selectedFileIndices?: number[]; // índices dos arquivos selecionados
 }
 
 // ─── AppSettings ──────────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ export interface PersistedDownloadItem {
 export interface AppSettings {
     destinationFolder: string;
     downloadSpeedLimit: number; // KB/s, 0 = sem limite
-    uploadSpeedLimit: number;   // KB/s, 0 = sem limite
+    uploadSpeedLimit: number; // KB/s, 0 = sem limite
     maxConcurrentDownloads: number; // máx downloads simultâneos (1–10, padrão 3)
     notificationsEnabled: boolean; // notificações nativas do OS (padrão: true)
     theme: string; // identificador do tema ativo (ex: "vs-code-dark")
@@ -80,9 +80,7 @@ export interface AppSettings {
 
 // ─── IPCResponse ──────────────────────────────────────────────────────────────
 
-export type IPCResponse<T> =
-    | { success: true; data: T }
-    | { success: false; error: string };
+export type IPCResponse<T> = { success: true; data: T } | { success: false; error: string };
 
 // ─── MeshyAPI ─────────────────────────────────────────────────────────────────
 
@@ -99,7 +97,10 @@ export interface MeshyAPI {
     selectFolder(): Promise<IPCResponse<string>>;
     // File selection
     getFiles(infoHash: string): Promise<IPCResponse<TorrentFileInfo[]>>;
-    setFileSelection(infoHash: string, selectedIndices: number[]): Promise<IPCResponse<TorrentFileInfo[]>>;
+    setFileSelection(
+        infoHash: string,
+        selectedIndices: number[],
+    ): Promise<IPCResponse<TorrentFileInfo[]>>;
     // Events
     onProgress(callback: (items: DownloadItem[]) => void): () => void;
     onError(callback: (data: { infoHash: string; message: string }) => void): () => void;

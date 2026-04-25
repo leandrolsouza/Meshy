@@ -144,11 +144,14 @@ describe('DownloadManager — metadata timeout (Requirement 2.5)', () => {
 
         // Simulate metadata resolution via a progress event at 30s
         jest.advanceTimersByTime(30_000);
-        engine.emit('progress', makeTorrentInfo({
-            name: 'My Torrent',
-            totalSize: 1_000_000,
-            status: 'downloading',
-        }));
+        engine.emit(
+            'progress',
+            makeTorrentInfo({
+                name: 'My Torrent',
+                totalSize: 1_000_000,
+                status: 'downloading',
+            }),
+        );
 
         // Advance past the 60s mark — timer should have been cleared
         jest.advanceTimersByTime(31_000);
@@ -171,11 +174,14 @@ describe('DownloadManager — metadata timeout (Requirement 2.5)', () => {
         await manager.addMagnetLink(VALID_MAGNET);
 
         // Emit progress with resolved metadata
-        engine.emit('progress', makeTorrentInfo({
-            name: 'Resolved Torrent Name',
-            totalSize: 5_000_000,
-            status: 'downloading',
-        }));
+        engine.emit(
+            'progress',
+            makeTorrentInfo({
+                name: 'Resolved Torrent Name',
+                totalSize: 5_000_000,
+                status: 'downloading',
+            }),
+        );
 
         const downloadingUpdate = updates.find((u) => u.status === 'downloading');
         expect(downloadingUpdate).toBeDefined();
@@ -316,7 +322,7 @@ describe('DownloadManager — Property 2: Adição de torrent cresce a lista', (
                     if (allAfter.length !== sizeBefore + 1) return false;
 
                     // The new item is present in the list
-                    const found = allAfter.some(item => item.infoHash === normalizedHash);
+                    const found = allAfter.some((item) => item.infoHash === normalizedHash);
                     return found;
                 },
             ),
@@ -380,7 +386,7 @@ describe('DownloadManager — Property 2: Adição de torrent cresce a lista', (
                         if (allAfter.length !== sizeBefore + 1) return false;
 
                         // The new item is present in the list
-                        const found = allAfter.some(item => item.infoHash === normalizedHash);
+                        const found = allAfter.some((item) => item.infoHash === normalizedHash);
                         return found;
                     },
                 ),
@@ -413,9 +419,49 @@ describe('DownloadManager — Property 3: Idempotência de adição (sem duplica
      */
     it('adding a duplicate torrent file does not change the list length', async () => {
         await fc.assert(
-            fc.asyncProperty(
-                fc.hexaString({ minLength: 40, maxLength: 40 }),
-                async (hash) => {
+            fc.asyncProperty(fc.hexaString({ minLength: 40, maxLength: 40 }), async (hash) => {
+                const normalizedHash = hash.toLowerCase();
+
+                mockExistsSync.mockReturnValue(true);
+                mockAccessSync.mockReturnValue(undefined);
+
+                const engine = makeMockEngine();
+                const settings = makeMockSettings();
+                const manager = createDownloadManager(engine, settings);
+
+                // First add — should succeed
+                const info = makeTorrentInfo({
+                    infoHash: normalizedHash,
+                    name: 'Test Torrent',
+                    status: 'downloading' as TorrentStatus,
+                });
+                (engine.addTorrentFile as jest.Mock).mockResolvedValueOnce(info);
+                await manager.addTorrentFile('/path/to/file.torrent');
+
+                const lengthBefore = manager.getAll().length;
+
+                // Second add — same infoHash, engine returns same info
+                (engine.addTorrentFile as jest.Mock).mockResolvedValueOnce(info);
+                try {
+                    await manager.addTorrentFile('/path/to/file.torrent');
+                } catch {
+                    // Expected: 'Torrent já existe na lista'
+                }
+
+                const lengthAfter = manager.getAll().length;
+
+                // List length must remain unchanged
+                return lengthAfter === lengthBefore;
+            }),
+            { numRuns: 100 },
+        );
+    });
+
+    it('adding a duplicate magnet link does not change the list length', async () => {
+        jest.useFakeTimers();
+        try {
+            await fc.assert(
+                fc.asyncProperty(fc.hexaString({ minLength: 40, maxLength: 40 }), async (hash) => {
                     const normalizedHash = hash.toLowerCase();
 
                     mockExistsSync.mockReturnValue(true);
@@ -425,21 +471,23 @@ describe('DownloadManager — Property 3: Idempotência de adição (sem duplica
                     const settings = makeMockSettings();
                     const manager = createDownloadManager(engine, settings);
 
+                    const magnetUri = `magnet:?xt=urn:btih:${normalizedHash}`;
+
                     // First add — should succeed
                     const info = makeTorrentInfo({
                         infoHash: normalizedHash,
-                        name: 'Test Torrent',
-                        status: 'downloading' as TorrentStatus,
+                        name: normalizedHash,
+                        status: 'resolving-metadata' as TorrentStatus,
                     });
-                    (engine.addTorrentFile as jest.Mock).mockResolvedValueOnce(info);
-                    await manager.addTorrentFile('/path/to/file.torrent');
+                    (engine.addMagnetLink as jest.Mock).mockResolvedValueOnce(info);
+                    await manager.addMagnetLink(magnetUri);
 
                     const lengthBefore = manager.getAll().length;
 
-                    // Second add — same infoHash, engine returns same info
-                    (engine.addTorrentFile as jest.Mock).mockResolvedValueOnce(info);
+                    // Second add — same magnet link
+                    (engine.addMagnetLink as jest.Mock).mockResolvedValueOnce(info);
                     try {
-                        await manager.addTorrentFile('/path/to/file.torrent');
+                        await manager.addMagnetLink(magnetUri);
                     } catch {
                         // Expected: 'Torrent já existe na lista'
                     }
@@ -448,55 +496,7 @@ describe('DownloadManager — Property 3: Idempotência de adição (sem duplica
 
                     // List length must remain unchanged
                     return lengthAfter === lengthBefore;
-                },
-            ),
-            { numRuns: 100 },
-        );
-    });
-
-    it('adding a duplicate magnet link does not change the list length', async () => {
-        jest.useFakeTimers();
-        try {
-            await fc.assert(
-                fc.asyncProperty(
-                    fc.hexaString({ minLength: 40, maxLength: 40 }),
-                    async (hash) => {
-                        const normalizedHash = hash.toLowerCase();
-
-                        mockExistsSync.mockReturnValue(true);
-                        mockAccessSync.mockReturnValue(undefined);
-
-                        const engine = makeMockEngine();
-                        const settings = makeMockSettings();
-                        const manager = createDownloadManager(engine, settings);
-
-                        const magnetUri = `magnet:?xt=urn:btih:${normalizedHash}`;
-
-                        // First add — should succeed
-                        const info = makeTorrentInfo({
-                            infoHash: normalizedHash,
-                            name: normalizedHash,
-                            status: 'resolving-metadata' as TorrentStatus,
-                        });
-                        (engine.addMagnetLink as jest.Mock).mockResolvedValueOnce(info);
-                        await manager.addMagnetLink(magnetUri);
-
-                        const lengthBefore = manager.getAll().length;
-
-                        // Second add — same magnet link
-                        (engine.addMagnetLink as jest.Mock).mockResolvedValueOnce(info);
-                        try {
-                            await manager.addMagnetLink(magnetUri);
-                        } catch {
-                            // Expected: 'Torrent já existe na lista'
-                        }
-
-                        const lengthAfter = manager.getAll().length;
-
-                        // List length must remain unchanged
-                        return lengthAfter === lengthBefore;
-                    },
-                ),
+                }),
                 { numRuns: 100 },
             );
         } finally {
@@ -553,21 +553,27 @@ describe('DownloadManager — Property 8: Round-trip pausar/retomar preserva est
                         await manager.addTorrentFile('/path/to/file.torrent');
 
                         // Verify initial status is downloading
-                        const beforePause = manager.getAll().find(i => i.infoHash === normalizedHash);
+                        const beforePause = manager
+                            .getAll()
+                            .find((i) => i.infoHash === normalizedHash);
                         if (!beforePause || beforePause.status !== 'downloading') return false;
 
                         // Pause the torrent
                         await manager.pause(normalizedHash);
 
                         // Verify status is paused
-                        const afterPause = manager.getAll().find(i => i.infoHash === normalizedHash);
+                        const afterPause = manager
+                            .getAll()
+                            .find((i) => i.infoHash === normalizedHash);
                         if (!afterPause || afterPause.status !== 'paused') return false;
 
                         // Resume the torrent
                         await manager.resume(normalizedHash);
 
                         // Verify status returned to downloading
-                        const afterResume = manager.getAll().find(i => i.infoHash === normalizedHash);
+                        const afterResume = manager
+                            .getAll()
+                            .find((i) => i.infoHash === normalizedHash);
                         if (!afterResume || afterResume.status !== 'downloading') return false;
 
                         // Verify the item's identity is preserved (same infoHash, name, totalSize)
@@ -634,14 +640,17 @@ describe('DownloadManager — Property 9: Remoção elimina item da lista indepe
 
                         // Verify the item is present before removal
                         const beforeRemoval = manager.getAll();
-                        if (!beforeRemoval.some(item => item.infoHash === normalizedHash)) return false;
+                        if (!beforeRemoval.some((item) => item.infoHash === normalizedHash))
+                            return false;
 
                         // Remove the item with the random deleteFiles boolean
                         await manager.remove(normalizedHash, deleteFiles);
 
                         // Verify the item is absent from getAll()
                         const afterRemoval = manager.getAll();
-                        const stillPresent = afterRemoval.some(item => item.infoHash === normalizedHash);
+                        const stillPresent = afterRemoval.some(
+                            (item) => item.infoHash === normalizedHash,
+                        );
                         return !stillPresent;
                     },
                 ),
@@ -704,19 +713,24 @@ describe('DownloadManager — Property 5: Atualização de metadados após resol
                         await manager.addMagnetLink(magnetUri);
 
                         // Verify initial status is resolving-metadata
-                        const initial = manager.getAll().find(i => i.infoHash === normalizedHash);
+                        const initial = manager.getAll().find((i) => i.infoHash === normalizedHash);
                         if (!initial || initial.status !== 'resolving-metadata') return false;
 
                         // Emit a progress event with resolved metadata (status: downloading)
-                        engine.emit('progress', makeTorrentInfo({
-                            infoHash: normalizedHash,
-                            name: resolvedName,
-                            totalSize: resolvedTotalSize,
-                            status: 'downloading' as TorrentStatus,
-                        }));
+                        engine.emit(
+                            'progress',
+                            makeTorrentInfo({
+                                infoHash: normalizedHash,
+                                name: resolvedName,
+                                totalSize: resolvedTotalSize,
+                                status: 'downloading' as TorrentStatus,
+                            }),
+                        );
 
                         // Verify the item was updated correctly
-                        const afterResolution = manager.getAll().find(i => i.infoHash === normalizedHash);
+                        const afterResolution = manager
+                            .getAll()
+                            .find((i) => i.infoHash === normalizedHash);
                         if (!afterResolution) return false;
 
                         return (
@@ -825,7 +839,10 @@ describe('DownloadManager — restoreSession()', () => {
     });
 
     it('does NOT mark completed items as files-not-found even if folder is missing', async () => {
-        const item = makePersistedItem({ status: 'completed', destinationFolder: '/missing/folder' });
+        const item = makePersistedItem({
+            status: 'completed',
+            destinationFolder: '/missing/folder',
+        });
         const store = makeMockStore([item]);
         const engine = makeMockEngine();
         const settings = makeMockSettings();
@@ -916,8 +933,16 @@ describe('DownloadManager — restoreSession()', () => {
 
     it('does NOT auto-resume paused or completed items', async () => {
         const items = [
-            makePersistedItem({ infoHash: 'h'.repeat(40), status: 'paused', magnetUri: 'magnet:?xt=urn:btih:' + 'h'.repeat(40) }),
-            makePersistedItem({ infoHash: 'i'.repeat(40), status: 'completed', magnetUri: 'magnet:?xt=urn:btih:' + 'i'.repeat(40) }),
+            makePersistedItem({
+                infoHash: 'h'.repeat(40),
+                status: 'paused',
+                magnetUri: 'magnet:?xt=urn:btih:' + 'h'.repeat(40),
+            }),
+            makePersistedItem({
+                infoHash: 'i'.repeat(40),
+                status: 'completed',
+                magnetUri: 'magnet:?xt=urn:btih:' + 'i'.repeat(40),
+            }),
         ];
         const store = makeMockStore(items);
         const engine = makeMockEngine();
@@ -984,7 +1009,7 @@ describe('DownloadManager — persistSession()', () => {
                     name: expect.any(String),
                     status: 'resolving-metadata',
                 }),
-            ])
+            ]),
         );
     });
 
@@ -1086,12 +1111,17 @@ describe('DownloadManager — Property 16: Auto-retomada seletiva na restauraç�
     it('restoreSession() re-adds only items with downloading status and leaves others untouched', async () => {
         // All possible statuses for persisted items
         const allStatuses: TorrentStatus[] = [
-            'downloading', 'paused', 'completed', 'error',
-            'queued', 'metadata-failed', 'resolving-metadata',
+            'downloading',
+            'paused',
+            'completed',
+            'error',
+            'queued',
+            'metadata-failed',
+            'resolving-metadata',
         ];
 
         const arbPersistedItem = fc.record({
-            infoHash: fc.hexaString({ minLength: 40, maxLength: 40 }).map(h => h.toLowerCase()),
+            infoHash: fc.hexaString({ minLength: 40, maxLength: 40 }).map((h) => h.toLowerCase()),
             name: fc.string({ minLength: 1, maxLength: 50 }),
             totalSize: fc.integer({ min: 0, max: 10_000_000_000 }),
             downloadedSize: fc.integer({ min: 0, max: 10_000_000_000 }),
@@ -1105,27 +1135,29 @@ describe('DownloadManager — Property 16: Auto-retomada seletiva na restauraç�
         // Generate arrays of 1–8 items with unique infoHashes
         const arbItems = fc
             .array(arbPersistedItem, { minLength: 1, maxLength: 8 })
-            .map(items => {
+            .map((items) => {
                 const seen = new Set<string>();
-                return items.filter(item => {
+                return items.filter((item) => {
                     if (seen.has(item.infoHash)) return false;
                     seen.add(item.infoHash);
                     return true;
                 });
             })
-            .filter(items => items.length > 0)
+            .filter((items) => items.length > 0)
             // Assign magnetUri for each item so restoreSession can re-add
-            .map(items => items.map(item => ({
-                ...item,
-                magnetUri: `magnet:?xt=urn:btih:${item.infoHash}`,
-            })));
+            .map((items) =>
+                items.map((item) => ({
+                    ...item,
+                    magnetUri: `magnet:?xt=urn:btih:${item.infoHash}`,
+                })),
+            );
 
         await fc.assert(
             fc.asyncProperty(arbItems, async (items) => {
                 mockExistsSync.mockReturnValue(true);
                 mockAccessSync.mockReturnValue(undefined);
 
-                const persistedItems: PersistedDownloadItem[] = items.map(item => ({
+                const persistedItems: PersistedDownloadItem[] = items.map((item) => ({
                     infoHash: item.infoHash,
                     name: item.name,
                     totalSize: item.totalSize,
@@ -1141,7 +1173,9 @@ describe('DownloadManager — Property 16: Auto-retomada seletiva na restauraç�
                 const engine = makeMockEngine();
 
                 // Usar um limite alto para que todos os itens ativos caibam em slots
-                const activeCount = items.filter(i => i.status === 'downloading' || i.status === 'resolving-metadata').length;
+                const activeCount = items.filter(
+                    (i) => i.status === 'downloading' || i.status === 'resolving-metadata',
+                ).length;
                 const settings = makeMockSettings('/downloads');
                 (settings.get as jest.Mock).mockReturnValue({
                     destinationFolder: '/downloads',
@@ -1169,8 +1203,8 @@ describe('DownloadManager — Property 16: Auto-retomada seletiva na restauraç�
                 await manager.restoreSession();
 
                 // Determine which items should have been re-added (status === 'downloading')
-                const downloadingItems = items.filter(i => i.status === 'downloading');
-                const nonDownloadingItems = items.filter(i => i.status !== 'downloading');
+                const downloadingItems = items.filter((i) => i.status === 'downloading');
+                const nonDownloadingItems = items.filter((i) => i.status !== 'downloading');
 
                 // engine.addMagnetLink should have been called exactly once per downloading item
                 const addMagnetCalls = (engine.addMagnetLink as jest.Mock).mock.calls;
@@ -1225,11 +1259,15 @@ describe('DownloadManager — Property 15: Round-trip de persistência de sessã
         // 'downloading' triggers re-add to engine which can change status,
         // so we exclude it to test the pure round-trip property.
         const nonResumableStatuses: TorrentStatus[] = [
-            'paused', 'completed', 'error', 'queued', 'metadata-failed',
+            'paused',
+            'completed',
+            'error',
+            'queued',
+            'metadata-failed',
         ];
 
         const arbPersistedItem = fc.record({
-            infoHash: fc.hexaString({ minLength: 40, maxLength: 40 }).map(h => h.toLowerCase()),
+            infoHash: fc.hexaString({ minLength: 40, maxLength: 40 }).map((h) => h.toLowerCase()),
             name: fc.string({ minLength: 1, maxLength: 100 }),
             totalSize: fc.integer({ min: 0, max: 10_000_000_000 }),
             downloadedSize: fc.integer({ min: 0, max: 10_000_000_000 }),
@@ -1242,16 +1280,16 @@ describe('DownloadManager — Property 15: Round-trip de persistência de sessã
         // Generate arrays of 1–5 items with unique infoHashes
         const arbItems = fc
             .array(arbPersistedItem, { minLength: 1, maxLength: 5 })
-            .map(items => {
+            .map((items) => {
                 // Deduplicate by infoHash — keep first occurrence
                 const seen = new Set<string>();
-                return items.filter(item => {
+                return items.filter((item) => {
                     if (seen.has(item.infoHash)) return false;
                     seen.add(item.infoHash);
                     return true;
                 });
             })
-            .filter(items => items.length > 0);
+            .filter((items) => items.length > 0);
 
         await fc.assert(
             fc.asyncProperty(arbItems, async (items) => {
@@ -1259,7 +1297,7 @@ describe('DownloadManager — Property 15: Round-trip de persistência de sessã
                 mockAccessSync.mockReturnValue(undefined);
 
                 // Build persisted items to seed the store directly
-                const persistedItems: PersistedDownloadItem[] = items.map(item => ({
+                const persistedItems: PersistedDownloadItem[] = items.map((item) => ({
                     infoHash: item.infoHash,
                     name: item.name,
                     totalSize: item.totalSize,
@@ -1292,7 +1330,7 @@ describe('DownloadManager — Property 15: Round-trip de persistência de sessã
 
                 // Each original item must match on the 6 specified fields
                 for (const original of items) {
-                    const match = restored.find(r => r.infoHash === original.infoHash);
+                    const match = restored.find((r) => r.infoHash === original.infoHash);
                     if (!match) return false;
                     if (match.name !== original.name) return false;
                     if (match.status !== original.status) return false;
@@ -1332,12 +1370,16 @@ describe('DownloadManager — Property 17: Arquivos ausentes resultam em status 
     it('items with missing destinationFolder get status files-not-found after restoreSession()', async () => {
         // Statuses that are NOT 'completed' — completed items are exempt from the folder check
         const nonCompletedStatuses: TorrentStatus[] = [
-            'downloading', 'paused', 'error', 'queued',
-            'metadata-failed', 'resolving-metadata',
+            'downloading',
+            'paused',
+            'error',
+            'queued',
+            'metadata-failed',
+            'resolving-metadata',
         ];
 
         const arbPersistedItem = fc.record({
-            infoHash: fc.hexaString({ minLength: 40, maxLength: 40 }).map(h => h.toLowerCase()),
+            infoHash: fc.hexaString({ minLength: 40, maxLength: 40 }).map((h) => h.toLowerCase()),
             name: fc.string({ minLength: 1, maxLength: 50 }),
             totalSize: fc.integer({ min: 0, max: 10_000_000_000 }),
             downloadedSize: fc.integer({ min: 0, max: 10_000_000_000 }),
@@ -1350,22 +1392,22 @@ describe('DownloadManager — Property 17: Arquivos ausentes resultam em status 
         // Generate arrays of 1–8 items with unique infoHashes
         const arbItems = fc
             .array(arbPersistedItem, { minLength: 1, maxLength: 8 })
-            .map(items => {
+            .map((items) => {
                 const seen = new Set<string>();
-                return items.filter(item => {
+                return items.filter((item) => {
                     if (seen.has(item.infoHash)) return false;
                     seen.add(item.infoHash);
                     return true;
                 });
             })
-            .filter(items => items.length > 0);
+            .filter((items) => items.length > 0);
 
         await fc.assert(
             fc.asyncProperty(arbItems, async (items) => {
                 // Mock fs.existsSync to return false for the destination folder
                 mockExistsSync.mockReturnValue(false);
 
-                const persistedItems: PersistedDownloadItem[] = items.map(item => ({
+                const persistedItems: PersistedDownloadItem[] = items.map((item) => ({
                     infoHash: item.infoHash,
                     name: item.name,
                     totalSize: item.totalSize,
@@ -1390,7 +1432,7 @@ describe('DownloadManager — Property 17: Arquivos ausentes resultam em status 
 
                 // Every non-completed item with a missing folder SHALL have status 'files-not-found'
                 for (const item of items) {
-                    const match = restored.find(r => r.infoHash === item.infoHash);
+                    const match = restored.find((r) => r.infoHash === item.infoHash);
                     if (!match) return false;
                     if (match.status !== 'files-not-found') return false;
                 }

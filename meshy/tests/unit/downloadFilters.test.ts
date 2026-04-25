@@ -97,9 +97,7 @@ describe('Feature: download-list-search-filter', () => {
 
                         if (trimmed === '') return true;
 
-                        return result.every((item) =>
-                            item.name.toLowerCase().includes(trimmed),
-                        );
+                        return result.every((item) => item.name.toLowerCase().includes(trimmed));
                     },
                 ),
                 { numRuns: 100 },
@@ -120,9 +118,7 @@ describe('Feature: download-list-search-filter', () => {
                         const resultSet = new Set(result);
                         const excluded = items.filter((item) => !resultSet.has(item));
 
-                        return excluded.every(
-                            (item) => !item.name.toLowerCase().includes(trimmed),
-                        );
+                        return excluded.every((item) => !item.name.toLowerCase().includes(trimmed));
                     },
                 ),
                 { numRuns: 100 },
@@ -351,8 +347,7 @@ describe('Feature: download-list-search-filter', () => {
                         // Calcula o conjunto esperado: itens que passam ambos os filtros
                         const expected = items.filter((item) => {
                             const passesName =
-                                trimmed === '' ||
-                                item.name.toLowerCase().includes(trimmed);
+                                trimmed === '' || item.name.toLowerCase().includes(trimmed);
                             const passesStatus =
                                 selectedStatuses.length === 0 ||
                                 new Set(selectedStatuses).has(item.status);

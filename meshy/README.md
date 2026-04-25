@@ -22,15 +22,15 @@ Meshy é um cliente BitTorrent com interface moderna inspirada no VS Code. Ele r
 
 ## Stack
 
-| Camada       | Tecnologia                                      |
-| ------------ | ------------------------------------------------ |
-| Framework    | [Electron](https://www.electronjs.org/) 33       |
-| Build        | [electron-vite](https://electron-vite.org/) + Vite 6 |
-| UI           | [React](https://react.dev/) 18                   |
-| Estado       | [Zustand](https://zustand-demo.pmnd.rs/) 5       |
-| Torrent      | [WebTorrent](https://webtorrent.io/) 2           |
+| Camada       | Tecnologia                                                         |
+| ------------ | ------------------------------------------------------------------ |
+| Framework    | [Electron](https://www.electronjs.org/) 33                         |
+| Build        | [electron-vite](https://electron-vite.org/) + Vite 6               |
+| UI           | [React](https://react.dev/) 18                                     |
+| Estado       | [Zustand](https://zustand-demo.pmnd.rs/) 5                         |
+| Torrent      | [WebTorrent](https://webtorrent.io/) 2                             |
 | Persistência | [electron-store](https://github.com/sindresorhus/electron-store) 8 |
-| Linguagem    | TypeScript 5                                     |
+| Linguagem    | TypeScript 5                                                       |
 
 ## Arquitetura
 
@@ -82,20 +82,20 @@ npm install
 
 ## Scripts
 
-| Comando              | Descrição                                  |
-| -------------------- | ------------------------------------------ |
-| `npm run dev`        | Inicia o app em modo desenvolvimento       |
-| `npm run build`      | Compila o app para produção                |
-| `npm run preview`    | Preview do build de produção               |
-| `npm start`          | Executa o app compilado                    |
-| `npm test`           | Roda os testes com Jest                    |
-| `npm run test:watch` | Roda os testes em modo watch               |
-| `npm run test:coverage` | Gera relatório de cobertura de testes   |
-| `npm run typecheck`  | Verifica tipos com TypeScript              |
-| `npm run lint`       | Roda o ESLint                              |
-| `npm run lint:fix`   | Roda o ESLint e corrige automaticamente    |
-| `npm run format`     | Formata o código com Prettier              |
-| `npm run format:check` | Verifica formatação sem alterar arquivos |
+| Comando                 | Descrição                                |
+| ----------------------- | ---------------------------------------- |
+| `npm run dev`           | Inicia o app em modo desenvolvimento     |
+| `npm run build`         | Compila o app para produção              |
+| `npm run preview`       | Preview do build de produção             |
+| `npm start`             | Executa o app compilado                  |
+| `npm test`              | Roda os testes com Jest                  |
+| `npm run test:watch`    | Roda os testes em modo watch             |
+| `npm run test:coverage` | Gera relatório de cobertura de testes    |
+| `npm run typecheck`     | Verifica tipos com TypeScript            |
+| `npm run lint`          | Roda o ESLint                            |
+| `npm run lint:fix`      | Roda o ESLint e corrige automaticamente  |
+| `npm run format`        | Formata o código com Prettier            |
+| `npm run format:check`  | Verifica formatação sem alterar arquivos |
 
 ## Desenvolvimento
 

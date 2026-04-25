@@ -57,8 +57,14 @@ export function DownloadListToolbar({
                 isOpen={isConfirmOpen}
                 title="Limpar downloads concluídos"
                 message={`Deseja remover ${completedCount === 1 ? '1 download concluído' : `${completedCount} downloads concluídos`} da lista? Os arquivos baixados podem ser mantidos ou excluídos do disco.`}
-                onConfirmKeepFiles={() => { setIsConfirmOpen(false); onClearCompleted(false); }}
-                onConfirmDeleteFiles={() => { setIsConfirmOpen(false); onClearCompleted(true); }}
+                onConfirmKeepFiles={() => {
+                    setIsConfirmOpen(false);
+                    onClearCompleted(false);
+                }}
+                onConfirmDeleteFiles={() => {
+                    setIsConfirmOpen(false);
+                    onClearCompleted(true);
+                }}
                 onCancel={() => setIsConfirmOpen(false)}
             />
         </div>

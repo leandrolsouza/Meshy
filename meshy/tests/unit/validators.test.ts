@@ -17,7 +17,9 @@ describe('isValidMagnetUri', () => {
 
     it('accepts a magnet URI with extra query params', () => {
         expect(
-            isValidMagnetUri(`magnet:?xt=urn:btih:${VALID_HASH}&dn=MyTorrent&tr=udp%3A%2F%2Ftracker.example.com%3A80`)
+            isValidMagnetUri(
+                `magnet:?xt=urn:btih:${VALID_HASH}&dn=MyTorrent&tr=udp%3A%2F%2Ftracker.example.com%3A80`,
+            ),
         ).toBe(true);
     });
 
@@ -59,22 +61,31 @@ describe('isValidMagnetUri', () => {
         const MAGNET_PREFIX = 'magnet:?xt=urn:btih:';
 
         /** Arbitrary that generates exactly 40 hex characters */
-        const hexHash40 = fc.stringOf(
-            fc.constantFrom(...'0123456789abcdefABCDEF'.split('')),
-            { minLength: 40, maxLength: 40 }
-        );
+        const hexHash40 = fc.stringOf(fc.constantFrom(...'0123456789abcdefABCDEF'.split('')), {
+            minLength: 40,
+            maxLength: 40,
+        });
 
         /** Arbitrary that generates valid optional query param suffixes */
         const optionalQueryParams = fc.oneof(
             fc.constant(''),
-            fc.stringOf(
-                fc.constantFrom(...'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&=%.+:?_-'.split('')),
-                { minLength: 1, maxLength: 50 }
-            ).map(s => `&${s}`)
+            fc
+                .stringOf(
+                    fc.constantFrom(
+                        ...'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&=%.+:?_-'.split(
+                            '',
+                        ),
+                    ),
+                    { minLength: 1, maxLength: 50 },
+                )
+                .map((s) => `&${s}`),
         );
 
         /** Arbitrary that generates whitespace for padding */
-        const whitespace = fc.stringOf(fc.constantFrom(' ', '\t', '\n', '\r'), { minLength: 0, maxLength: 5 });
+        const whitespace = fc.stringOf(fc.constantFrom(' ', '\t', '\n', '\r'), {
+            minLength: 0,
+            maxLength: 5,
+        });
 
         it('returns true for any valid magnet URI (prefix + 40 hex chars + optional query params)', () => {
             fc.assert(
@@ -82,7 +93,7 @@ describe('isValidMagnetUri', () => {
                     const uri = `${MAGNET_PREFIX}${hash}${params}`;
                     expect(isValidMagnetUri(uri)).toBe(true);
                 }),
-                { numRuns: 100 }
+                { numRuns: 100 },
             );
         });
 
@@ -92,45 +103,46 @@ describe('isValidMagnetUri', () => {
                     const uri = `${leading}${MAGNET_PREFIX}${hash}${trailing}`;
                     expect(isValidMagnetUri(uri)).toBe(true);
                 }),
-                { numRuns: 100 }
+                { numRuns: 100 },
             );
         });
 
         it('returns false for any arbitrary string that does not match the magnet pattern', () => {
-            const VALID_MAGNET_REGEX = /^magnet:\?xt=urn:btih:[a-fA-F0-9]{40}(&[a-zA-Z0-9&=%.+:?_-]*)?$/i;
+            const VALID_MAGNET_REGEX =
+                /^magnet:\?xt=urn:btih:[a-fA-F0-9]{40}(&[a-zA-Z0-9&=%.+:?_-]*)?$/i;
             fc.assert(
                 fc.property(fc.string(), (s) => {
                     const result = isValidMagnetUri(s);
                     const expected = VALID_MAGNET_REGEX.test(s.trim());
                     expect(result).toBe(expected);
                 }),
-                { numRuns: 100 }
+                { numRuns: 100 },
             );
         });
 
         it('returns false when hash has fewer than 40 hex characters', () => {
-            const shortHash = fc.stringOf(
-                fc.constantFrom(...'0123456789abcdef'.split('')),
-                { minLength: 0, maxLength: 39 }
-            );
+            const shortHash = fc.stringOf(fc.constantFrom(...'0123456789abcdef'.split('')), {
+                minLength: 0,
+                maxLength: 39,
+            });
             fc.assert(
                 fc.property(shortHash, (hash) => {
                     expect(isValidMagnetUri(`${MAGNET_PREFIX}${hash}`)).toBe(false);
                 }),
-                { numRuns: 100 }
+                { numRuns: 100 },
             );
         });
 
         it('returns false when hash has more than 40 hex characters', () => {
-            const longHash = fc.stringOf(
-                fc.constantFrom(...'0123456789abcdef'.split('')),
-                { minLength: 41, maxLength: 80 }
-            );
+            const longHash = fc.stringOf(fc.constantFrom(...'0123456789abcdef'.split('')), {
+                minLength: 41,
+                maxLength: 80,
+            });
             fc.assert(
                 fc.property(longHash, (hash) => {
                     expect(isValidMagnetUri(`${MAGNET_PREFIX}${hash}`)).toBe(false);
                 }),
-                { numRuns: 100 }
+                { numRuns: 100 },
             );
         });
 
@@ -149,9 +161,9 @@ describe('isValidMagnetUri', () => {
                         chars[pos] = bad;
                         const hash = chars.join('');
                         expect(isValidMagnetUri(`${MAGNET_PREFIX}${hash}`)).toBe(false);
-                    }
+                    },
                 ),
-                { numRuns: 100 }
+                { numRuns: 100 },
             );
         });
     });
@@ -174,31 +186,35 @@ describe('Property 1: Validação de arquivo .torrent', () => {
     const torrentExtension = fc.constantFrom('.torrent', '.TORRENT', '.Torrent', '.tOrReNt');
     const fileBaseName = fc.stringOf(
         fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789_-'.split('')),
-        { minLength: 1, maxLength: 30 }
+        { minLength: 1, maxLength: 30 },
     );
-    const torrentFilePath = fc.tuple(fileBaseName, torrentExtension).map(
-        ([name, ext]) => name + ext
-    );
+    const torrentFilePath = fc
+        .tuple(fileBaseName, torrentExtension)
+        .map(([name, ext]) => name + ext);
 
     /** Arbitrary that generates file paths NOT ending with .torrent */
     const nonTorrentExtension = fc.constantFrom('.txt', '.zip', '.mp4', '.pdf', '.exe', '.bin', '');
-    const nonTorrentFilePath = fc.tuple(fileBaseName, nonTorrentExtension).map(
-        ([name, ext]) => name + ext
-    );
+    const nonTorrentFilePath = fc
+        .tuple(fileBaseName, nonTorrentExtension)
+        .map(([name, ext]) => name + ext);
 
     /** Arbitrary that generates a buffer starting with 0x64 */
-    const validMagicBuffer = fc.tuple(
-        fc.constant(0x64),
-        fc.array(fc.integer({ min: 0, max: 255 }), { minLength: 0, maxLength: 50 })
-    ).map(([magic, rest]) => Buffer.from([magic, ...rest]));
+    const validMagicBuffer = fc
+        .tuple(
+            fc.constant(0x64),
+            fc.array(fc.integer({ min: 0, max: 255 }), { minLength: 0, maxLength: 50 }),
+        )
+        .map(([magic, rest]) => Buffer.from([magic, ...rest]));
 
     /** Arbitrary that generates a buffer NOT starting with 0x64 (including empty) */
     const invalidMagicBuffer = fc.oneof(
         fc.constant(Buffer.alloc(0)),
-        fc.tuple(
-            fc.integer({ min: 0, max: 255 }).filter(b => b !== 0x64),
-            fc.array(fc.integer({ min: 0, max: 255 }), { minLength: 0, maxLength: 50 })
-        ).map(([first, rest]) => Buffer.from([first, ...rest]))
+        fc
+            .tuple(
+                fc.integer({ min: 0, max: 255 }).filter((b) => b !== 0x64),
+                fc.array(fc.integer({ min: 0, max: 255 }), { minLength: 0, maxLength: 50 }),
+            )
+            .map(([first, rest]) => Buffer.from([first, ...rest])),
     );
 
     it('returns true when path ends with .torrent AND buffer starts with 0x64', () => {
@@ -206,7 +222,7 @@ describe('Property 1: Validação de arquivo .torrent', () => {
             fc.property(torrentFilePath, validMagicBuffer, (filePath, buffer) => {
                 expect(isValidTorrent(filePath, buffer)).toBe(true);
             }),
-            { numRuns: 100 }
+            { numRuns: 100 },
         );
     });
 
@@ -215,7 +231,7 @@ describe('Property 1: Validação de arquivo .torrent', () => {
             fc.property(torrentFilePath, invalidMagicBuffer, (filePath, buffer) => {
                 expect(isValidTorrent(filePath, buffer)).toBe(false);
             }),
-            { numRuns: 100 }
+            { numRuns: 100 },
         );
     });
 
@@ -224,7 +240,7 @@ describe('Property 1: Validação de arquivo .torrent', () => {
             fc.property(nonTorrentFilePath, validMagicBuffer, (filePath, buffer) => {
                 expect(isValidTorrent(filePath, buffer)).toBe(false);
             }),
-            { numRuns: 100 }
+            { numRuns: 100 },
         );
     });
 
@@ -233,7 +249,7 @@ describe('Property 1: Validação de arquivo .torrent', () => {
             fc.property(nonTorrentFilePath, invalidMagicBuffer, (filePath, buffer) => {
                 expect(isValidTorrent(filePath, buffer)).toBe(false);
             }),
-            { numRuns: 100 }
+            { numRuns: 100 },
         );
     });
 
@@ -247,9 +263,9 @@ describe('Property 1: Validação de arquivo .torrent', () => {
                     const expectedPath = filePath.toLowerCase().endsWith('.torrent');
                     const expectedMagic = buffer.length > 0 && buffer[0] === 0x64;
                     expect(result).toBe(expectedPath && expectedMagic);
-                }
+                },
             ),
-            { numRuns: 100 }
+            { numRuns: 100 },
         );
     });
 });
@@ -366,26 +382,24 @@ describe('isValidSpeedLimit', () => {
     describe('Property 14: Rejeição de Speed_Limit inválido', () => {
         it('rejects negative numbers', () => {
             fc.assert(
-                fc.property(
-                    fc.integer({ min: -1_000_000, max: -1 }),
-                    (n) => {
-                        expect(isValidSpeedLimit(n)).toBe(false);
-                    }
-                ),
-                { numRuns: 100 }
+                fc.property(fc.integer({ min: -1_000_000, max: -1 }), (n) => {
+                    expect(isValidSpeedLimit(n)).toBe(false);
+                }),
+                { numRuns: 100 },
             );
         });
 
         it('rejects floating-point numbers (non-integer)', () => {
             fc.assert(
                 fc.property(
-                    fc.double({ min: -1e6, max: 1e6, noNaN: true, noDefaultInfinity: true })
+                    fc
+                        .double({ min: -1e6, max: 1e6, noNaN: true, noDefaultInfinity: true })
                         .filter((n) => !Number.isInteger(n)),
                     (n) => {
                         expect(isValidSpeedLimit(n)).toBe(false);
-                    }
+                    },
                 ),
-                { numRuns: 100 }
+                { numRuns: 100 },
             );
         });
 
@@ -394,7 +408,7 @@ describe('isValidSpeedLimit', () => {
                 fc.property(fc.string(), (s) => {
                     expect(isValidSpeedLimit(s)).toBe(false);
                 }),
-                { numRuns: 100 }
+                { numRuns: 100 },
             );
         });
 
@@ -421,13 +435,13 @@ describe('isValidSpeedLimit', () => {
                         fc.constant(NaN),
                         fc.constant(Infinity),
                         fc.constant(-Infinity),
-                        fc.constant(Symbol('test'))
+                        fc.constant(Symbol('test')),
                     ),
                     (value) => {
                         expect(isValidSpeedLimit(value)).toBe(false);
-                    }
+                    },
                 ),
-                { numRuns: 100 }
+                { numRuns: 100 },
             );
         });
 
@@ -438,22 +452,25 @@ describe('isValidSpeedLimit', () => {
                         // Valid: non-negative integers
                         fc.nat().map((n) => ({ value: n, expected: true })),
                         // Invalid: negative integers
-                        fc.integer({ min: -1_000_000, max: -1 }).map((n) => ({ value: n, expected: false })),
+                        fc
+                            .integer({ min: -1_000_000, max: -1 })
+                            .map((n) => ({ value: n, expected: false })),
                         // Invalid: floats
-                        fc.double({ min: -1e6, max: 1e6, noNaN: true, noDefaultInfinity: true })
+                        fc
+                            .double({ min: -1e6, max: 1e6, noNaN: true, noDefaultInfinity: true })
                             .filter((n) => !Number.isInteger(n))
                             .map((n) => ({ value: n, expected: false })),
                         // Invalid: strings
                         fc.string().map((s) => ({ value: s, expected: false })),
                         // Invalid: null/undefined
                         fc.constant({ value: null, expected: false }),
-                        fc.constant({ value: undefined, expected: false })
+                        fc.constant({ value: undefined, expected: false }),
                     ),
                     ({ value, expected }) => {
                         expect(isValidSpeedLimit(value)).toBe(expected);
-                    }
+                    },
                 ),
-                { numRuns: 100 }
+                { numRuns: 100 },
             );
         });
     });

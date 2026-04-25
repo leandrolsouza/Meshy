@@ -11,7 +11,9 @@ function createFakeStore(initial: Record<string, unknown> = {}): SettingsStore {
     const data = new Map<string, unknown>(Object.entries(initial));
     return {
         get: (key) => data.get(key) as any,
-        set: (key, value) => { data.set(key, value); },
+        set: (key, value) => {
+            data.set(key, value);
+        },
     };
 }
 
@@ -56,7 +58,14 @@ describe('SettingsManager.get()', () => {
         const manager = makeManager();
         const settings = manager.get();
         expect(Object.keys(settings).sort()).toEqual(
-            ['destinationFolder', 'downloadSpeedLimit', 'maxConcurrentDownloads', 'notificationsEnabled', 'theme', 'uploadSpeedLimit'].sort()
+            [
+                'destinationFolder',
+                'downloadSpeedLimit',
+                'maxConcurrentDownloads',
+                'notificationsEnabled',
+                'theme',
+                'uploadSpeedLimit',
+            ].sort(),
         );
     });
 });
@@ -121,7 +130,6 @@ describe('SettingsManager.getDefaultDownloadFolder()', () => {
     });
 });
 
-
 // ─── Property-Based Tests ─────────────────────────────────────────────────────
 
 // Feature: meshy-torrent-client, Property 10: Round-trip de persistência de configurações
@@ -144,13 +152,12 @@ describe('Property 10: Round-trip de persistência de configurações', () => {
                     expect(result.destinationFolder).toBe(settings.destinationFolder);
                     expect(result.downloadSpeedLimit).toBe(settings.downloadSpeedLimit);
                     expect(result.uploadSpeedLimit).toBe(settings.uploadSpeedLimit);
-                }
+                },
             ),
-            { numRuns: 100 }
+            { numRuns: 100 },
         );
     });
 });
-
 
 // ─── Property 11 ──────────────────────────────────────────────────────────────
 
@@ -221,7 +228,7 @@ describe('Property 11: Novos downloads usam a pasta de destino atual', () => {
     it('downloads iniciados após set({destinationFolder}) usam o valor configurado', async () => {
         await fc.assert(
             fc.asyncProperty(
-                fc.string({ minLength: 1 }).filter(s => !s.includes('\0')),
+                fc.string({ minLength: 1 }).filter((s) => !s.includes('\0')),
                 async (folder) => {
                     const settingsManager = makeManager();
                     settingsManager.set({ destinationFolder: folder });
@@ -232,31 +239,37 @@ describe('Property 11: Novos downloads usam a pasta de destino atual', () => {
                     const magnetUri = `magnet:?xt=urn:btih:${infoHash}`;
 
                     const silentLogger = {
-                        info: () => { },
-                        warn: () => { },
-                        error: () => { },
+                        info: () => {},
+                        warn: () => {},
+                        error: () => {},
                     };
 
-                    const downloadManager = createDownloadManager(engine, settingsManager, undefined, silentLogger);
+                    const downloadManager = createDownloadManager(
+                        engine,
+                        settingsManager,
+                        undefined,
+                        silentLogger,
+                    );
                     const item = await downloadManager.addMagnetLink(magnetUri);
 
                     expect(item.destinationFolder).toBe(folder);
 
                     // Clear metadata timeout to prevent open handles
                     jest.runAllTimers();
-                }
+                },
             ),
-            { numRuns: 100 }
+            { numRuns: 100 },
         );
     });
 });
-
 
 // ─── Property 12 ──────────────────────────────────────────────────────────────
 
 // Feature: meshy-torrent-client, Property 12: Pasta inválida resulta em erro antes de iniciar download
 describe('Property 12: Pasta inválida resulta em erro antes de iniciar download', () => {
-    beforeEach(() => { jest.useFakeTimers(); });
+    beforeEach(() => {
+        jest.useFakeTimers();
+    });
     afterEach(() => {
         jest.useRealTimers();
         jest.restoreAllMocks();
@@ -266,7 +279,7 @@ describe('Property 12: Pasta inválida resulta em erro antes de iniciar download
     it('pasta que não existe ou sem permissão de escrita resulta em erro sem iniciar transferência', async () => {
         await fc.assert(
             fc.asyncProperty(
-                fc.string({ minLength: 1 }).filter(s => !s.includes('\0')),
+                fc.string({ minLength: 1 }).filter((s) => !s.includes('\0')),
                 fc.oneof(
                     fc.constant('non-existent' as const),
                     fc.constant('non-writable' as const),
@@ -292,16 +305,21 @@ describe('Property 12: Pasta inválida resulta em erro antes de iniciar download
                     const magnetUri = `magnet:?xt=urn:btih:${infoHash}`;
 
                     const silentLogger = {
-                        info: () => { },
-                        warn: () => { },
-                        error: () => { },
+                        info: () => {},
+                        warn: () => {},
+                        error: () => {},
                     };
 
-                    const downloadManager = createDownloadManager(engine, settingsManager, undefined, silentLogger);
+                    const downloadManager = createDownloadManager(
+                        engine,
+                        settingsManager,
+                        undefined,
+                        silentLogger,
+                    );
 
                     // Attempting to add a download with an invalid folder should throw
                     await expect(downloadManager.addMagnetLink(magnetUri)).rejects.toThrow(
-                        'Pasta inválida ou sem permissão de escrita'
+                        'Pasta inválida ou sem permissão de escrita',
                     );
 
                     // The engine should NOT have been called — transfer was not started
@@ -312,9 +330,9 @@ describe('Property 12: Pasta inválida resulta em erro antes de iniciar download
 
                     // Clear any pending timers
                     jest.runAllTimers();
-                }
+                },
             ),
-            { numRuns: 100 }
+            { numRuns: 100 },
         );
     });
 });

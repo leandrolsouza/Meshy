@@ -18,7 +18,10 @@ interface ThemeSwitcherProps {
  * A troca é imediata (sem botão "Salvar") — o onChange chama onThemeChange com o novo ID.
  * Inclui região aria-live para anunciar mudanças aos leitores de tela.
  */
-export function ThemeSwitcher({ currentThemeId, onThemeChange }: ThemeSwitcherProps): React.JSX.Element {
+export function ThemeSwitcher({
+    currentThemeId,
+    onThemeChange,
+}: ThemeSwitcherProps): React.JSX.Element {
     // Texto anunciado pela região aria-live após troca de tema
     const [announcement, setAnnouncement] = useState('');
 
@@ -49,11 +52,7 @@ export function ThemeSwitcher({ currentThemeId, onThemeChange }: ThemeSwitcherPr
                 ))}
             </select>
             {/* Região aria-live — anuncia mudanças de tema para leitores de tela */}
-            <span
-                aria-live="polite"
-                role="status"
-                className={styles.srOnly}
-            >
+            <span aria-live="polite" role="status" className={styles.srOnly}>
                 {announcement}
             </span>
         </div>

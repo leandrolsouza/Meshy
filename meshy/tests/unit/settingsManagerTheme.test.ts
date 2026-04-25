@@ -11,7 +11,9 @@ function createFakeStore(initial: Record<string, unknown> = {}): SettingsStore {
     const data = new Map<string, unknown>(Object.entries(initial));
     return {
         get: (key) => data.get(key) as any,
-        set: (key, value) => { data.set(key, value); },
+        set: (key, value) => {
+            data.set(key, value);
+        },
     };
 }
 
@@ -31,18 +33,15 @@ describe('Property 4: Round-trip de persistência de tema', () => {
     // **Validates: Requirements 2.1, 5.2**
     it('set({ theme: id }) seguido de get().theme retorna o mesmo id para qualquer string não-vazia', () => {
         fc.assert(
-            fc.property(
-                fc.string({ minLength: 1 }),
-                (themeId) => {
-                    const manager = makeManager();
+            fc.property(fc.string({ minLength: 1 }), (themeId) => {
+                const manager = makeManager();
 
-                    manager.set({ theme: themeId });
-                    const result = manager.get().theme;
+                manager.set({ theme: themeId });
+                const result = manager.get().theme;
 
-                    expect(result).toBe(themeId);
-                }
-            ),
-            { numRuns: 100 }
+                expect(result).toBe(themeId);
+            }),
+            { numRuns: 100 },
         );
     });
 });

@@ -38,7 +38,8 @@ function formatElapsed(ms: number): string {
 
 function progressVariant(status: DownloadItemType['status']): 'default' | 'success' | 'error' {
     if (status === 'completed') return 'success';
-    if (status === 'error' || status === 'metadata-failed' || status === 'files-not-found') return 'error';
+    if (status === 'error' || status === 'metadata-failed' || status === 'files-not-found')
+        return 'error';
     return 'default';
 }
 
@@ -97,21 +98,26 @@ export function DownloadItem({
         setFilesLoading(true);
         setFilesError(null);
 
-        window.meshy.getFiles(item.infoHash).then((response) => {
-            if (cancelled) return;
-            setFilesLoading(false);
-            if (response.success) {
-                setFiles(response.data);
-            } else {
-                setFilesError(response.error);
-            }
-        }).catch((err: unknown) => {
-            if (cancelled) return;
-            setFilesLoading(false);
-            setFilesError(err instanceof Error ? err.message : 'Erro ao buscar arquivos');
-        });
+        window.meshy
+            .getFiles(item.infoHash)
+            .then((response) => {
+                if (cancelled) return;
+                setFilesLoading(false);
+                if (response.success) {
+                    setFiles(response.data);
+                } else {
+                    setFilesError(response.error);
+                }
+            })
+            .catch((err: unknown) => {
+                if (cancelled) return;
+                setFilesLoading(false);
+                setFilesError(err instanceof Error ? err.message : 'Erro ao buscar arquivos');
+            });
 
-        return () => { cancelled = true; };
+        return () => {
+            cancelled = true;
+        };
     }, [expanded, item.infoHash]);
 
     // ── Atualizar progresso dos arquivos periodicamente enquanto baixando ─────
@@ -123,14 +129,17 @@ export function DownloadItem({
         let cancelled = false;
 
         const interval = setInterval(() => {
-            window.meshy.getFiles(item.infoHash).then((response) => {
-                if (cancelled) return;
-                if (response.success) {
-                    setFiles(response.data);
-                }
-            }).catch(() => {
-                // Silenciar erros de polling — não sobrescrever o estado
-            });
+            window.meshy
+                .getFiles(item.infoHash)
+                .then((response) => {
+                    if (cancelled) return;
+                    if (response.success) {
+                        setFiles(response.data);
+                    }
+                })
+                .catch(() => {
+                    // Silenciar erros de polling — não sobrescrever o estado
+                });
         }, 1500);
 
         return () => {
@@ -145,17 +154,22 @@ export function DownloadItem({
             setSelectionLoading(true);
             setSelectionError(null);
 
-            window.meshy.setFileSelection(item.infoHash, selectedIndices).then((response) => {
-                setSelectionLoading(false);
-                if (response.success) {
-                    setFiles(response.data);
-                } else {
-                    setSelectionError(response.error);
-                }
-            }).catch((err: unknown) => {
-                setSelectionLoading(false);
-                setSelectionError(err instanceof Error ? err.message : 'Erro ao aplicar seleção');
-            });
+            window.meshy
+                .setFileSelection(item.infoHash, selectedIndices)
+                .then((response) => {
+                    setSelectionLoading(false);
+                    if (response.success) {
+                        setFiles(response.data);
+                    } else {
+                        setSelectionError(response.error);
+                    }
+                })
+                .catch((err: unknown) => {
+                    setSelectionLoading(false);
+                    setSelectionError(
+                        err instanceof Error ? err.message : 'Erro ao aplicar seleção',
+                    );
+                });
         },
         [item.infoHash],
     );
@@ -184,9 +198,7 @@ export function DownloadItem({
                             {item.selectedFileCount}/{item.totalFileCount} arquivos
                         </span>
                     )}
-                    <span className={styles.status}>
-                        {statusLabel(item.status)}
-                    </span>
+                    <span className={styles.status}>{statusLabel(item.status)}</span>
                 </div>
             </div>
 
@@ -200,11 +212,20 @@ export function DownloadItem({
 
             {/* Details */}
             <div className={styles.details}>
-                <span>{formatBytes(item.downloadedSize)} / {formatBytes(item.totalSize)} ({progressPercent}%)</span>
-                {!isCompleted && <SpeedDisplay speedBytesPerSec={item.downloadSpeed} icon={<VscArrowDown />} />}
-                {!isCompleted && <SpeedDisplay speedBytesPerSec={item.uploadSpeed} icon={<VscArrowUp />} />}
+                <span>
+                    {formatBytes(item.downloadedSize)} / {formatBytes(item.totalSize)} (
+                    {progressPercent}%)
+                </span>
                 {!isCompleted && (
-                    <span>{item.numSeeders} seeders · {item.numPeers} peers</span>
+                    <SpeedDisplay speedBytesPerSec={item.downloadSpeed} icon={<VscArrowDown />} />
+                )}
+                {!isCompleted && (
+                    <SpeedDisplay speedBytesPerSec={item.uploadSpeed} icon={<VscArrowUp />} />
+                )}
+                {!isCompleted && (
+                    <span>
+                        {item.numSeeders} seeders · {item.numPeers} peers
+                    </span>
                 )}
                 {isCompleted ? (
                     <span>Tempo total: {formatElapsed(item.elapsedMs ?? 0)}</span>
@@ -219,19 +240,29 @@ export function DownloadItem({
                     <button
                         className="btn"
                         onClick={handleToggleExpand}
-                        aria-label={expanded ? 'Recolher lista de arquivos' : 'Expandir lista de arquivos'}
+                        aria-label={
+                            expanded ? 'Recolher lista de arquivos' : 'Expandir lista de arquivos'
+                        }
                         aria-expanded={expanded}
                     >
                         {expanded ? <VscChevronDown /> : <VscChevronRight />} Arquivos
                     </button>
                 )}
                 {item.status === 'downloading' && (
-                    <button className="btn" onClick={() => onPause(item.infoHash)} aria-label={`Pausar ${item.name}`}>
+                    <button
+                        className="btn"
+                        onClick={() => onPause(item.infoHash)}
+                        aria-label={`Pausar ${item.name}`}
+                    >
                         <VscDebugPause /> Pausar
                     </button>
                 )}
                 {item.status === 'paused' && (
-                    <button className="btn" onClick={() => onResume(item.infoHash)} aria-label={`Retomar ${item.name}`}>
+                    <button
+                        className="btn"
+                        onClick={() => onResume(item.infoHash)}
+                        aria-label={`Retomar ${item.name}`}
+                    >
                         <VscPlay /> Retomar
                     </button>
                 )}
@@ -248,7 +279,11 @@ export function DownloadItem({
             {expanded && (
                 <div className={styles.fileSelectorSection}>
                     {filesLoading && !files.length && (
-                        <div className={styles.fileSelectorLoading} role="status" aria-live="polite">
+                        <div
+                            className={styles.fileSelectorLoading}
+                            role="status"
+                            aria-live="polite"
+                        >
                             Carregando arquivos...
                         </div>
                     )}
@@ -272,8 +307,14 @@ export function DownloadItem({
                 isOpen={isConfirmDialogOpen}
                 title="Remover download"
                 message={`Deseja remover "${item.name}"? Os arquivos baixados podem ser mantidos ou excluídos do disco.`}
-                onConfirmKeepFiles={() => { setIsConfirmDialogOpen(false); onRemove(item.infoHash, false); }}
-                onConfirmDeleteFiles={() => { setIsConfirmDialogOpen(false); onRemove(item.infoHash, true); }}
+                onConfirmKeepFiles={() => {
+                    setIsConfirmDialogOpen(false);
+                    onRemove(item.infoHash, false);
+                }}
+                onConfirmDeleteFiles={() => {
+                    setIsConfirmDialogOpen(false);
+                    onRemove(item.infoHash, true);
+                }}
                 onCancel={() => setIsConfirmDialogOpen(false)}
             />
         </div>

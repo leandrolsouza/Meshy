@@ -2,7 +2,12 @@ import { EventEmitter } from 'events';
 import { existsSync, accessSync, constants as fsConstants } from 'fs';
 import type { TorrentEngine, TorrentInfo } from './torrentEngine';
 import type { SettingsManager } from './settingsManager';
-import type { DownloadItem, PersistedDownloadItem, TorrentFileInfo, TorrentStatus } from '../shared/types';
+import type {
+    DownloadItem,
+    PersistedDownloadItem,
+    TorrentFileInfo,
+    TorrentStatus,
+} from '../shared/types';
 import { DEFAULT_MAX_CONCURRENT_DOWNLOADS } from '../shared/validators';
 import { logger as defaultLogger } from './logger';
 import type { Logger } from './logger';
@@ -22,6 +27,7 @@ export interface DownloadManager {
     /** Atualiza o limite de downloads simultâneos e processa a fila */
     setMaxConcurrentDownloads(max: number): void;
     on(event: 'update', listener: (item: DownloadItem) => void): void;
+    on(event: 'remove', listener: (infoHash: string) => void): void;
 }
 
 // ─── Store interface (subset used by DownloadManager) ─────────────────────────
@@ -98,13 +104,19 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
     private readonly store: PersistedStore | undefined;
     private readonly log: Logger;
 
-    constructor(engine: TorrentEngine, settings: SettingsManager, store?: PersistedStore, log?: Logger) {
+    constructor(
+        engine: TorrentEngine,
+        settings: SettingsManager,
+        store?: PersistedStore,
+        log?: Logger,
+    ) {
         super();
         this.engine = engine;
         this.settings = settings;
         this.store = store;
         this.log = log ?? defaultLogger;
-        this.maxConcurrent = settings.get().maxConcurrentDownloads ?? DEFAULT_MAX_CONCURRENT_DOWNLOADS;
+        this.maxConcurrent =
+            settings.get().maxConcurrentDownloads ?? DEFAULT_MAX_CONCURRENT_DOWNLOADS;
 
         // Subscribe to engine events
         this.engine.on('progress', (info: TorrentInfo) => {
@@ -129,7 +141,8 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             }
 
             // Recalculate progress and totalSize based on selected files
-            let totalSize = wasResolvingMetadata && isNowDownloading ? info.totalSize : existing.totalSize;
+            let totalSize =
+                wasResolvingMetadata && isNowDownloading ? info.totalSize : existing.totalSize;
             let downloadedSize = info.downloaded;
             let progress = info.progress;
             let selectedFileCount = existing.selectedFileCount;
@@ -138,7 +151,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             try {
                 const files = this.engine.getFiles(info.infoHash);
                 if (files.length > 0) {
-                    const selectedFiles = files.filter(f => f.selected);
+                    const selectedFiles = files.filter((f) => f.selected);
                     totalFileCount = files.length;
                     selectedFileCount = selectedFiles.length;
 
@@ -158,9 +171,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             // dispara. Verificamos manualmente se todos os selecionados já foram
             // baixados (progress >= 1) e o torrent está ativo.
             const selectedFilesComplete =
-                totalSize > 0 &&
-                downloadedSize >= totalSize &&
-                info.status === 'downloading';
+                totalSize > 0 && downloadedSize >= totalSize && info.status === 'downloading';
 
             if (selectedFilesComplete) {
                 const completedAt = Date.now();
@@ -351,7 +362,8 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             // Se o engine já resolveu os metadados (status 'downloading'),
             // usar esse status diretamente. Caso contrário, iniciar como
             // 'resolving-metadata' com timeout de 60s.
-            const initialStatus = info.status === 'downloading' ? 'downloading' : 'resolving-metadata';
+            const initialStatus =
+                info.status === 'downloading' ? 'downloading' : 'resolving-metadata';
             const item: DownloadItem = {
                 ...torrentInfoToDownloadItem(info, destinationFolder, addedAt),
                 status: initialStatus,
@@ -492,7 +504,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
         // Update the DownloadItem with file selection info
         const existing = this.items.get(infoHash);
         if (existing) {
-            const selectedFiles = updatedFiles.filter(f => f.selected);
+            const selectedFiles = updatedFiles.filter((f) => f.selected);
             const totalSize = selectedFiles.reduce((sum, f) => sum + f.length, 0);
             const downloadedSize = selectedFiles.reduce((sum, f) => sum + f.downloaded, 0);
             const progress = totalSize > 0 ? downloadedSize / totalSize : 0;
@@ -538,6 +550,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
         this._clearMetadataTimer(infoHash);
         this.selectedFileIndicesMap.delete(infoHash);
         this.items.delete(infoHash);
+        this.emit('remove', infoHash);
 
         // Se um download ativo foi removido, processar a fila
         if (wasActive) {
@@ -549,12 +562,12 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
 
     getAll(): DownloadItem[] {
         const items = Array.from(this.items.values());
-        return items.map(item => {
+        return items.map((item) => {
             // Enrich with file count info if available
             try {
                 const files = this.engine.getFiles(item.infoHash);
                 if (files.length > 0) {
-                    const selectedFiles = files.filter(f => f.selected);
+                    const selectedFiles = files.filter((f) => f.selected);
                     return {
                         ...item,
                         selectedFileCount: selectedFiles.length,
@@ -608,7 +621,9 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
 
             // Restore selected file indices into the map for later persistence
             if (persistedItem.selectedFileIndices) {
-                this.selectedFileIndicesMap.set(item.infoHash, [...persistedItem.selectedFileIndices]);
+                this.selectedFileIndicesMap.set(item.infoHash, [
+                    ...persistedItem.selectedFileIndices,
+                ]);
             }
 
             // Auto-resume items that were downloading; re-queue items that were queued
@@ -657,11 +672,16 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                     }
 
                     // Reapply file selection if persisted (ignoring invalid indices)
-                    if (persistedItem.selectedFileIndices && persistedItem.selectedFileIndices.length > 0) {
+                    if (
+                        persistedItem.selectedFileIndices &&
+                        persistedItem.selectedFileIndices.length > 0
+                    ) {
                         try {
                             const files = this.engine.getFiles(item.infoHash);
                             const maxIndex = files.length;
-                            const validIndices = persistedItem.selectedFileIndices.filter(idx => idx >= 0 && idx < maxIndex);
+                            const validIndices = persistedItem.selectedFileIndices.filter(
+                                (idx) => idx >= 0 && idx < maxIndex,
+                            );
                             if (validIndices.length > 0) {
                                 this.engine.setFileSelection(item.infoHash, validIndices);
                                 this.selectedFileIndicesMap.set(item.infoHash, validIndices);
@@ -691,7 +711,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
         if (!this.store) return;
 
         const items = Array.from(this.items.values());
-        const persisted: PersistedDownloadItem[] = items.map(item => ({
+        const persisted: PersistedDownloadItem[] = items.map((item) => ({
             infoHash: item.infoHash,
             name: item.name,
             totalSize: item.totalSize,
@@ -791,22 +811,59 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                 this.queuedMagnetUris.delete(infoHash);
 
                 // Adicionar ao engine de forma assíncrona
-                this.engine.addMagnetLink(magnetUri).then((info) => {
+                this.engine
+                    .addMagnetLink(magnetUri)
+                    .then((info) => {
+                        const current = this.items.get(infoHash);
+                        if (!current) return;
+
+                        const updated: DownloadItem = {
+                            ...current,
+                            name: info.name || current.name,
+                            totalSize: info.totalSize || current.totalSize,
+                            status: 'resolving-metadata',
+                        };
+                        this.items.set(infoHash, updated);
+                        this.emit('update', updated);
+
+                        this._startMetadataTimer(infoHash);
+                    })
+                    .catch((err) => {
+                        this.log.error(
+                            '[DownloadManager] Falha ao iniciar torrent da fila:',
+                            infoHash,
+                            (err as Error).message,
+                        );
+                        const current = this.items.get(infoHash);
+                        if (current) {
+                            const errItem: DownloadItem = { ...current, status: 'error' };
+                            this.items.set(infoHash, errItem);
+                            this.emit('update', errItem);
+                        }
+                        // Tentar o próximo da fila
+                        this._processQueue();
+                    });
+
+                continue;
+            }
+
+            // Torrent já está no engine (foi pausado ao enfileirar) — retomar
+            this.engine
+                .resume(infoHash)
+                .then(() => {
                     const current = this.items.get(infoHash);
-                    if (!current) return;
-
-                    const updated: DownloadItem = {
-                        ...current,
-                        name: info.name || current.name,
-                        totalSize: info.totalSize || current.totalSize,
-                        status: 'resolving-metadata',
-                    };
-                    this.items.set(infoHash, updated);
-                    this.emit('update', updated);
-
-                    this._startMetadataTimer(infoHash);
-                }).catch((err) => {
-                    this.log.error('[DownloadManager] Falha ao iniciar torrent da fila:', infoHash, (err as Error).message);
+                    if (current) {
+                        const updated: DownloadItem = { ...current, status: 'downloading' };
+                        this.items.set(infoHash, updated);
+                        this.emit('update', updated);
+                    }
+                })
+                .catch((err) => {
+                    this.log.error(
+                        '[DownloadManager] Falha ao retomar torrent da fila:',
+                        infoHash,
+                        (err as Error).message,
+                    );
                     const current = this.items.get(infoHash);
                     if (current) {
                         const errItem: DownloadItem = { ...current, status: 'error' };
@@ -816,35 +873,13 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                     // Tentar o próximo da fila
                     this._processQueue();
                 });
-
-                continue;
-            }
-
-            // Torrent já está no engine (foi pausado ao enfileirar) — retomar
-            this.engine.resume(infoHash).then(() => {
-                const current = this.items.get(infoHash);
-                if (current) {
-                    const updated: DownloadItem = { ...current, status: 'downloading' };
-                    this.items.set(infoHash, updated);
-                    this.emit('update', updated);
-                }
-            }).catch((err) => {
-                this.log.error('[DownloadManager] Falha ao retomar torrent da fila:', infoHash, (err as Error).message);
-                const current = this.items.get(infoHash);
-                if (current) {
-                    const errItem: DownloadItem = { ...current, status: 'error' };
-                    this.items.set(infoHash, errItem);
-                    this.emit('update', errItem);
-                }
-                // Tentar o próximo da fila
-                this._processQueue();
-            });
         }
     }
 
     // ── EventEmitter overloads (type-safe) ──────────────────────────────────────
 
     on(event: 'update', listener: (item: DownloadItem) => void): this;
+    on(event: 'remove', listener: (infoHash: string) => void): this;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     on(event: string, listener: (...args: any[]) => void): this {
         return super.on(event, listener);

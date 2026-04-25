@@ -28,7 +28,12 @@ const variantClassMap: Record<string, string> = {
     error: styles.fillError,
 };
 
-export function ProgressBar({ value, max = 100, label, variant = 'default' }: ProgressBarProps): React.JSX.Element {
+export function ProgressBar({
+    value,
+    max = 100,
+    label,
+    variant = 'default',
+}: ProgressBarProps): React.JSX.Element {
     const clampedValue = Math.min(Math.max(value, 0), max);
     const percentage = max > 0 ? (clampedValue / max) * 100 : 0;
     const fillClass = `${styles.fill} ${variantClassMap[variant] ?? styles.fillDefault}`;
@@ -42,10 +47,7 @@ export function ProgressBar({ value, max = 100, label, variant = 'default' }: Pr
             aria-valuemax={max}
             aria-label={label}
         >
-            <div
-                className={fillClass}
-                style={{ width: `${percentage}%` }}
-            />
+            <div className={fillClass} style={{ width: `${percentage}%` }} />
         </div>
     );
 }
