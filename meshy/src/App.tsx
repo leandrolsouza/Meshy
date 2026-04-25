@@ -13,6 +13,8 @@ import { DropZone } from './components/AddTorrent/DropZone';
 import { AddTorrentModal } from './components/AddTorrent/AddTorrentModal';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
 import { FilterSidebar } from './components/DownloadList/FilterSidebar';
+import { applyTheme } from './themes/themeApplier';
+import { DEFAULT_THEME_ID } from './themes/themeRegistry';
 import { formatBytes } from './utils/formatters';
 import styles from './App.module.css';
 
@@ -54,6 +56,29 @@ function App(): React.JSX.Element {
 
         loadInitialState();
     }, [setItems]);
+
+    // ── Aplicação de tema na inicialização ────────────────────────────────
+
+    useEffect(() => {
+        async function initializeTheme(): Promise<void> {
+            try {
+                const response = await window.meshy.getSettings();
+                if (response.success && response.data.theme) {
+                    // Tema salvo encontrado — aplica o tema persistido
+                    applyTheme(response.data.theme);
+                } else {
+                    // Primeira execução ou sem tema salvo — aplica tema padrão
+                    applyTheme(DEFAULT_THEME_ID);
+                }
+            } catch (err) {
+                // Falha na leitura — aplica tema padrão e registra erro
+                console.error('[App] Falha ao carregar tema salvo, aplicando tema padrão:', err);
+                applyTheme(DEFAULT_THEME_ID);
+            }
+        }
+
+        initializeTheme();
+    }, []);
 
     // ── Status Bar computations ───────────────────────────────────────────
 

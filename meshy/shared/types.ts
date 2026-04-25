@@ -75,6 +75,7 @@ export interface AppSettings {
     uploadSpeedLimit: number;   // KB/s, 0 = sem limite
     maxConcurrentDownloads: number; // máx downloads simultâneos (1–10, padrão 3)
     notificationsEnabled: boolean; // notificações nativas do OS (padrão: true)
+    theme: string; // identificador do tema ativo (ex: "vs-code-dark")
 }
 
 // ─── IPCResponse ──────────────────────────────────────────────────────────────

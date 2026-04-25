@@ -85,6 +85,7 @@ function makeMockSettingsManager(): SettingsManager {
         uploadSpeedLimit: 0,
         maxConcurrentDownloads: 3,
         notificationsEnabled: true,
+        theme: 'vs-code-dark',
     };
     return {
         get: jest.fn().mockReturnValue(settings),
@@ -434,6 +435,7 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                     uploadSpeedLimit: 0,
                     maxConcurrentDownloads: 3,
                     notificationsEnabled: true,
+                    theme: 'vs-code-dark',
                 });
             }
         });
@@ -445,6 +447,7 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                 uploadSpeedLimit: 0,
                 maxConcurrentDownloads: 3,
                 notificationsEnabled: true,
+                theme: 'vs-code-dark',
             };
             (settingsManager.get as jest.Mock).mockReturnValue(updatedSettings);
 
@@ -465,6 +468,7 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                 uploadSpeedLimit: 512,
                 maxConcurrentDownloads: 3,
                 notificationsEnabled: true,
+                theme: 'vs-code-dark',
             };
             (settingsManager.get as jest.Mock).mockReturnValue(updatedSettings);
 
@@ -485,6 +489,7 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                 uploadSpeedLimit: 0,
                 maxConcurrentDownloads: 3,
                 notificationsEnabled: true,
+                theme: 'vs-code-dark',
             };
             (settingsManager.get as jest.Mock).mockReturnValue(updatedSettings);
 

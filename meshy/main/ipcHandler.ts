@@ -3,7 +3,7 @@ import type { DownloadManager } from './downloadManager';
 import type { SettingsManager } from './settingsManager';
 import type { TorrentEngine } from './torrentEngine';
 import type { DownloadItem, AppSettings, IPCResponse, TorrentFileInfo } from '../shared/types';
-import { isValidSpeedLimit, isValidMaxConcurrentDownloads } from './validators';
+import { isValidSpeedLimit, isValidMaxConcurrentDownloads, isValidThemeId } from './validators';
 import { logger } from './logger';
 
 export type { IPCResponse } from '../shared/types';
@@ -243,6 +243,11 @@ export function registerIpcHandlers(
             // Validate notificationsEnabled if provided
             if (partial.notificationsEnabled !== undefined && typeof partial.notificationsEnabled !== 'boolean') {
                 return fail('Valor inválido: notificationsEnabled deve ser um booleano');
+            }
+
+            // Validate theme if provided
+            if (partial.theme !== undefined && !isValidThemeId(partial.theme)) {
+                return fail('Tema inválido: deve ser uma string não-vazia');
             }
 
             settingsManager.set(partial);

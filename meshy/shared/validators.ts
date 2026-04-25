@@ -66,3 +66,13 @@ export function isValidMaxConcurrentDownloads(value: unknown): boolean {
         value <= MAX_CONCURRENT_DOWNLOADS
     );
 }
+
+// ─── Theme ID ─────────────────────────────────────────────────────────────────
+
+/**
+ * Valida se um valor é um identificador de tema válido.
+ * Deve ser uma string não-vazia.
+ */
+export function isValidThemeId(value: unknown): boolean {
+    return typeof value === 'string' && value.length > 0;
+}

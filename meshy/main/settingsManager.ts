@@ -12,6 +12,7 @@ interface PersistedSettings {
     uploadSpeedLimit: number;
     maxConcurrentDownloads: number;
     notificationsEnabled: boolean;
+    theme: string; // identificador do tema ativo (ex: "vs-code-dark")
     schemaVersion: number; // para migrações futuras
 }
 
@@ -102,6 +103,7 @@ export function createSettingsManager(options: CreateSettingsManagerOptions = {}
                 maxConcurrentDownloads:
                     store.get('maxConcurrentDownloads') ?? DEFAULT_MAX_CONCURRENT_DOWNLOADS,
                 notificationsEnabled: store.get('notificationsEnabled') ?? true,
+                theme: store.get('theme') ?? 'vs-code-dark',
             };
         },
 
@@ -120,6 +122,9 @@ export function createSettingsManager(options: CreateSettingsManagerOptions = {}
             }
             if (partial.notificationsEnabled !== undefined) {
                 store.set('notificationsEnabled', partial.notificationsEnabled);
+            }
+            if (partial.theme !== undefined) {
+                store.set('theme', partial.theme);
             }
         },
 
@@ -144,6 +149,7 @@ function createElectronStore(): SettingsStore {
             uploadSpeedLimit: 0,
             maxConcurrentDownloads: DEFAULT_MAX_CONCURRENT_DOWNLOADS,
             notificationsEnabled: true,
+            theme: 'vs-code-dark',
             schemaVersion: SCHEMA_VERSION,
         },
     });

@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSettings } from '../../hooks/useSettings';
 import { isValidSpeedLimit, isValidMaxConcurrentDownloads, MIN_CONCURRENT_DOWNLOADS, MAX_CONCURRENT_DOWNLOADS } from '../../../shared/validators';
+import { ThemeSwitcher } from './ThemeSwitcher';
+import { applyTheme } from '../../themes/themeApplier';
+import { isValidThemeId, DEFAULT_THEME_ID } from '../../themes/themeRegistry';
 import styles from './SettingsPanel.module.css';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -30,6 +33,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
     const [uploadLimitError, setUploadLimitError] = useState<string | null>(null);
     const [maxConcurrentError, setMaxConcurrentError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [currentThemeId, setCurrentThemeId] = useState(DEFAULT_THEME_ID);
 
     // Sync local form state when settings load from the main process.
     // This is intentional: the effect bridges async IPC data into local form state.
@@ -39,8 +43,43 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
             setUploadLimit(String(settings.uploadSpeedLimit));
             setMaxConcurrent(String(settings.maxConcurrentDownloads));
             setNotificationsEnabled(settings.notificationsEnabled);
+            // Sincroniza o tema local com o valor persistido
+            if (settings.theme) {
+                setCurrentThemeId(settings.theme);
+            }
         }
     }, [settings]);
+
+    // Aplica o tema salvo na inicialização, com fallback para o padrão
+    useEffect(() => {
+        if (settings) {
+            if (settings.theme && isValidThemeId(settings.theme)) {
+                // Tema salvo existe no registro — aplica normalmente
+                applyTheme(settings.theme);
+            } else if (settings.theme && !isValidThemeId(settings.theme)) {
+                // Tema salvo não existe no registro — aplica padrão e persiste correção
+                applyTheme(DEFAULT_THEME_ID);
+                setCurrentThemeId(DEFAULT_THEME_ID);
+                updateSettings({ theme: DEFAULT_THEME_ID });
+            } else {
+                // Sem tema salvo (primeira execução) — aplica padrão
+                applyTheme(DEFAULT_THEME_ID);
+            }
+        }
+    }, [settings, updateSettings]);
+
+    // Callback para troca imediata de tema
+    const handleThemeChange = useCallback(
+        (newId: string) => {
+            // Efeito visual imediato
+            applyTheme(newId);
+            // Atualiza estado local
+            setCurrentThemeId(newId);
+            // Persiste via IPC (fire-and-forget para sensação imediata)
+            updateSettings({ theme: newId });
+        },
+        [updateSettings],
+    );
 
     const handleSelectFolder = useCallback(async () => {
         await selectFolder();
@@ -124,6 +163,17 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
 
             {settings && (
                 <form onSubmit={handleSave} noValidate>
+                    {/* Seletor de tema — aplicação imediata, sem "Salvar" */}
+                    <div className={styles.fieldGroup}>
+                        <label htmlFor="theme-select" className="label">
+                            Tema
+                        </label>
+                        <ThemeSwitcher
+                            currentThemeId={currentThemeId}
+                            onThemeChange={handleThemeChange}
+                        />
+                    </div>
+
                     {/* Destination folder */}
                     <div className={styles.fieldGroup}>
                         <label htmlFor="destination-folder" className="label">

@@ -6,6 +6,7 @@ export {
     hasTorrentMagicBytes,
     isValidSpeedLimit,
     isValidMaxConcurrentDownloads,
+    isValidThemeId,
     MIN_CONCURRENT_DOWNLOADS,
     MAX_CONCURRENT_DOWNLOADS,
     DEFAULT_MAX_CONCURRENT_DOWNLOADS,

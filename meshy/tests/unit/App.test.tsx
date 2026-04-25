@@ -25,6 +25,18 @@ jest.mock('../../src/components/Settings/SettingsPanel', () => ({
     SettingsPanel: () => <div data-testid="settings-panel">SettingsPanel</div>,
 }));
 
+// ─── Mock themeApplier e themeRegistry ────────────────────────────────────────
+
+const mockApplyTheme = jest.fn().mockReturnValue('vs-code-dark');
+
+jest.mock('../../src/themes/themeApplier', () => ({
+    applyTheme: (...args: unknown[]) => mockApplyTheme(...args),
+}));
+
+jest.mock('../../src/themes/themeRegistry', () => ({
+    DEFAULT_THEME_ID: 'vs-code-dark',
+}));
+
 // ─── Mock window.meshy ───────────────────────────────────────────────────────
 
 const mockMeshy = {
@@ -210,5 +222,85 @@ describe('App — accessibility', () => {
             expect(title).toBeTruthy();
             expect(title).toBe(ariaLabel);
         });
+    });
+});
+
+// ─── Theme Initialization Tests ───────────────────────────────────────────────
+// Requisitos: 2.2, 2.3, 2.4, 10.3
+
+describe('App — inicialização de tema', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('aplica o tema salvo quando getSettings retorna um tema válido (Req 2.2)', async () => {
+        mockMeshy.getSettings.mockResolvedValueOnce({
+            success: true,
+            data: { theme: 'dracula' },
+        });
+
+        render(<App />);
+
+        // Aguarda o efeito assíncrono executar
+        await screen.findByText('Meshy');
+
+        expect(mockMeshy.getSettings).toHaveBeenCalled();
+        expect(mockApplyTheme).toHaveBeenCalledWith('dracula');
+    });
+
+    it('aplica tema padrão na primeira execução sem tema salvo (Req 2.4)', async () => {
+        mockMeshy.getSettings.mockResolvedValueOnce({
+            success: true,
+            data: {},
+        });
+
+        render(<App />);
+
+        await screen.findByText('Meshy');
+
+        expect(mockApplyTheme).toHaveBeenCalledWith('vs-code-dark');
+    });
+
+    it('aplica tema padrão quando getSettings retorna success: false (Req 2.4)', async () => {
+        mockMeshy.getSettings.mockResolvedValueOnce({
+            success: false,
+            error: 'Erro ao ler configurações',
+        });
+
+        render(<App />);
+
+        await screen.findByText('Meshy');
+
+        expect(mockApplyTheme).toHaveBeenCalledWith('vs-code-dark');
+    });
+
+    it('aplica tema padrão e registra erro quando getSettings lança exceção (Req 10.3)', async () => {
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => { });
+        mockMeshy.getSettings.mockRejectedValueOnce(new Error('IPC falhou'));
+
+        render(<App />);
+
+        await screen.findByText('Meshy');
+
+        expect(mockApplyTheme).toHaveBeenCalledWith('vs-code-dark');
+        expect(consoleSpy).toHaveBeenCalledWith(
+            '[App] Falha ao carregar tema salvo, aplicando tema padrão:',
+            expect.any(Error),
+        );
+
+        consoleSpy.mockRestore();
+    });
+
+    it('aplica tema padrão quando settings.theme é string vazia (Req 2.4)', async () => {
+        mockMeshy.getSettings.mockResolvedValueOnce({
+            success: true,
+            data: { theme: '' },
+        });
+
+        render(<App />);
+
+        await screen.findByText('Meshy');
+
+        expect(mockApplyTheme).toHaveBeenCalledWith('vs-code-dark');
     });
 });
