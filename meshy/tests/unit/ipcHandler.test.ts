@@ -62,10 +62,29 @@ function makeMockSettingsManager(): SettingsManager {
             uploadSpeedLimit: 0,
             maxConcurrentDownloads: 3,
             notificationsEnabled: true,
+            theme: 'vs-code-dark',
+            globalTrackers: [],
+            autoApplyGlobalTrackers: false,
         } as AppSettings),
         set: jest.fn(),
         getDefaultDownloadFolder: jest.fn().mockReturnValue('/downloads'),
+        getGlobalTrackers: jest.fn().mockReturnValue([]),
+        addGlobalTracker: jest.fn(),
+        removeGlobalTracker: jest.fn(),
+        setAutoApplyGlobalTrackers: jest.fn(),
     } as unknown as SettingsManager;
+}
+
+function makeMockTorrentEngine() {
+    return {
+        getTrackers: jest.fn().mockReturnValue([]),
+        addTracker: jest.fn(),
+        removeTracker: jest.fn(),
+        getFiles: jest.fn().mockReturnValue([]),
+        setFileSelection: jest.fn().mockReturnValue([]),
+        on: jest.fn(),
+        removeListener: jest.fn(),
+    };
 }
 
 // ─── Tests: Requirement 8.1 — All IPC channels are registered ────────────────
@@ -83,17 +102,25 @@ describe('registerIpcHandlers — IPC channel registration (Requirement 8.1)', (
         'settings:get',
         'settings:set',
         'settings:select-folder',
+        'tracker:get',
+        'tracker:add',
+        'tracker:remove',
+        'tracker:apply-global',
+        'tracker:get-global',
+        'tracker:add-global',
+        'tracker:remove-global',
     ];
 
     beforeEach(() => {
         jest.clearAllMocks();
     });
 
-    it('registers all 11 expected IPC channels', () => {
+    it('registers all 18 expected IPC channels', () => {
         const downloadManager = makeMockDownloadManager();
         const settingsManager = makeMockSettingsManager();
+        const torrentEngine = makeMockTorrentEngine();
 
-        registerIpcHandlers(downloadManager, settingsManager);
+        registerIpcHandlers(downloadManager, settingsManager, torrentEngine as any);
 
         const registeredChannels = mockIpcMain.handle.mock.calls.map(
             (call: unknown[]) => call[0] as string,
@@ -104,11 +131,12 @@ describe('registerIpcHandlers — IPC channel registration (Requirement 8.1)', (
         }
     });
 
-    it('registers exactly 11 IPC channels (no extra channels)', () => {
+    it('registers exactly 18 IPC channels (no extra channels)', () => {
         const downloadManager = makeMockDownloadManager();
         const settingsManager = makeMockSettingsManager();
+        const torrentEngine = makeMockTorrentEngine();
 
-        registerIpcHandlers(downloadManager, settingsManager);
+        registerIpcHandlers(downloadManager, settingsManager, torrentEngine as any);
 
         expect(mockIpcMain.handle).toHaveBeenCalledTimes(EXPECTED_CHANNELS.length);
     });
@@ -116,8 +144,9 @@ describe('registerIpcHandlers — IPC channel registration (Requirement 8.1)', (
     it.each(EXPECTED_CHANNELS)('registers channel "%s"', (channel) => {
         const downloadManager = makeMockDownloadManager();
         const settingsManager = makeMockSettingsManager();
+        const torrentEngine = makeMockTorrentEngine();
 
-        registerIpcHandlers(downloadManager, settingsManager);
+        registerIpcHandlers(downloadManager, settingsManager, torrentEngine as any);
 
         const registeredChannels = mockIpcMain.handle.mock.calls.map(
             (call: unknown[]) => call[0] as string,
@@ -291,6 +320,333 @@ describe('registerIpcHandlers — invalid payload returns structured error (Requ
     });
 });
 
+// ─── Tests: Tracker IPC handlers (Requirement 8.1, 8.2) ──────────────────────
+
+describe('registerIpcHandlers — tracker handlers', () => {
+    let mockTorrentEngine: ReturnType<typeof makeMockTorrentEngine>;
+    let mockSettingsMgr: SettingsManager;
+
+    function getHandler(
+        channel: string,
+    ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
+        const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
+        return call
+            ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
+            : undefined;
+    }
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockTorrentEngine = makeMockTorrentEngine();
+        mockSettingsMgr = makeMockSettingsManager();
+        const downloadManager = makeMockDownloadManager();
+        registerIpcHandlers(downloadManager, mockSettingsMgr, mockTorrentEngine as any);
+    });
+
+    // ── tracker:get ───────────────────────────────────────────────────────────
+
+    describe('tracker:get', () => {
+        it('retorna trackers do torrent com sucesso', async () => {
+            const trackers = [
+                { url: 'udp://tracker.example.com:6969', status: 'connected' },
+            ];
+            (mockTorrentEngine.getTrackers as jest.Mock).mockReturnValue(trackers);
+
+            const handler = getHandler('tracker:get')!;
+            const response = (await handler(null, { infoHash: 'a'.repeat(40) })) as any;
+
+            expect(response.success).toBe(true);
+            expect(response.data).toEqual(trackers);
+            expect(mockTorrentEngine.getTrackers).toHaveBeenCalledWith('a'.repeat(40));
+        });
+
+        it('retorna erro para payload inválido (null)', async () => {
+            const handler = getHandler('tracker:get')!;
+            const response = (await handler(null, null)) as any;
+
+            expect(response.success).toBe(false);
+            expect(typeof response.error).toBe('string');
+        });
+
+        it('retorna erro para infoHash vazio', async () => {
+            const handler = getHandler('tracker:get')!;
+            const response = (await handler(null, { infoHash: '' })) as any;
+
+            expect(response.success).toBe(false);
+            expect(typeof response.error).toBe('string');
+        });
+
+        it('retorna erro quando torrentEngine lança exceção', async () => {
+            (mockTorrentEngine.getTrackers as jest.Mock).mockImplementation(() => {
+                throw new Error('Torrent não encontrado');
+            });
+
+            const handler = getHandler('tracker:get')!;
+            const response = (await handler(null, { infoHash: 'a'.repeat(40) })) as any;
+
+            expect(response.success).toBe(false);
+            expect(response.error).toContain('Torrent não encontrado');
+        });
+    });
+
+    // ── tracker:add ───────────────────────────────────────────────────────────
+
+    describe('tracker:add', () => {
+        it('adiciona tracker e retorna lista atualizada', async () => {
+            const trackers = [
+                { url: 'udp://tracker.example.com:6969', status: 'pending' },
+            ];
+            (mockTorrentEngine.getTrackers as jest.Mock).mockReturnValue(trackers);
+
+            const handler = getHandler('tracker:add')!;
+            const response = (await handler(null, {
+                infoHash: 'a'.repeat(40),
+                url: 'udp://tracker.example.com:6969/announce',
+            })) as any;
+
+            expect(response.success).toBe(true);
+            expect(response.data).toEqual(trackers);
+            expect(mockTorrentEngine.addTracker).toHaveBeenCalledWith(
+                'a'.repeat(40),
+                'udp://tracker.example.com:6969/announce',
+            );
+        });
+
+        it('retorna erro para payload sem url', async () => {
+            const handler = getHandler('tracker:add')!;
+            const response = (await handler(null, { infoHash: 'a'.repeat(40) })) as any;
+
+            expect(response.success).toBe(false);
+            expect(typeof response.error).toBe('string');
+        });
+
+        it('retorna erro para url inválida (protocolo ftp)', async () => {
+            const handler = getHandler('tracker:add')!;
+            const response = (await handler(null, {
+                infoHash: 'a'.repeat(40),
+                url: 'ftp://tracker.example.com:6969',
+            })) as any;
+
+            expect(response.success).toBe(false);
+            expect(response.error).toContain('URL de tracker inválida');
+        });
+
+        it('retorna erro para payload null', async () => {
+            const handler = getHandler('tracker:add')!;
+            const response = (await handler(null, null)) as any;
+
+            expect(response.success).toBe(false);
+            expect(typeof response.error).toBe('string');
+        });
+    });
+
+    // ── tracker:remove ────────────────────────────────────────────────────────
+
+    describe('tracker:remove', () => {
+        it('remove tracker e retorna lista atualizada', async () => {
+            (mockTorrentEngine.getTrackers as jest.Mock).mockReturnValue([]);
+
+            const handler = getHandler('tracker:remove')!;
+            const response = (await handler(null, {
+                infoHash: 'a'.repeat(40),
+                url: 'udp://tracker.example.com:6969',
+            })) as any;
+
+            expect(response.success).toBe(true);
+            expect(response.data).toEqual([]);
+            expect(mockTorrentEngine.removeTracker).toHaveBeenCalledWith(
+                'a'.repeat(40),
+                'udp://tracker.example.com:6969',
+            );
+        });
+
+        it('retorna erro para payload sem url', async () => {
+            const handler = getHandler('tracker:remove')!;
+            const response = (await handler(null, { infoHash: 'a'.repeat(40) })) as any;
+
+            expect(response.success).toBe(false);
+            expect(typeof response.error).toBe('string');
+        });
+
+        it('retorna erro quando removeTracker lança exceção', async () => {
+            (mockTorrentEngine.removeTracker as jest.Mock).mockImplementation(() => {
+                throw new Error('Tracker não encontrado');
+            });
+
+            const handler = getHandler('tracker:remove')!;
+            const response = (await handler(null, {
+                infoHash: 'a'.repeat(40),
+                url: 'udp://tracker.example.com:6969',
+            })) as any;
+
+            expect(response.success).toBe(false);
+            expect(response.error).toContain('Tracker não encontrado');
+        });
+    });
+
+    // ── tracker:apply-global ──────────────────────────────────────────────────
+
+    describe('tracker:apply-global', () => {
+        it('aplica trackers globais e retorna lista atualizada', async () => {
+            (mockSettingsMgr.getGlobalTrackers as jest.Mock).mockReturnValue([
+                'udp://global1.example.com:6969',
+                'udp://global2.example.com:6969',
+            ]);
+            const trackers = [
+                { url: 'udp://global1.example.com:6969', status: 'pending' },
+                { url: 'udp://global2.example.com:6969', status: 'pending' },
+            ];
+            (mockTorrentEngine.getTrackers as jest.Mock).mockReturnValue(trackers);
+
+            const handler = getHandler('tracker:apply-global')!;
+            const response = (await handler(null, { infoHash: 'a'.repeat(40) })) as any;
+
+            expect(response.success).toBe(true);
+            expect(response.data).toEqual(trackers);
+            expect(mockTorrentEngine.addTracker).toHaveBeenCalledTimes(2);
+        });
+
+        it('ignora silenciosamente erros individuais ao aplicar trackers globais', async () => {
+            (mockSettingsMgr.getGlobalTrackers as jest.Mock).mockReturnValue([
+                'udp://ok.example.com:6969',
+                'udp://fail.example.com:6969',
+            ]);
+            (mockTorrentEngine.addTracker as jest.Mock)
+                .mockImplementationOnce(() => { }) // primeiro sucesso
+                .mockImplementationOnce(() => {
+                    throw new Error('Tracker já presente');
+                }); // segundo falha
+            (mockTorrentEngine.getTrackers as jest.Mock).mockReturnValue([
+                { url: 'udp://ok.example.com:6969', status: 'pending' },
+            ]);
+
+            const handler = getHandler('tracker:apply-global')!;
+            const response = (await handler(null, { infoHash: 'a'.repeat(40) })) as any;
+
+            expect(response.success).toBe(true);
+            expect(response.data).toHaveLength(1);
+        });
+
+        it('retorna erro para payload inválido', async () => {
+            const handler = getHandler('tracker:apply-global')!;
+            const response = (await handler(null, null)) as any;
+
+            expect(response.success).toBe(false);
+            expect(typeof response.error).toBe('string');
+        });
+    });
+
+    // ── tracker:get-global ────────────────────────────────────────────────────
+
+    describe('tracker:get-global', () => {
+        it('retorna lista global de trackers', async () => {
+            const globalTrackers = ['udp://global.example.com:6969'];
+            (mockSettingsMgr.getGlobalTrackers as jest.Mock).mockReturnValue(globalTrackers);
+
+            const handler = getHandler('tracker:get-global')!;
+            const response = (await handler(null, undefined)) as any;
+
+            expect(response.success).toBe(true);
+            expect(response.data).toEqual(globalTrackers);
+        });
+    });
+
+    // ── tracker:add-global ────────────────────────────────────────────────────
+
+    describe('tracker:add-global', () => {
+        it('adiciona tracker global e retorna lista atualizada', async () => {
+            const updated = ['udp://global.example.com:6969'];
+            (mockSettingsMgr.getGlobalTrackers as jest.Mock).mockReturnValue(updated);
+
+            const handler = getHandler('tracker:add-global')!;
+            const response = (await handler(null, {
+                url: 'udp://global.example.com:6969',
+            })) as any;
+
+            expect(response.success).toBe(true);
+            expect(response.data).toEqual(updated);
+            expect(mockSettingsMgr.addGlobalTracker).toHaveBeenCalledWith(
+                'udp://global.example.com:6969',
+            );
+        });
+
+        it('retorna erro para url inválida', async () => {
+            const handler = getHandler('tracker:add-global')!;
+            const response = (await handler(null, {
+                url: 'ftp://invalid.example.com',
+            })) as any;
+
+            expect(response.success).toBe(false);
+            expect(response.error).toContain('URL de tracker inválida');
+        });
+
+        it('retorna erro para payload null', async () => {
+            const handler = getHandler('tracker:add-global')!;
+            const response = (await handler(null, null)) as any;
+
+            expect(response.success).toBe(false);
+            expect(typeof response.error).toBe('string');
+        });
+
+        it('retorna erro para url vazia', async () => {
+            const handler = getHandler('tracker:add-global')!;
+            const response = (await handler(null, { url: '' })) as any;
+
+            expect(response.success).toBe(false);
+            expect(typeof response.error).toBe('string');
+        });
+
+        it('retorna erro quando addGlobalTracker lança exceção (duplicata)', async () => {
+            (mockSettingsMgr.addGlobalTracker as jest.Mock).mockImplementation(() => {
+                throw new Error('Tracker já existe na lista global');
+            });
+
+            const handler = getHandler('tracker:add-global')!;
+            const response = (await handler(null, {
+                url: 'udp://global.example.com:6969',
+            })) as any;
+
+            expect(response.success).toBe(false);
+            expect(response.error).toContain('Tracker já existe na lista global');
+        });
+    });
+
+    // ── tracker:remove-global ─────────────────────────────────────────────────
+
+    describe('tracker:remove-global', () => {
+        it('remove tracker global e retorna lista atualizada', async () => {
+            (mockSettingsMgr.getGlobalTrackers as jest.Mock).mockReturnValue([]);
+
+            const handler = getHandler('tracker:remove-global')!;
+            const response = (await handler(null, {
+                url: 'udp://global.example.com:6969',
+            })) as any;
+
+            expect(response.success).toBe(true);
+            expect(response.data).toEqual([]);
+            expect(mockSettingsMgr.removeGlobalTracker).toHaveBeenCalledWith(
+                'udp://global.example.com:6969',
+            );
+        });
+
+        it('retorna erro para payload null', async () => {
+            const handler = getHandler('tracker:remove-global')!;
+            const response = (await handler(null, null)) as any;
+
+            expect(response.success).toBe(false);
+            expect(typeof response.error).toBe('string');
+        });
+
+        it('retorna erro para url vazia', async () => {
+            const handler = getHandler('tracker:remove-global')!;
+            const response = (await handler(null, { url: '' })) as any;
+
+            expect(response.success).toBe(false);
+            expect(typeof response.error).toBe('string');
+        });
+    });
+});
+
 // ─── Property-Based Tests ─────────────────────────────────────────────────────
 
 import fc from 'fast-check';
@@ -310,6 +666,13 @@ describe('Property 18: Resposta IPC sempre tem forma estruturada', () => {
         'settings:get',
         'settings:set',
         'settings:select-folder',
+        'tracker:get',
+        'tracker:add',
+        'tracker:remove',
+        'tracker:apply-global',
+        'tracker:get-global',
+        'tracker:add-global',
+        'tracker:remove-global',
     ];
 
     /**
@@ -332,10 +695,11 @@ describe('Property 18: Resposta IPC sempre tem forma estruturada', () => {
 
         const downloadManager = makeMockDownloadManager();
         const settingsManager = makeMockSettingsManager();
+        const torrentEngine = makeMockTorrentEngine();
 
-        registerIpcHandlers(downloadManager, settingsManager);
+        registerIpcHandlers(downloadManager, settingsManager, torrentEngine as any);
 
-        return { downloadManager, settingsManager };
+        return { downloadManager, settingsManager, torrentEngine };
     }
 
     it('any payload sent to any IPC channel always returns { success: boolean } and never throws', async () => {
@@ -370,6 +734,12 @@ describe('Property 18: Resposta IPC sempre tem forma estruturada', () => {
             'torrent:pause',
             'torrent:resume',
             'torrent:remove',
+            'tracker:get',
+            'tracker:add',
+            'tracker:remove',
+            'tracker:apply-global',
+            'tracker:add-global',
+            'tracker:remove-global',
         ];
 
         // Generator for payloads that are definitely NOT valid for any of these channels.
@@ -499,8 +869,8 @@ describe('Property 19: Evento de progresso IPC contém todos os itens ativos', (
             hashes.length === 0
                 ? fc.constant([])
                 : fc
-                      .tuple(...hashes.map((h) => downloadItemArb(h)))
-                      .map((items) => items as DownloadItem[]),
+                    .tuple(...hashes.map((h) => downloadItemArb(h)))
+                    .map((items) => items as DownloadItem[]),
         );
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -582,6 +952,156 @@ describe('Property 19: Evento de progresso IPC contém todos os itens ativos', (
                 }
             }),
             { numRuns: 100 },
+        );
+    });
+});
+
+// ─── Property 8 — Payloads inválidos retornam { success: false } sem exceção ──
+// Feature: tracker-management, Property 8: IPC retorna erro para payloads inválidos
+// **Validates: Requirements 8.2**
+
+describe('Property 8: payloads inválidos retornam { success: false } sem lançar exceção', () => {
+    // Canais de tracker que exigem payload com campos específicos
+    const TRACKER_CHANNELS_WITH_INFOHASH = [
+        'tracker:get',
+        'tracker:apply-global',
+    ];
+
+    const TRACKER_CHANNELS_WITH_INFOHASH_AND_URL = [
+        'tracker:add',
+        'tracker:remove',
+    ];
+
+    const TRACKER_CHANNELS_WITH_URL = [
+        'tracker:add-global',
+        'tracker:remove-global',
+    ];
+
+    const ALL_TRACKER_CHANNELS = [
+        ...TRACKER_CHANNELS_WITH_INFOHASH,
+        ...TRACKER_CHANNELS_WITH_INFOHASH_AND_URL,
+        ...TRACKER_CHANNELS_WITH_URL,
+    ];
+
+    function getHandler(
+        channel: string,
+    ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
+        const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
+        return call
+            ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
+            : undefined;
+    }
+
+    function setupHandlers() {
+        jest.clearAllMocks();
+
+        const downloadManager = makeMockDownloadManager();
+        const settingsManager = makeMockSettingsManager();
+        const torrentEngine = makeMockTorrentEngine();
+
+        registerIpcHandlers(downloadManager, settingsManager, torrentEngine as any);
+
+        return { downloadManager, settingsManager, torrentEngine };
+    }
+
+    // Gerador de payloads inválidos — primitivos, null, arrays, objetos sem campos esperados
+    const invalidPayloadArb = fc.oneof(
+        fc.constant(null),
+        fc.constant(undefined),
+        fc.boolean(),
+        fc.integer(),
+        fc.double(),
+        fc.string(),
+        fc.array(fc.anything()),
+        fc.record({ wrongKey: fc.anything() }),
+        fc.constant({}),
+    );
+
+    it('qualquer payload inválido enviado a canais de tracker retorna { success: false } sem lançar exceção', async () => {
+        await fc.assert(
+            fc.asyncProperty(
+                fc.constantFrom(...ALL_TRACKER_CHANNELS),
+                invalidPayloadArb,
+                async (channel, payload) => {
+                    setupHandlers();
+                    const handler = getHandler(channel);
+                    expect(handler).toBeDefined();
+
+                    // O handler nunca deve lançar exceção
+                    const response = (await handler!(null, payload)) as Record<string, unknown>;
+
+                    expect(response).toBeDefined();
+                    expect(typeof response).toBe('object');
+                    expect(response).not.toBeNull();
+                    expect(response.success).toBe(false);
+                    expect(typeof response.error).toBe('string');
+                    expect((response.error as string).length).toBeGreaterThan(0);
+                },
+            ),
+            { numRuns: 100 },
+        );
+    });
+
+    it('canais com infoHash rejeitam objetos com infoHash não-string ou vazio', async () => {
+        const invalidInfoHashArb = fc.oneof(
+            fc.constant({ infoHash: '' }),
+            fc.constant({ infoHash: 123 }),
+            fc.constant({ infoHash: null }),
+            fc.constant({ infoHash: true }),
+            fc.constant({ infoHash: undefined }),
+            fc.constant({}),
+        );
+
+        const channelsWithInfoHash = [
+            ...TRACKER_CHANNELS_WITH_INFOHASH,
+            ...TRACKER_CHANNELS_WITH_INFOHASH_AND_URL,
+        ];
+
+        await fc.assert(
+            fc.asyncProperty(
+                fc.constantFrom(...channelsWithInfoHash),
+                invalidInfoHashArb,
+                async (channel, payload) => {
+                    setupHandlers();
+                    const handler = getHandler(channel);
+                    expect(handler).toBeDefined();
+
+                    const response = (await handler!(null, payload)) as Record<string, unknown>;
+
+                    expect(response.success).toBe(false);
+                    expect(typeof response.error).toBe('string');
+                },
+            ),
+            { numRuns: 50 },
+        );
+    });
+
+    it('canais com url rejeitam objetos com url não-string ou vazia', async () => {
+        const invalidUrlPayloadArb = fc.oneof(
+            fc.constant({ url: '' }),
+            fc.constant({ url: 123 }),
+            fc.constant({ url: null }),
+            fc.constant({ url: true }),
+            fc.constant({ url: undefined }),
+            fc.constant({}),
+        );
+
+        await fc.assert(
+            fc.asyncProperty(
+                fc.constantFrom(...TRACKER_CHANNELS_WITH_URL),
+                invalidUrlPayloadArb,
+                async (channel, payload) => {
+                    setupHandlers();
+                    const handler = getHandler(channel);
+                    expect(handler).toBeDefined();
+
+                    const response = (await handler!(null, payload)) as Record<string, unknown>;
+
+                    expect(response.success).toBe(false);
+                    expect(typeof response.error).toBe('string');
+                },
+            ),
+            { numRuns: 50 },
         );
     });
 });

@@ -14,6 +14,7 @@ import { SpeedDisplay } from '../common/SpeedDisplay';
 import { formatBytes } from '../../utils/formatters';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { FileSelector } from '../FileSelector/FileSelector';
+import { TrackerPanel } from '../TrackerPanel/TrackerPanel';
 import styles from './DownloadItem.module.css';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -80,6 +81,9 @@ export function DownloadItem({
 
     // ── File selector expansion state (Task 6.1) ─────────────────────────────
     const [expanded, setExpanded] = useState(false);
+
+    // ── Tracker panel expansion state (Task 8.5) ─────────────────────────────
+    const [trackersExpanded, setTrackersExpanded] = useState(false);
     const [files, setFiles] = useState<TorrentFileInfo[]>([]);
     const [filesLoading, setFilesLoading] = useState(false);
     const [filesError, setFilesError] = useState<string | null>(null);
@@ -179,6 +183,11 @@ export function DownloadItem({
         setExpanded((prev) => !prev);
     }, []);
 
+    // ── Toggle tracker panel ─────────────────────────────────────────────────
+    const handleToggleTrackers = useCallback(() => {
+        setTrackersExpanded((prev) => !prev);
+    }, []);
+
     // ── File count display (Task 6.4) ────────────────────────────────────────
     const hasFileCount =
         item.selectedFileCount !== undefined &&
@@ -248,6 +257,20 @@ export function DownloadItem({
                         {expanded ? <VscChevronDown /> : <VscChevronRight />} Arquivos
                     </button>
                 )}
+                {canExpand && (
+                    <button
+                        className="btn"
+                        onClick={handleToggleTrackers}
+                        aria-label={
+                            trackersExpanded
+                                ? 'Recolher painel de trackers'
+                                : 'Expandir painel de trackers'
+                        }
+                        aria-expanded={trackersExpanded}
+                    >
+                        {trackersExpanded ? <VscChevronDown /> : <VscChevronRight />} Trackers
+                    </button>
+                )}
                 {item.status === 'downloading' && (
                     <button
                         className="btn"
@@ -300,6 +323,13 @@ export function DownloadItem({
                             error={selectionError}
                         />
                     )}
+                </div>
+            )}
+
+            {/* Expanded tracker panel section (Task 8.5) */}
+            {trackersExpanded && (
+                <div className={styles.trackerPanelSection}>
+                    <TrackerPanel infoHash={item.infoHash} />
                 </div>
             )}
 

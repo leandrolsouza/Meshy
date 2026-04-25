@@ -475,3 +475,255 @@ describe('isValidSpeedLimit', () => {
         });
     });
 });
+
+// ─── Importações para testes de Tracker URL ───────────────────────────────────
+
+import { isValidTrackerUrl, normalizeTrackerUrl } from '../../shared/validators';
+
+// ─── isValidTrackerUrl (testes unitários) ─────────────────────────────────────
+
+describe('isValidTrackerUrl', () => {
+    it('aceita URL http com hostname', () => {
+        expect(isValidTrackerUrl('http://tracker.example.com:6969/announce')).toBe(true);
+    });
+
+    it('aceita URL https com hostname', () => {
+        expect(isValidTrackerUrl('https://tracker.example.com/announce')).toBe(true);
+    });
+
+    it('aceita URL udp com hostname e porta', () => {
+        expect(isValidTrackerUrl('udp://tracker.example.com:6969/announce')).toBe(true);
+    });
+
+    it('aceita URL udp sem path', () => {
+        expect(isValidTrackerUrl('udp://tracker.example.com:6969')).toBe(true);
+    });
+
+    it('aceita URL http sem /announce no path', () => {
+        expect(isValidTrackerUrl('http://tracker.example.com:8080')).toBe(true);
+    });
+
+    it('rejeita string vazia', () => {
+        expect(isValidTrackerUrl('')).toBe(false);
+    });
+
+    it('rejeita string com apenas espaços', () => {
+        expect(isValidTrackerUrl('   ')).toBe(false);
+    });
+
+    it('rejeita protocolo ftp', () => {
+        expect(isValidTrackerUrl('ftp://tracker.example.com/announce')).toBe(false);
+    });
+
+    it('rejeita protocolo wss', () => {
+        expect(isValidTrackerUrl('wss://tracker.example.com/announce')).toBe(false);
+    });
+
+    it('rejeita string sem protocolo', () => {
+        expect(isValidTrackerUrl('tracker.example.com/announce')).toBe(false);
+    });
+
+    it('rejeita URL com protocolo válido mas sem hostname', () => {
+        expect(isValidTrackerUrl('http://')).toBe(false);
+    });
+
+    it('aceita URL com espaços ao redor (trim)', () => {
+        expect(isValidTrackerUrl('  http://tracker.example.com  ')).toBe(true);
+    });
+});
+
+// ─── normalizeTrackerUrl (testes unitários) ────────────────────────────────────
+
+describe('normalizeTrackerUrl', () => {
+    it('remove espaços no início e fim', () => {
+        expect(normalizeTrackerUrl('  http://tracker.example.com  ')).toBe(
+            'http://tracker.example.com',
+        );
+    });
+
+    it('converte protocolo para minúsculas', () => {
+        expect(normalizeTrackerUrl('HTTP://tracker.example.com')).toBe(
+            'http://tracker.example.com',
+        );
+    });
+
+    it('converte protocolo UDP para minúsculas', () => {
+        expect(normalizeTrackerUrl('UDP://tracker.example.com:6969')).toBe(
+            'udp://tracker.example.com:6969',
+        );
+    });
+
+    it('remove barras finais duplicadas', () => {
+        expect(normalizeTrackerUrl('http://tracker.example.com/announce///')).toBe(
+            'http://tracker.example.com/announce',
+        );
+    });
+
+    it('remove barra final única', () => {
+        expect(normalizeTrackerUrl('http://tracker.example.com/')).toBe(
+            'http://tracker.example.com',
+        );
+    });
+
+    it('não altera URL já normalizada', () => {
+        const url = 'http://tracker.example.com/announce';
+        expect(normalizeTrackerUrl(url)).toBe(url);
+    });
+
+    it('aplica trim e lowercase de protocolo juntos', () => {
+        expect(normalizeTrackerUrl('  HTTPS://Tracker.Example.COM/announce/  ')).toBe(
+            'https://Tracker.Example.COM/announce',
+        );
+    });
+});
+
+// ─── PBT: Propriedade 1 — URLs válidas aceitas, protocolos inválidos rejeitados ───
+
+// Feature: tracker-management, Propriedade 1: Validação de Tracker URL
+// **Validates: Requirements 7.1, 7.2**
+describe('[PBT] Propriedade 1: URLs com protocolos válidos são aceitas; protocolos inválidos são rejeitados', () => {
+    /** Gerador de hostnames válidos */
+    const validHostname = fc
+        .stringOf(fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')), {
+            minLength: 1,
+            maxLength: 20,
+        })
+        .map((s) => s + '.com');
+
+    /** Gerador de portas opcionais */
+    const optionalPort = fc.oneof(
+        fc.constant(''),
+        fc.integer({ min: 1, max: 65535 }).map((p) => `:${p}`),
+    );
+
+    /** Gerador de paths opcionais */
+    const optionalPath = fc.oneof(
+        fc.constant(''),
+        fc.constant('/announce'),
+        fc.constant('/scrape'),
+        fc
+            .stringOf(fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789/-_'.split('')), {
+                minLength: 1,
+                maxLength: 20,
+            })
+            .map((s) => '/' + s),
+    );
+
+    /** Protocolos válidos */
+    const validProtocol = fc.constantFrom('http', 'https', 'udp');
+
+    /** Protocolos inválidos */
+    const invalidProtocol = fc.constantFrom('ftp', 'wss', 'ws', 'ssh', 'magnet', 'irc', 'smtp');
+
+    it('aceita URLs com protocolos válidos e hostname não-vazio', () => {
+        fc.assert(
+            fc.property(
+                validProtocol,
+                validHostname,
+                optionalPort,
+                optionalPath,
+                (proto, host, port, path) => {
+                    const url = `${proto}://${host}${port}${path}`;
+                    expect(isValidTrackerUrl(url)).toBe(true);
+                },
+            ),
+            { numRuns: 200 },
+        );
+    });
+
+    it('rejeita URLs com protocolos inválidos', () => {
+        fc.assert(
+            fc.property(
+                invalidProtocol,
+                validHostname,
+                optionalPort,
+                optionalPath,
+                (proto, host, port, path) => {
+                    const url = `${proto}://${host}${port}${path}`;
+                    expect(isValidTrackerUrl(url)).toBe(false);
+                },
+            ),
+            { numRuns: 200 },
+        );
+    });
+});
+
+// ─── PBT: Propriedade 2 — Normalização é idempotente ──────────────────────────
+
+// Feature: tracker-management, Propriedade 2: Normalização idempotente
+// **Validates: Requirements 7.4**
+describe('[PBT] Propriedade 2: normalização é idempotente', () => {
+    /** Gerador de URLs válidas com variações de casing e espaços */
+    const validTrackerUrl = fc
+        .tuple(
+            fc.constantFrom('http', 'https', 'udp', 'HTTP', 'HTTPS', 'UDP', 'Http', 'Udp'),
+            fc
+                .stringOf(
+                    fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')),
+                    { minLength: 1, maxLength: 15 },
+                )
+                .map((s) => s + '.com'),
+            fc.oneof(
+                fc.constant(''),
+                fc.integer({ min: 1, max: 65535 }).map((p) => `:${p}`),
+            ),
+            fc.oneof(fc.constant(''), fc.constant('/announce'), fc.constant('/scrape')),
+            fc.oneof(fc.constant(''), fc.constant('/'), fc.constant('//'), fc.constant('///')),
+            fc.stringOf(fc.constant(' '), { minLength: 0, maxLength: 3 }),
+            fc.stringOf(fc.constant(' '), { minLength: 0, maxLength: 3 }),
+        )
+        .map(
+            ([proto, host, port, path, trailingSlashes, leadingSpaces, trailingSpaces]) =>
+                `${leadingSpaces}${proto}://${host}${port}${path}${trailingSlashes}${trailingSpaces}`,
+        );
+
+    it('normalizeTrackerUrl(normalizeTrackerUrl(u)) === normalizeTrackerUrl(u) para toda URL válida', () => {
+        fc.assert(
+            fc.property(validTrackerUrl, (url) => {
+                const once = normalizeTrackerUrl(url);
+                const twice = normalizeTrackerUrl(once);
+                expect(twice).toBe(once);
+            }),
+            { numRuns: 200 },
+        );
+    });
+});
+
+// ─── PBT: Propriedade 3 — Round-trip ──────────────────────────────────────────
+
+// Feature: tracker-management, Propriedade 3: Round-trip
+// **Validates: Requirements 7.4**
+describe('[PBT] Propriedade 3: round-trip — isValidTrackerUrl(normalizeTrackerUrl(u)) é true para toda URL válida', () => {
+    /** Gerador de URLs válidas com variações */
+    const validTrackerUrl = fc
+        .tuple(
+            fc.constantFrom('http', 'https', 'udp', 'HTTP', 'HTTPS', 'UDP', 'Http', 'Udp'),
+            fc
+                .stringOf(
+                    fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')),
+                    { minLength: 1, maxLength: 15 },
+                )
+                .map((s) => s + '.com'),
+            fc.oneof(
+                fc.constant(''),
+                fc.integer({ min: 1, max: 65535 }).map((p) => `:${p}`),
+            ),
+            fc.oneof(fc.constant(''), fc.constant('/announce'), fc.constant('/scrape')),
+            fc.stringOf(fc.constant(' '), { minLength: 0, maxLength: 3 }),
+            fc.stringOf(fc.constant(' '), { minLength: 0, maxLength: 3 }),
+        )
+        .map(
+            ([proto, host, port, path, leadingSpaces, trailingSpaces]) =>
+                `${leadingSpaces}${proto}://${host}${port}${path}${trailingSpaces}`,
+        );
+
+    it('isValidTrackerUrl(normalizeTrackerUrl(u)) é true para toda URL válida u', () => {
+        fc.assert(
+            fc.property(validTrackerUrl, (url) => {
+                const normalized = normalizeTrackerUrl(url);
+                expect(isValidTrackerUrl(normalized)).toBe(true);
+            }),
+            { numRuns: 200 },
+        );
+    });
+});

@@ -55,3 +55,96 @@
     cursor: pointer;
     flex-shrink: 0;
 }
+
+/* ─── Global Trackers Section ─────────────────────────────────────────────── */
+
+.globalTrackersSection {
+    margin-top: var(--space-xl);
+    padding-top: var(--space-lg);
+    border-top: 1px solid var(--color-border-light);
+}
+
+.sectionTitle {
+    color: var(--color-text);
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: var(--space-md);
+}
+
+/* ─── Global Tracker List ─────────────────────────────────────────────────── */
+
+.globalTrackerList {
+    list-style: none;
+    margin: 0 0 var(--space-sm);
+    padding: 0;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.globalTrackerItem {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-sm);
+    transition: background-color var(--transition-fast);
+}
+
+.globalTrackerItem:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.globalTrackerUrl {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+}
+
+.globalTrackerRemoveButton {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    padding: 2px;
+    border-radius: var(--radius-sm);
+    transition:
+        color var(--transition-fast),
+        background-color var(--transition-fast);
+}
+
+.globalTrackerRemoveButton:hover {
+    color: var(--color-danger);
+    background-color: var(--color-danger-light);
+}
+
+.globalTrackerEmpty {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    margin-bottom: var(--space-sm);
+}
+
+/* ─── Add Tracker Row ─────────────────────────────────────────────────────── */
+
+.globalTrackerAddRow {
+    display: flex;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-sm);
+}
+
+.globalTrackerAddRow .input {
+    flex: 1;
+}
+
+/* ─── Auto-Apply Toggle ───────────────────────────────────────────────────── */
+
+.globalTrackerToggle {
+    margin-top: var(--space-md);
+}

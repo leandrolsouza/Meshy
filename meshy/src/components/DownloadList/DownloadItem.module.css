@@ -95,3 +95,17 @@
     font-size: var(--font-size-sm);
     color: var(--color-danger);
 }
+
+/* ─── Expanded Tracker Panel Section ──────────────────────────────────────── */
+
+.trackerPanelSection {
+    margin-top: var(--space-md);
+    border-top: 1px solid var(--color-border-light);
+    padding-top: var(--space-md);
+    background-color: rgba(0, 0, 0, 0.1);
+    margin-left: calc(-1 * var(--space-lg));
+    margin-right: calc(-1 * var(--space-lg));
+    margin-bottom: calc(-1 * var(--space-lg));
+    padding: var(--space-md) var(--space-lg) var(--space-sm);
+    border-radius: 0 0 var(--card-radius) var(--card-radius);
+}

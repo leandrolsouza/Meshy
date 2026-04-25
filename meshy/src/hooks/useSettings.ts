@@ -93,11 +93,84 @@ export function useSettings() {
         }
     }, [updateSettings]);
 
+    // ── Trackers globais ──────────────────────────────────────────────────────
+
+    /**
+     * Retorna a lista de trackers globais favoritos via IPC.
+     */
+    const getGlobalTrackers = useCallback(async (): Promise<string[]> => {
+        try {
+            const response = await window.meshy.getGlobalTrackers();
+            if (response.success) {
+                return response.data;
+            } else {
+                setError(response.error);
+                return [];
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : String(err));
+            return [];
+        }
+    }, []);
+
+    /**
+     * Adiciona uma URL de tracker à lista global de favoritos.
+     * Atualiza o estado local de settings em caso de sucesso.
+     */
+    const addGlobalTracker = useCallback(
+        async (url: string): Promise<boolean> => {
+            try {
+                const response = await window.meshy.addGlobalTracker(url);
+                if (response.success) {
+                    setSettings((prev) =>
+                        prev ? { ...prev, globalTrackers: response.data } : prev,
+                    );
+                    return true;
+                } else {
+                    setError(response.error);
+                    return false;
+                }
+            } catch (err) {
+                setError(err instanceof Error ? err.message : String(err));
+                return false;
+            }
+        },
+        [],
+    );
+
+    /**
+     * Remove uma URL de tracker da lista global de favoritos.
+     * Atualiza o estado local de settings em caso de sucesso.
+     */
+    const removeGlobalTracker = useCallback(
+        async (url: string): Promise<boolean> => {
+            try {
+                const response = await window.meshy.removeGlobalTracker(url);
+                if (response.success) {
+                    setSettings((prev) =>
+                        prev ? { ...prev, globalTrackers: response.data } : prev,
+                    );
+                    return true;
+                } else {
+                    setError(response.error);
+                    return false;
+                }
+            } catch (err) {
+                setError(err instanceof Error ? err.message : String(err));
+                return false;
+            }
+        },
+        [],
+    );
+
     return {
         settings,
         loading,
         error,
         updateSettings,
         selectFolder,
+        getGlobalTrackers,
+        addGlobalTracker,
+        removeGlobalTracker,
     };
 }

@@ -353,6 +353,9 @@ function makeDMMockEngine(): TorrentEngine & EventEmitter {
         getAll: jest.fn().mockReturnValue([]),
         getFiles: jest.fn().mockReturnValue([]),
         setFileSelection: jest.fn().mockReturnValue([]),
+        getTrackers: jest.fn().mockReturnValue([]),
+        addTracker: jest.fn(),
+        removeTracker: jest.fn(),
     });
 
     return engine;

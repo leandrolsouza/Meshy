@@ -4,6 +4,7 @@ import type {
     AppSettings,
     IPCResponse,
     TorrentFileInfo,
+    TrackerInfo,
     MeshyAPI,
 } from '../shared/types';
 
@@ -59,6 +60,38 @@ const meshyAPI: MeshyAPI = {
         selectedIndices: number[],
     ): Promise<IPCResponse<TorrentFileInfo[]>> {
         return ipcRenderer.invoke('torrent:set-file-selection', { infoHash, selectedIndices });
+    },
+
+    // ── Trackers (por torrent) ──────────────────────────────────────────────────
+
+    getTrackers(infoHash: string): Promise<IPCResponse<TrackerInfo[]>> {
+        return ipcRenderer.invoke('tracker:get', { infoHash });
+    },
+
+    addTracker(infoHash: string, url: string): Promise<IPCResponse<TrackerInfo[]>> {
+        return ipcRenderer.invoke('tracker:add', { infoHash, url });
+    },
+
+    removeTracker(infoHash: string, url: string): Promise<IPCResponse<TrackerInfo[]>> {
+        return ipcRenderer.invoke('tracker:remove', { infoHash, url });
+    },
+
+    applyGlobalTrackers(infoHash: string): Promise<IPCResponse<TrackerInfo[]>> {
+        return ipcRenderer.invoke('tracker:apply-global', { infoHash });
+    },
+
+    // ── Trackers globais ────────────────────────────────────────────────────────
+
+    getGlobalTrackers(): Promise<IPCResponse<string[]>> {
+        return ipcRenderer.invoke('tracker:get-global');
+    },
+
+    addGlobalTracker(url: string): Promise<IPCResponse<string[]>> {
+        return ipcRenderer.invoke('tracker:add-global', { url });
+    },
+
+    removeGlobalTracker(url: string): Promise<IPCResponse<string[]>> {
+        return ipcRenderer.invoke('tracker:remove-global', { url });
     },
 
     // ── Events ──────────────────────────────────────────────────────────────────

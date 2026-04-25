@@ -7,6 +7,8 @@ export {
     isValidSpeedLimit,
     isValidMaxConcurrentDownloads,
     isValidThemeId,
+    isValidTrackerUrl,
+    normalizeTrackerUrl,
     MIN_CONCURRENT_DOWNLOADS,
     MAX_CONCURRENT_DOWNLOADS,
     DEFAULT_MAX_CONCURRENT_DOWNLOADS,

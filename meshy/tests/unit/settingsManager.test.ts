@@ -59,8 +59,10 @@ describe('SettingsManager.get()', () => {
         const settings = manager.get();
         expect(Object.keys(settings).sort()).toEqual(
             [
+                'autoApplyGlobalTrackers',
                 'destinationFolder',
                 'downloadSpeedLimit',
+                'globalTrackers',
                 'maxConcurrentDownloads',
                 'notificationsEnabled',
                 'theme',
@@ -130,6 +132,135 @@ describe('SettingsManager.getDefaultDownloadFolder()', () => {
     });
 });
 
+// ─── getGlobalTrackers() ──────────────────────────────────────────────────────
+
+describe('SettingsManager.getGlobalTrackers()', () => {
+    it('retorna lista vazia quando store está vazio', () => {
+        const manager = makeManager();
+        expect(manager.getGlobalTrackers()).toEqual([]);
+    });
+
+    it('retorna trackers previamente armazenados', () => {
+        const manager = makeManager({
+            globalTrackers: ['udp://tracker.example.com:6969/announce'],
+        });
+        expect(manager.getGlobalTrackers()).toEqual(['udp://tracker.example.com:6969/announce']);
+    });
+});
+
+// ─── addGlobalTracker() ───────────────────────────────────────────────────────
+
+describe('SettingsManager.addGlobalTracker()', () => {
+    it('adiciona tracker válido à lista global', () => {
+        const manager = makeManager();
+        manager.addGlobalTracker('udp://tracker.example.com:6969/announce');
+        expect(manager.getGlobalTrackers()).toEqual([
+            'udp://tracker.example.com:6969/announce',
+        ]);
+    });
+
+    it('normaliza a URL antes de armazenar', () => {
+        const manager = makeManager();
+        manager.addGlobalTracker('  UDP://Tracker.Example.com:6969/announce  ');
+        expect(manager.getGlobalTrackers()).toEqual([
+            'udp://Tracker.Example.com:6969/announce',
+        ]);
+    });
+
+    it('rejeita URL inválida com erro de validação', () => {
+        const manager = makeManager();
+        expect(() => manager.addGlobalTracker('ftp://invalid.com')).toThrow(
+            'URL de tracker inválida',
+        );
+        expect(manager.getGlobalTrackers()).toEqual([]);
+    });
+
+    it('rejeita string vazia', () => {
+        const manager = makeManager();
+        expect(() => manager.addGlobalTracker('')).toThrow('URL de tracker inválida');
+    });
+
+    it('rejeita URL duplicada com erro de duplicidade', () => {
+        const manager = makeManager();
+        manager.addGlobalTracker('udp://tracker.example.com:6969/announce');
+        expect(() =>
+            manager.addGlobalTracker('udp://tracker.example.com:6969/announce'),
+        ).toThrow('Tracker já existe na lista global');
+    });
+
+    it('rejeita duplicata mesmo com espaços e casing diferente no protocolo', () => {
+        const manager = makeManager();
+        manager.addGlobalTracker('udp://tracker.example.com:6969/announce');
+        expect(() =>
+            manager.addGlobalTracker('  UDP://tracker.example.com:6969/announce  '),
+        ).toThrow('Tracker já existe na lista global');
+    });
+
+    it('permite adicionar múltiplos trackers distintos', () => {
+        const manager = makeManager();
+        manager.addGlobalTracker('udp://tracker1.example.com:6969/announce');
+        manager.addGlobalTracker('http://tracker2.example.com/announce');
+        expect(manager.getGlobalTrackers()).toEqual([
+            'udp://tracker1.example.com:6969/announce',
+            'http://tracker2.example.com/announce',
+        ]);
+    });
+});
+
+// ─── removeGlobalTracker() ────────────────────────────────────────────────────
+
+describe('SettingsManager.removeGlobalTracker()', () => {
+    it('remove tracker existente da lista global', () => {
+        const manager = makeManager({
+            globalTrackers: [
+                'udp://tracker1.example.com:6969/announce',
+                'http://tracker2.example.com/announce',
+            ],
+        });
+        manager.removeGlobalTracker('udp://tracker1.example.com:6969/announce');
+        expect(manager.getGlobalTrackers()).toEqual(['http://tracker2.example.com/announce']);
+    });
+
+    it('não altera a lista ao remover tracker inexistente', () => {
+        const manager = makeManager({
+            globalTrackers: ['udp://tracker.example.com:6969/announce'],
+        });
+        manager.removeGlobalTracker('udp://nonexistent.com:6969/announce');
+        expect(manager.getGlobalTrackers()).toEqual([
+            'udp://tracker.example.com:6969/announce',
+        ]);
+    });
+
+    it('normaliza a URL antes de comparar para remoção', () => {
+        const manager = makeManager({
+            globalTrackers: ['udp://tracker.example.com:6969/announce'],
+        });
+        manager.removeGlobalTracker('  UDP://tracker.example.com:6969/announce  ');
+        expect(manager.getGlobalTrackers()).toEqual([]);
+    });
+});
+
+// ─── setAutoApplyGlobalTrackers() ─────────────────────────────────────────────
+
+describe('SettingsManager.setAutoApplyGlobalTrackers()', () => {
+    it('habilita aplicação automática de trackers globais', () => {
+        const manager = makeManager();
+        manager.setAutoApplyGlobalTrackers(true);
+        expect(manager.get().autoApplyGlobalTrackers).toBe(true);
+    });
+
+    it('desabilita aplicação automática de trackers globais', () => {
+        const manager = makeManager({ autoApplyGlobalTrackers: true });
+        manager.setAutoApplyGlobalTrackers(false);
+        expect(manager.get().autoApplyGlobalTrackers).toBe(false);
+    });
+
+    it('valor padrão é false', () => {
+        const manager = makeManager();
+        expect(manager.get().autoApplyGlobalTrackers).toBe(false);
+    });
+});
+
 // ─── Property-Based Tests ─────────────────────────────────────────────────────
 
 // Feature: meshy-torrent-client, Property 10: Round-trip de persistência de configurações
@@ -154,6 +285,60 @@ describe('Property 10: Round-trip de persistência de configurações', () => {
                     expect(result.uploadSpeedLimit).toBe(settings.uploadSpeedLimit);
                 },
             ),
+            { numRuns: 100 },
+        );
+    });
+});
+
+// ─── Property 6: Lista global persiste entre sessões ──────────────────────────
+
+// Feature: tracker-management, Property 6: Lista global persiste entre sessões
+describe('Property 6: Lista global persiste entre sessões', () => {
+    // **Validates: Requirements 4.1**
+    it('salvar trackers globais e recriar SettingsManager com o mesmo store produz a mesma lista', () => {
+        // Gerador de URLs de tracker válidas únicas
+        const validTrackerUrlArb = fc
+            .record({
+                protocol: fc.constantFrom('udp', 'http', 'https'),
+                host: fc
+                    .stringOf(fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')), {
+                        minLength: 3,
+                        maxLength: 12,
+                    })
+                    .filter((h) => /^[a-z]/.test(h)),
+                port: fc.integer({ min: 1, max: 65535 }),
+            })
+            .map(({ protocol, host, port }) => `${protocol}://${host}.example.com:${port}/announce`);
+
+        const uniqueTrackerListArb = fc
+            .uniqueArray(validTrackerUrlArb, {
+                minLength: 0,
+                maxLength: 10,
+                comparator: (a, b) => a === b,
+            });
+
+        fc.assert(
+            fc.property(uniqueTrackerListArb, (trackerList) => {
+                // Criar store compartilhado entre as duas instâncias
+                const sharedStore = createFakeStore();
+
+                // Primeira sessão: salvar trackers
+                const manager1 = createSettingsManager({
+                    store: sharedStore,
+                    getDownloadsPath: () => FAKE_DOWNLOADS_PATH,
+                });
+                for (const url of trackerList) {
+                    manager1.addGlobalTracker(url);
+                }
+
+                // Segunda sessão: recriar com o mesmo store
+                const manager2 = createSettingsManager({
+                    store: sharedStore,
+                    getDownloadsPath: () => FAKE_DOWNLOADS_PATH,
+                });
+
+                expect(manager2.getGlobalTrackers()).toEqual(trackerList);
+            }),
             { numRuns: 100 },
         );
     });
@@ -206,6 +391,9 @@ function makeMockEngine(infoHash: string): TorrentEngine & EventEmitter {
         getAll: jest.fn().mockReturnValue([]),
         getFiles: jest.fn().mockReturnValue([]),
         setFileSelection: jest.fn().mockReturnValue([]),
+        getTrackers: jest.fn().mockReturnValue([]),
+        addTracker: jest.fn(),
+        removeTracker: jest.fn(),
     });
 
     return engine;
@@ -239,9 +427,9 @@ describe('Property 11: Novos downloads usam a pasta de destino atual', () => {
                     const magnetUri = `magnet:?xt=urn:btih:${infoHash}`;
 
                     const silentLogger = {
-                        info: () => {},
-                        warn: () => {},
-                        error: () => {},
+                        info: () => { },
+                        warn: () => { },
+                        error: () => { },
                     };
 
                     const downloadManager = createDownloadManager(
@@ -305,9 +493,9 @@ describe('Property 12: Pasta inválida resulta em erro antes de iniciar download
                     const magnetUri = `magnet:?xt=urn:btih:${infoHash}`;
 
                     const silentLogger = {
-                        info: () => {},
-                        warn: () => {},
-                        error: () => {},
+                        info: () => { },
+                        warn: () => { },
+                        error: () => { },
                     };
 
                     const downloadManager = createDownloadManager(

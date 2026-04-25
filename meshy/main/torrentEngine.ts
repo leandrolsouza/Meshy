@@ -3,10 +3,12 @@ import { readFileSync } from 'fs';
 import WebTorrent from 'webtorrent';
 import type { Torrent } from 'webtorrent';
 import { isValidMagnetUri, hasTorrentMagicBytes } from './validators';
-import type { TorrentStatus, TorrentFileInfo } from '../shared/types';
+import { isValidTrackerUrl, normalizeTrackerUrl } from '../shared/validators';
+import type { TorrentStatus, TorrentFileInfo, TrackerInfo, TrackerStatus } from '../shared/types';
 
 export type { TorrentStatus } from '../shared/types';
 export type { TorrentFileInfo } from '../shared/types';
+export type { TrackerInfo } from '../shared/types';
 
 // The @types/webtorrent package doesn't include throttleDownload/throttleUpload,
 // but they exist in the actual webtorrent@2.x library.
@@ -48,6 +50,12 @@ export interface TorrentEngine {
     getFiles(infoHash: string): TorrentFileInfo[];
     /** Aplica seleção de arquivos: seleciona os índices fornecidos, desseleciona os demais */
     setFileSelection(infoHash: string, selectedIndices: number[]): TorrentFileInfo[];
+    /** Retorna a lista de trackers de um torrent com status de conexão */
+    getTrackers(infoHash: string): TrackerInfo[];
+    /** Adiciona um tracker a um torrent (valida URL e rejeita duplicatas) */
+    addTracker(infoHash: string, trackerUrl: string): void;
+    /** Remove um tracker de um torrent e encerra a conexão */
+    removeTracker(infoHash: string, trackerUrl: string): void;
     on(event: 'progress', listener: (info: TorrentInfo) => void): void;
     on(event: 'done', listener: (infoHash: string) => void): void;
     on(event: 'error', listener: (infoHash: string, err: Error) => void): void;
@@ -369,6 +377,114 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
         }
 
         return this.getFiles(infoHash);
+    }
+
+    // ── getTrackers ─────────────────────────────────────────────────────────────
+
+    getTrackers(infoHash: string): TrackerInfo[] {
+        const torrent = this._getTorrent(infoHash);
+        if (!torrent) {
+            throw new Error(`Torrent não encontrado: ${infoHash}`);
+        }
+
+        const announce: string[] = (torrent as unknown as { announce?: string[] }).announce ?? [];
+
+        // O WebTorrent mantém internamente um objeto `_trackers` (mapa de URL → Tracker)
+        // que contém o estado de cada conexão com tracker.
+        const internalTrackers =
+            (torrent as unknown as { _trackers?: Record<string, { destroyed?: boolean }> })
+                ._trackers ?? {};
+
+        return announce.map((url) => {
+            const tracker = internalTrackers[url];
+            let status: TrackerStatus = 'pending';
+
+            if (tracker) {
+                if (tracker.destroyed) {
+                    status = 'error';
+                } else {
+                    status = 'connected';
+                }
+            }
+
+            return { url, status };
+        });
+    }
+
+    // ── addTracker ──────────────────────────────────────────────────────────────
+
+    addTracker(infoHash: string, trackerUrl: string): void {
+        const torrent = this._getTorrent(infoHash);
+        if (!torrent) {
+            throw new Error(`Torrent não encontrado: ${infoHash}`);
+        }
+
+        if (!isValidTrackerUrl(trackerUrl)) {
+            throw new Error(
+                'URL de tracker inválida. Protocolos aceitos: http://, https://, udp://',
+            );
+        }
+
+        const normalized = normalizeTrackerUrl(trackerUrl);
+        const announce: string[] = (torrent as unknown as { announce?: string[] }).announce ?? [];
+        const alreadyExists = announce.some(
+            (existing) => normalizeTrackerUrl(existing) === normalized,
+        );
+
+        if (alreadyExists) {
+            throw new Error(`Tracker já presente: ${normalized}`);
+        }
+
+        // Usa o método addTracker do WebTorrent para adicionar ao swarm
+        const addTrackerFn = (
+            torrent as unknown as { addTracker?: (url: string) => void }
+        ).addTracker;
+        if (typeof addTrackerFn === 'function') {
+            addTrackerFn.call(torrent, normalized);
+        } else {
+            // Fallback: adiciona manualmente ao announce
+            announce.push(normalized);
+            (torrent as unknown as { announce: string[] }).announce = announce;
+        }
+    }
+
+    // ── removeTracker ───────────────────────────────────────────────────────────
+
+    removeTracker(infoHash: string, trackerUrl: string): void {
+        const torrent = this._getTorrent(infoHash);
+        if (!torrent) {
+            throw new Error(`Torrent não encontrado: ${infoHash}`);
+        }
+
+        const normalized = normalizeTrackerUrl(trackerUrl);
+        const announce: string[] = (torrent as unknown as { announce?: string[] }).announce ?? [];
+        const index = announce.findIndex(
+            (existing) => normalizeTrackerUrl(existing) === normalized,
+        );
+
+        if (index === -1) {
+            throw new Error(`Tracker não encontrado: ${normalized}`);
+        }
+
+        // Remove do array announce
+        announce.splice(index, 1);
+        (torrent as unknown as { announce: string[] }).announce = announce;
+
+        // Destrói a conexão com o tracker, se existir
+        const internalTrackers =
+            (torrent as unknown as { _trackers?: Record<string, { destroy?: () => void }> })
+                ._trackers ?? {};
+
+        // Procura o tracker pelo URL normalizado ou original
+        for (const [key, tracker] of Object.entries(internalTrackers)) {
+            if (normalizeTrackerUrl(key) === normalized) {
+                if (typeof tracker.destroy === 'function') {
+                    tracker.destroy();
+                }
+                delete internalTrackers[key];
+                break;
+            }
+        }
     }
 
     // ── Private helpers ─────────────────────────────────────────────────────────

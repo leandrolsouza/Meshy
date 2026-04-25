@@ -393,3 +393,320 @@ describe('Property 6: Payload de progresso contém todos os campos obrigatórios
         );
     });
 });
+
+// ─── Tracker Methods — Unit Tests (Task 2.5) ─────────────────────────────────
+
+/**
+ * Helper: cria um fake torrent com suporte a announce e _trackers para testes de tracker.
+ */
+function makeFakeTorrentWithTrackers(
+    infoHash: string,
+    announce: string[] = [],
+    trackers: Record<string, { destroyed?: boolean; destroy?: jest.Mock }> = {},
+    overrides: Partial<Torrent> = {},
+): Torrent {
+    const torrent = makeFakeTorrent(infoHash, overrides);
+    (torrent as unknown as { announce: string[] }).announce = announce;
+    (torrent as unknown as { _trackers: typeof trackers })._trackers = trackers;
+    (torrent as unknown as { addTracker: jest.Mock }).addTracker = jest.fn(
+        (url: string) => {
+            const ann = (torrent as unknown as { announce: string[] }).announce;
+            ann.push(url);
+        },
+    );
+    return torrent;
+}
+
+describe('TorrentEngine.getTrackers() — unit tests', () => {
+    it('retorna lista vazia quando torrent não tem trackers', () => {
+        const infoHash = 'c'.repeat(40);
+        const fakeTorrent = makeFakeTorrentWithTrackers(infoHash, [], {});
+        const mockClient = makeMockClient();
+        mockClient.torrents.push(fakeTorrent);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+        const trackers = engine.getTrackers(infoHash);
+
+        expect(trackers).toEqual([]);
+    });
+
+    it('retorna trackers com status "pending" quando não há _trackers internos', () => {
+        const infoHash = 'd'.repeat(40);
+        const announce = ['udp://tracker.example.com:6969/announce'];
+        const fakeTorrent = makeFakeTorrentWithTrackers(infoHash, announce, {});
+        const mockClient = makeMockClient();
+        mockClient.torrents.push(fakeTorrent);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+        const trackers = engine.getTrackers(infoHash);
+
+        expect(trackers).toHaveLength(1);
+        expect(trackers[0]).toEqual({
+            url: 'udp://tracker.example.com:6969/announce',
+            status: 'pending',
+        });
+    });
+
+    it('retorna status "connected" para tracker ativo', () => {
+        const infoHash = 'e'.repeat(40);
+        const url = 'http://tracker.example.com/announce';
+        const fakeTorrent = makeFakeTorrentWithTrackers(
+            infoHash,
+            [url],
+            { [url]: { destroyed: false } },
+        );
+        const mockClient = makeMockClient();
+        mockClient.torrents.push(fakeTorrent);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+        const trackers = engine.getTrackers(infoHash);
+
+        expect(trackers[0].status).toBe('connected');
+    });
+
+    it('retorna status "error" para tracker destruído', () => {
+        const infoHash = 'f'.repeat(40);
+        const url = 'https://tracker.example.com/announce';
+        const fakeTorrent = makeFakeTorrentWithTrackers(
+            infoHash,
+            [url],
+            { [url]: { destroyed: true } },
+        );
+        const mockClient = makeMockClient();
+        mockClient.torrents.push(fakeTorrent);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+        const trackers = engine.getTrackers(infoHash);
+
+        expect(trackers[0].status).toBe('error');
+    });
+
+    it('lança erro quando torrent não é encontrado', () => {
+        const mockClient = makeMockClient();
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+
+        expect(() => engine.getTrackers('nonexistent'.padEnd(40, '0'))).toThrow(
+            /Torrent não encontrado/,
+        );
+    });
+});
+
+describe('TorrentEngine.addTracker() — unit tests', () => {
+    it('adiciona tracker válido ao torrent', () => {
+        const infoHash = 'a'.repeat(40);
+        const fakeTorrent = makeFakeTorrentWithTrackers(infoHash, [], {});
+        const mockClient = makeMockClient();
+        mockClient.torrents.push(fakeTorrent);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+        engine.addTracker(infoHash, 'udp://tracker.new.com:1234/announce');
+
+        const trackers = engine.getTrackers(infoHash);
+        expect(trackers).toHaveLength(1);
+        expect(trackers[0].url).toBe('udp://tracker.new.com:1234/announce');
+    });
+
+    it('lança erro para URL inválida', () => {
+        const infoHash = 'b'.repeat(40);
+        const fakeTorrent = makeFakeTorrentWithTrackers(infoHash, [], {});
+        const mockClient = makeMockClient();
+        mockClient.torrents.push(fakeTorrent);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+
+        expect(() => engine.addTracker(infoHash, 'ftp://invalid.com')).toThrow(
+            /URL de tracker inválida/,
+        );
+    });
+
+    it('lança erro para tracker duplicado', () => {
+        const infoHash = 'c'.repeat(40);
+        const url = 'http://tracker.example.com/announce';
+        const fakeTorrent = makeFakeTorrentWithTrackers(infoHash, [url], {});
+        const mockClient = makeMockClient();
+        mockClient.torrents.push(fakeTorrent);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+
+        expect(() => engine.addTracker(infoHash, url)).toThrow(/Tracker já presente/);
+    });
+
+    it('lança erro quando torrent não é encontrado', () => {
+        const mockClient = makeMockClient();
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+
+        expect(() =>
+            engine.addTracker('nonexistent'.padEnd(40, '0'), 'http://tracker.com/announce'),
+        ).toThrow(/Torrent não encontrado/);
+    });
+
+    it('detecta duplicata mesmo com casing diferente no protocolo', () => {
+        const infoHash = 'd'.repeat(40);
+        const fakeTorrent = makeFakeTorrentWithTrackers(
+            infoHash,
+            ['http://tracker.example.com/announce'],
+            {},
+        );
+        const mockClient = makeMockClient();
+        mockClient.torrents.push(fakeTorrent);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+
+        expect(() =>
+            engine.addTracker(infoHash, 'HTTP://tracker.example.com/announce'),
+        ).toThrow(/Tracker já presente/);
+    });
+});
+
+describe('TorrentEngine.removeTracker() — unit tests', () => {
+    it('remove tracker existente do torrent', () => {
+        const infoHash = 'a'.repeat(40);
+        const url = 'udp://tracker.example.com:6969/announce';
+        const destroyMock = jest.fn();
+        const fakeTorrent = makeFakeTorrentWithTrackers(
+            infoHash,
+            [url],
+            { [url]: { destroy: destroyMock } },
+        );
+        const mockClient = makeMockClient();
+        mockClient.torrents.push(fakeTorrent);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+        engine.removeTracker(infoHash, url);
+
+        const trackers = engine.getTrackers(infoHash);
+        expect(trackers).toHaveLength(0);
+        expect(destroyMock).toHaveBeenCalled();
+    });
+
+    it('lança erro quando tracker não está presente', () => {
+        const infoHash = 'b'.repeat(40);
+        const fakeTorrent = makeFakeTorrentWithTrackers(infoHash, [], {});
+        const mockClient = makeMockClient();
+        mockClient.torrents.push(fakeTorrent);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+
+        expect(() =>
+            engine.removeTracker(infoHash, 'http://nonexistent.com/announce'),
+        ).toThrow(/Tracker não encontrado/);
+    });
+
+    it('lança erro quando torrent não é encontrado', () => {
+        const mockClient = makeMockClient();
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+
+        expect(() =>
+            engine.removeTracker('nonexistent'.padEnd(40, '0'), 'http://tracker.com/announce'),
+        ).toThrow(/Torrent não encontrado/);
+    });
+
+    it('remove tracker mesmo quando não há _trackers internos (apenas announce)', () => {
+        const infoHash = 'c'.repeat(40);
+        const url = 'http://tracker.example.com/announce';
+        const fakeTorrent = makeFakeTorrentWithTrackers(infoHash, [url], {});
+        const mockClient = makeMockClient();
+        mockClient.torrents.push(fakeTorrent);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+        engine.removeTracker(infoHash, url);
+
+        const trackers = engine.getTrackers(infoHash);
+        expect(trackers).toHaveLength(0);
+    });
+});
+
+// ─── Tracker Methods — Property-Based Tests ──────────────────────────────────
+
+/**
+ * Gerador de URLs de tracker válidas para testes PBT.
+ */
+const validTrackerUrlArb = fc
+    .record({
+        protocol: fc.constantFrom('http', 'https', 'udp'),
+        host: fc.stringMatching(/^[a-z][a-z0-9]{2,15}$/),
+        domain: fc.constantFrom('.com', '.org', '.net', '.io'),
+        port: fc.integer({ min: 1, max: 65535 }),
+    })
+    .map(({ protocol, host, domain, port }) => `${protocol}://${host}${domain}:${port}/announce`);
+
+// Propriedade 3: Adicionar tracker novo aumenta a lista em 1 (Req 2.1)
+// **Validates: Requirements 2.1**
+describe('Propriedade 3: adicionar tracker novo aumenta a lista em 1 e a URL está presente', () => {
+    it('após addTracker com URL nova, getTrackers().length === anterior + 1 e URL está presente', () => {
+        fc.assert(
+            fc.property(validTrackerUrlArb, (trackerUrl) => {
+                const infoHash = 'a'.repeat(40);
+                const fakeTorrent = makeFakeTorrentWithTrackers(infoHash, [], {});
+                const mockClient = makeMockClient();
+                mockClient.torrents.push(fakeTorrent);
+
+                const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+
+                const before = engine.getTrackers(infoHash).length;
+                engine.addTracker(infoHash, trackerUrl);
+                const after = engine.getTrackers(infoHash);
+
+                expect(after.length).toBe(before + 1);
+                const urls = after.map((t) => t.url);
+                expect(urls).toContain(trackerUrl.replace(/\/+$/, ''));
+            }),
+            { numRuns: 100 },
+        );
+    });
+});
+
+// Propriedade 4: Remover tracker existente diminui a lista em 1 (Req 3.1)
+// **Validates: Requirements 3.1**
+describe('Propriedade 4: remover tracker existente diminui a lista em 1 e a URL não está presente', () => {
+    it('após removeTracker de URL existente, getTrackers().length === anterior - 1 e URL não está presente', () => {
+        fc.assert(
+            fc.property(validTrackerUrlArb, (trackerUrl) => {
+                const infoHash = 'b'.repeat(40);
+                const normalized = trackerUrl.replace(/\/+$/, '');
+                const fakeTorrent = makeFakeTorrentWithTrackers(infoHash, [normalized], {});
+                const mockClient = makeMockClient();
+                mockClient.torrents.push(fakeTorrent);
+
+                const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+
+                const before = engine.getTrackers(infoHash).length;
+                engine.removeTracker(infoHash, trackerUrl);
+                const after = engine.getTrackers(infoHash);
+
+                expect(after.length).toBe(before - 1);
+                const urls = after.map((t) => t.url);
+                expect(urls).not.toContain(normalized);
+            }),
+            { numRuns: 100 },
+        );
+    });
+});
+
+// Propriedade 5: Adicionar tracker duplicado é idempotente (Req 2.3)
+// **Validates: Requirements 2.3**
+describe('Propriedade 5: adicionar tracker duplicado não altera o tamanho da lista (idempotência)', () => {
+    it('tentar adicionar URL já presente lança erro e não altera o tamanho da lista', () => {
+        fc.assert(
+            fc.property(validTrackerUrlArb, (trackerUrl) => {
+                const infoHash = 'c'.repeat(40);
+                const normalized = trackerUrl.replace(/\/+$/, '');
+                const fakeTorrent = makeFakeTorrentWithTrackers(infoHash, [normalized], {});
+                const mockClient = makeMockClient();
+                mockClient.torrents.push(fakeTorrent);
+
+                const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+
+                const before = engine.getTrackers(infoHash).length;
+
+                expect(() => engine.addTracker(infoHash, trackerUrl)).toThrow(
+                    /Tracker já presente/,
+                );
+
+                const after = engine.getTrackers(infoHash).length;
+                expect(after).toBe(before);
+            }),
+            { numRuns: 100 },
+        );
+    });
+});

@@ -282,6 +282,10 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             const item = torrentInfoToDownloadItem(info, destinationFolder, addedAt);
             this.items.set(item.infoHash, item);
             this.emit('update', item);
+
+            // Aplicar trackers globais automaticamente (não bloqueia o retorno)
+            this._applyGlobalTrackers(item.infoHash);
+
             return item;
         }
 
@@ -376,6 +380,9 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             if (initialStatus === 'resolving-metadata') {
                 this._startMetadataTimer(item.infoHash);
             }
+
+            // Aplicar trackers globais automaticamente (não bloqueia o retorno)
+            this._applyGlobalTrackers(item.infoHash);
 
             return item;
         }
@@ -738,6 +745,36 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
     }
 
     // ── Private helpers ─────────────────────────────────────────────────────────
+
+    /**
+     * Aplica trackers globais automaticamente a um torrent recém-adicionado.
+     * Só executa se a opção `autoApplyGlobalTrackers` estiver habilitada.
+     * Erros individuais (ex: tracker duplicado) são silenciosamente ignorados
+     * para não interromper a operação de adição do torrent.
+     */
+    private _applyGlobalTrackers(infoHash: string): void {
+        try {
+            const { autoApplyGlobalTrackers } = this.settings.get();
+            if (!autoApplyGlobalTrackers) return;
+
+            const globalTrackers = this.settings.getGlobalTrackers();
+            if (globalTrackers.length === 0) return;
+
+            for (const trackerUrl of globalTrackers) {
+                try {
+                    this.engine.addTracker(infoHash, trackerUrl);
+                } catch {
+                    // Silenciosamente ignorar erros individuais (ex: duplicata)
+                }
+            }
+        } catch (err) {
+            this.log.error(
+                '[DownloadManager] Falha ao aplicar trackers globais:',
+                infoHash,
+                (err as Error).message,
+            );
+        }
+    }
 
     /** Clears and removes the pending metadata-resolution timer for the given infoHash. */
     private _clearMetadataTimer(infoHash: string): void {

@@ -69,6 +69,9 @@ function makeMockEngine(magnetInfo: TorrentInfo = makeTorrentInfo()): TorrentEng
         getAll: jest.fn().mockReturnValue([]),
         getFiles: jest.fn().mockReturnValue([]),
         setFileSelection: jest.fn().mockReturnValue([]),
+        getTrackers: jest.fn().mockReturnValue([]),
+        addTracker: jest.fn(),
+        removeTracker: jest.fn(),
     });
 
     return engine;
@@ -82,9 +85,15 @@ function makeMockSettings(folder = '/downloads'): SettingsManager {
             uploadSpeedLimit: 0,
             maxConcurrentDownloads: 3,
             notificationsEnabled: true,
+            globalTrackers: [],
+            autoApplyGlobalTrackers: false,
         }),
         set: jest.fn(),
         getDefaultDownloadFolder: jest.fn().mockReturnValue(folder),
+        getGlobalTrackers: jest.fn().mockReturnValue([]),
+        addGlobalTracker: jest.fn(),
+        removeGlobalTracker: jest.fn(),
+        setAutoApplyGlobalTrackers: jest.fn(),
     } as unknown as SettingsManager;
 }
 
@@ -1439,6 +1448,298 @@ describe('DownloadManager — Property 17: Arquivos ausentes resultam em status 
 
                 return true;
             }),
+            { numRuns: 100 },
+        );
+    });
+});
+
+
+// ─── Aplicação automática de trackers globais ─────────────────────────────────
+
+describe('DownloadManager — Aplicação automática de trackers globais (Requisito 6)', () => {
+    beforeEach(() => {
+        mockExistsSync.mockReturnValue(true);
+        mockAccessSync.mockReturnValue(undefined);
+    });
+    afterEach(() => {
+        jest.useRealTimers();
+    });
+
+    it('aplica trackers globais ao adicionar torrent file quando autoApply está habilitado', async () => {
+        const engine = makeMockEngine();
+        const settings = makeMockSettings();
+        const globalTrackers = [
+            'udp://tracker1.example.com:6969/announce',
+            'udp://tracker2.example.com:6969/announce',
+        ];
+        (settings.get as jest.Mock).mockReturnValue({
+            destinationFolder: '/downloads',
+            downloadSpeedLimit: 0,
+            uploadSpeedLimit: 0,
+            maxConcurrentDownloads: 3,
+            notificationsEnabled: true,
+            globalTrackers,
+            autoApplyGlobalTrackers: true,
+        });
+        (settings.getGlobalTrackers as jest.Mock).mockReturnValue(globalTrackers);
+
+        const info = makeTorrentInfo({
+            infoHash: INFO_HASH,
+            name: 'Test Torrent',
+            status: 'downloading',
+        });
+        (engine.addTorrentFile as jest.Mock).mockResolvedValueOnce(info);
+
+        const manager = createDownloadManager(engine, settings);
+        await manager.addTorrentFile('/path/to/file.torrent');
+
+        expect(engine.addTracker).toHaveBeenCalledTimes(2);
+        expect(engine.addTracker).toHaveBeenCalledWith(INFO_HASH, globalTrackers[0]);
+        expect(engine.addTracker).toHaveBeenCalledWith(INFO_HASH, globalTrackers[1]);
+    });
+
+    it('aplica trackers globais ao adicionar magnet link quando autoApply está habilitado', async () => {
+        jest.useFakeTimers();
+
+        const engine = makeMockEngine();
+        const settings = makeMockSettings();
+        const globalTrackers = ['udp://tracker1.example.com:6969/announce'];
+        (settings.get as jest.Mock).mockReturnValue({
+            destinationFolder: '/downloads',
+            downloadSpeedLimit: 0,
+            uploadSpeedLimit: 0,
+            maxConcurrentDownloads: 3,
+            notificationsEnabled: true,
+            globalTrackers,
+            autoApplyGlobalTrackers: true,
+        });
+        (settings.getGlobalTrackers as jest.Mock).mockReturnValue(globalTrackers);
+
+        const manager = createDownloadManager(engine, settings);
+        await manager.addMagnetLink(VALID_MAGNET);
+
+        expect(engine.addTracker).toHaveBeenCalledTimes(1);
+        expect(engine.addTracker).toHaveBeenCalledWith(INFO_HASH, globalTrackers[0]);
+    });
+
+    it('NÃO aplica trackers globais quando autoApply está desabilitado', async () => {
+        const engine = makeMockEngine();
+        const settings = makeMockSettings();
+        // autoApplyGlobalTrackers é false por padrão no makeMockSettings
+
+        const info = makeTorrentInfo({
+            infoHash: INFO_HASH,
+            name: 'Test Torrent',
+            status: 'downloading',
+        });
+        (engine.addTorrentFile as jest.Mock).mockResolvedValueOnce(info);
+
+        const manager = createDownloadManager(engine, settings);
+        await manager.addTorrentFile('/path/to/file.torrent');
+
+        expect(engine.addTracker).not.toHaveBeenCalled();
+    });
+
+    it('NÃO aplica trackers globais a itens enfileirados (queued)', async () => {
+        const engine = makeMockEngine();
+        const settings = makeMockSettings();
+        const globalTrackers = ['udp://tracker1.example.com:6969/announce'];
+        (settings.get as jest.Mock).mockReturnValue({
+            destinationFolder: '/downloads',
+            downloadSpeedLimit: 0,
+            uploadSpeedLimit: 0,
+            maxConcurrentDownloads: 1, // limite baixo para forçar fila
+            notificationsEnabled: true,
+            globalTrackers,
+            autoApplyGlobalTrackers: true,
+        });
+        (settings.getGlobalTrackers as jest.Mock).mockReturnValue(globalTrackers);
+
+        const manager = createDownloadManager(engine, settings);
+
+        // Primeiro torrent ocupa o slot
+        const info1 = makeTorrentInfo({
+            infoHash: '1'.repeat(40),
+            name: 'Torrent 1',
+            status: 'downloading',
+        });
+        (engine.addTorrentFile as jest.Mock).mockResolvedValueOnce(info1);
+        await manager.addTorrentFile('/path/to/file1.torrent');
+
+        // Resetar contagem de chamadas ao addTracker
+        (engine.addTracker as jest.Mock).mockClear();
+
+        // Segundo torrent vai para a fila
+        const info2 = makeTorrentInfo({
+            infoHash: '2'.repeat(40),
+            name: 'Torrent 2',
+            status: 'downloading',
+        });
+        (engine.addTorrentFile as jest.Mock).mockResolvedValueOnce(info2);
+        const queuedItem = await manager.addTorrentFile('/path/to/file2.torrent');
+
+        expect(queuedItem.status).toBe('queued');
+        // addTracker NÃO deve ter sido chamado para o item enfileirado
+        expect(engine.addTracker).not.toHaveBeenCalledWith(
+            '2'.repeat(40),
+            expect.any(String),
+        );
+    });
+
+    it('ignora silenciosamente erros de addTracker individuais (ex: duplicata)', async () => {
+        const engine = makeMockEngine();
+        const settings = makeMockSettings();
+        const globalTrackers = [
+            'udp://tracker1.example.com:6969/announce',
+            'udp://tracker2.example.com:6969/announce',
+            'udp://tracker3.example.com:6969/announce',
+        ];
+        (settings.get as jest.Mock).mockReturnValue({
+            destinationFolder: '/downloads',
+            downloadSpeedLimit: 0,
+            uploadSpeedLimit: 0,
+            maxConcurrentDownloads: 3,
+            notificationsEnabled: true,
+            globalTrackers,
+            autoApplyGlobalTrackers: true,
+        });
+        (settings.getGlobalTrackers as jest.Mock).mockReturnValue(globalTrackers);
+
+        // Segundo tracker lança erro (duplicata)
+        (engine.addTracker as jest.Mock)
+            .mockImplementationOnce(() => { }) // tracker1 OK
+            .mockImplementationOnce(() => {
+                throw new Error('Tracker já presente');
+            }) // tracker2 falha
+            .mockImplementationOnce(() => { }); // tracker3 OK
+
+        const info = makeTorrentInfo({
+            infoHash: INFO_HASH,
+            name: 'Test Torrent',
+            status: 'downloading',
+        });
+        (engine.addTorrentFile as jest.Mock).mockResolvedValueOnce(info);
+
+        const manager = createDownloadManager(engine, settings);
+        // Não deve lançar exceção
+        const item = await manager.addTorrentFile('/path/to/file.torrent');
+
+        expect(item).toBeDefined();
+        expect(item.infoHash).toBe(INFO_HASH);
+        // Todos os 3 trackers foram tentados
+        expect(engine.addTracker).toHaveBeenCalledTimes(3);
+    });
+
+    it('NÃO aplica trackers quando a lista global está vazia', async () => {
+        const engine = makeMockEngine();
+        const settings = makeMockSettings();
+        (settings.get as jest.Mock).mockReturnValue({
+            destinationFolder: '/downloads',
+            downloadSpeedLimit: 0,
+            uploadSpeedLimit: 0,
+            maxConcurrentDownloads: 3,
+            notificationsEnabled: true,
+            globalTrackers: [],
+            autoApplyGlobalTrackers: true,
+        });
+        (settings.getGlobalTrackers as jest.Mock).mockReturnValue([]);
+
+        const info = makeTorrentInfo({
+            infoHash: INFO_HASH,
+            name: 'Test Torrent',
+            status: 'downloading',
+        });
+        (engine.addTorrentFile as jest.Mock).mockResolvedValueOnce(info);
+
+        const manager = createDownloadManager(engine, settings);
+        await manager.addTorrentFile('/path/to/file.torrent');
+
+        expect(engine.addTracker).not.toHaveBeenCalled();
+    });
+});
+
+// ─── Property-based tests — Trackers globais resultam em superset ─────────────
+
+// Feature: tracker-management, Propriedade 7: Após aplicar trackers globais, superset da lista global
+describe('DownloadManager — Propriedade 7: Após aplicar trackers globais, superset da lista global', () => {
+    beforeEach(() => {
+        mockExistsSync.mockReturnValue(true);
+        mockAccessSync.mockReturnValue(undefined);
+    });
+    afterEach(() => {
+        jest.useRealTimers();
+    });
+
+    /**
+     * **Validates: Requirements 6.1**
+     *
+     * Para qualquer lista de trackers globais válidos e qualquer torrent adicionado
+     * com autoApplyGlobalTrackers habilitado, após a adição, o conjunto de trackers
+     * do torrent SHALL ser um superset da lista global — ou seja, todo tracker global
+     * SHALL ter sido passado ao engine.addTracker.
+     */
+    it('após aplicar trackers globais, todos os trackers globais são adicionados ao torrent', async () => {
+        // Gerador de URLs de tracker válidas únicas
+        const arbTrackerUrl = fc
+            .record({
+                protocol: fc.constantFrom('udp', 'http', 'https'),
+                host: fc.stringMatching(/^[a-z][a-z0-9]{2,15}$/).filter((h) => h.length >= 3),
+                port: fc.integer({ min: 1024, max: 65535 }),
+            })
+            .map(({ protocol, host, port }) => `${protocol}://${host}.example.com:${port}/announce`);
+
+        const arbGlobalTrackers = fc
+            .array(arbTrackerUrl, { minLength: 1, maxLength: 10 })
+            .map((urls) => [...new Set(urls)]); // garantir unicidade
+
+        await fc.assert(
+            fc.asyncProperty(
+                arbGlobalTrackers,
+                fc.hexaString({ minLength: 40, maxLength: 40 }),
+                async (globalTrackers, hash) => {
+                    const normalizedHash = hash.toLowerCase();
+
+                    mockExistsSync.mockReturnValue(true);
+                    mockAccessSync.mockReturnValue(undefined);
+
+                    const engine = makeMockEngine();
+                    const settings = makeMockSettings();
+
+                    (settings.get as jest.Mock).mockReturnValue({
+                        destinationFolder: '/downloads',
+                        downloadSpeedLimit: 0,
+                        uploadSpeedLimit: 0,
+                        maxConcurrentDownloads: 3,
+                        notificationsEnabled: true,
+                        globalTrackers,
+                        autoApplyGlobalTrackers: true,
+                    });
+                    (settings.getGlobalTrackers as jest.Mock).mockReturnValue(globalTrackers);
+
+                    const info = makeTorrentInfo({
+                        infoHash: normalizedHash,
+                        name: 'Test Torrent',
+                        status: 'downloading',
+                    });
+                    (engine.addTorrentFile as jest.Mock).mockResolvedValueOnce(info);
+
+                    const manager = createDownloadManager(engine, settings);
+                    await manager.addTorrentFile('/path/to/file.torrent');
+
+                    // Verificar que engine.addTracker foi chamado para cada tracker global
+                    const addTrackerCalls = (engine.addTracker as jest.Mock).mock.calls;
+                    const calledUrls = addTrackerCalls
+                        .filter((call: [string, string]) => call[0] === normalizedHash)
+                        .map((call: [string, string]) => call[1]);
+
+                    // O conjunto de URLs chamadas deve ser superset da lista global
+                    for (const trackerUrl of globalTrackers) {
+                        if (!calledUrls.includes(trackerUrl)) return false;
+                    }
+
+                    return true;
+                },
+            ),
             { numRuns: 100 },
         );
     });

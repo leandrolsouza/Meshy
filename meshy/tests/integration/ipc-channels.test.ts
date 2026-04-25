@@ -38,9 +38,18 @@ const EXPECTED_CHANNELS = [
     'torrent:resume',
     'torrent:remove',
     'torrent:get-all',
+    'torrent:get-files',
+    'torrent:set-file-selection',
     'settings:get',
     'settings:set',
     'settings:select-folder',
+    'tracker:get',
+    'tracker:add',
+    'tracker:remove',
+    'tracker:apply-global',
+    'tracker:get-global',
+    'tracker:add-global',
+    'tracker:remove-global',
 ] as const;
 
 function makeSampleDownloadItem(overrides: Partial<DownloadItem> = {}): DownloadItem {
@@ -86,12 +95,26 @@ function makeMockSettingsManager(): SettingsManager {
         maxConcurrentDownloads: 3,
         notificationsEnabled: true,
         theme: 'vs-code-dark',
+        globalTrackers: [],
+        autoApplyGlobalTrackers: false,
     };
     return {
         get: jest.fn().mockReturnValue(settings),
         set: jest.fn(),
         getDefaultDownloadFolder: jest.fn().mockReturnValue('/downloads'),
     } as unknown as SettingsManager;
+}
+
+function makeMockTorrentEngine() {
+    return {
+        getTrackers: jest.fn().mockReturnValue([]),
+        addTracker: jest.fn(),
+        removeTracker: jest.fn(),
+        getFiles: jest.fn().mockReturnValue([]),
+        setFileSelection: jest.fn().mockReturnValue([]),
+        on: jest.fn(),
+        removeListener: jest.fn(),
+    };
 }
 
 /**
@@ -109,19 +132,21 @@ function getHandler(
 describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
     let downloadManager: DownloadManager;
     let settingsManager: SettingsManager;
+    let torrentEngine: ReturnType<typeof makeMockTorrentEngine>;
 
     beforeEach(() => {
         jest.clearAllMocks();
         downloadManager = makeMockDownloadManager();
         settingsManager = makeMockSettingsManager();
-        registerIpcHandlers(downloadManager, settingsManager);
+        torrentEngine = makeMockTorrentEngine();
+        registerIpcHandlers(downloadManager, settingsManager, torrentEngine as any);
     });
 
     // ── Smoke tests: all channels registered ─────────────────────────────────
 
-    describe('Smoke: all 9 IPC channels are registered and respond', () => {
-        it('registers exactly 11 IPC channels', () => {
-            expect(mockIpcMain.handle).toHaveBeenCalledTimes(11);
+    describe('Smoke: all 18 IPC channels are registered and respond', () => {
+        it('registers exactly 18 IPC channels', () => {
+            expect(mockIpcMain.handle).toHaveBeenCalledTimes(18);
         });
 
         it.each(EXPECTED_CHANNELS)('channel "%s" is registered', (channel) => {
@@ -444,6 +469,8 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                     maxConcurrentDownloads: 3,
                     notificationsEnabled: true,
                     theme: 'vs-code-dark',
+                    globalTrackers: [],
+                    autoApplyGlobalTrackers: false,
                 });
             }
         });
@@ -456,6 +483,8 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                 maxConcurrentDownloads: 3,
                 notificationsEnabled: true,
                 theme: 'vs-code-dark',
+                globalTrackers: [],
+                autoApplyGlobalTrackers: false,
             };
             (settingsManager.get as jest.Mock).mockReturnValue(updatedSettings);
 
@@ -479,6 +508,8 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                 maxConcurrentDownloads: 3,
                 notificationsEnabled: true,
                 theme: 'vs-code-dark',
+                globalTrackers: [],
+                autoApplyGlobalTrackers: false,
             };
             (settingsManager.get as jest.Mock).mockReturnValue(updatedSettings);
 
@@ -502,6 +533,8 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                 maxConcurrentDownloads: 3,
                 notificationsEnabled: true,
                 theme: 'vs-code-dark',
+                globalTrackers: [],
+                autoApplyGlobalTrackers: false,
             };
             (settingsManager.get as jest.Mock).mockReturnValue(updatedSettings);
 

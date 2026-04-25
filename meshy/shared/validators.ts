@@ -67,6 +67,63 @@ export function isValidMaxConcurrentDownloads(value: unknown): boolean {
     );
 }
 
+// ─── Tracker URL ──────────────────────────────────────────────────────────────
+
+/**
+ * Protocolos aceitos para Tracker URLs.
+ */
+const VALID_TRACKER_PROTOCOLS = ['http:', 'https:', 'udp:'];
+
+/**
+ * Valida se uma string é uma Tracker URL válida.
+ * Aceita protocolos http://, https://, udp:// com hostname não-vazio.
+ * Rejeita strings vazias, apenas espaços, e protocolos inválidos.
+ */
+export function isValidTrackerUrl(url: string): boolean {
+    if (typeof url !== 'string') return false;
+    const trimmed = url.trim();
+    if (trimmed.length === 0) return false;
+
+    try {
+        // URL não suporta udp://, então tratamos manualmente
+        const protocolMatch = trimmed.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//);
+        if (!protocolMatch) return false;
+
+        const protocol = protocolMatch[1].toLowerCase() + ':';
+        if (!VALID_TRACKER_PROTOCOLS.includes(protocol)) return false;
+
+        // Para http/https, usamos o construtor URL nativo
+        if (protocol === 'http:' || protocol === 'https:') {
+            const parsed = new URL(trimmed);
+            return parsed.hostname.length > 0;
+        }
+
+        // Para udp://, extraímos o hostname manualmente
+        const afterProtocol = trimmed.slice(protocolMatch[0].length);
+        // Hostname é tudo antes de : ou / ou fim da string
+        const hostnameMatch = afterProtocol.match(/^([^:/]+)/);
+        return hostnameMatch !== null && hostnameMatch[1].length > 0;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Normaliza uma Tracker URL: remove espaços, converte protocolo para minúsculas,
+ * e remove barras finais duplicadas.
+ */
+export function normalizeTrackerUrl(url: string): string {
+    const trimmed = url.trim();
+
+    // Converte protocolo para minúsculas
+    const normalized = trimmed.replace(/^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)/, (match) =>
+        match.toLowerCase(),
+    );
+
+    // Remove barras finais duplicadas (mantém no máximo uma)
+    return normalized.replace(/\/+$/, '');
+}
+
 // ─── Theme ID ─────────────────────────────────────────────────────────────────
 
 /**

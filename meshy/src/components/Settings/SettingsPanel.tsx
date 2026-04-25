@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { VscTrash } from 'react-icons/vsc';
 import { useSettings } from '../../hooks/useSettings';
 import {
     isValidSpeedLimit,
@@ -28,7 +29,15 @@ interface SettingsPanelProps {
  * is false the component returns null.
  */
 export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JSX.Element | null {
-    const { settings, loading, error, updateSettings, selectFolder } = useSettings();
+    const {
+        settings,
+        loading,
+        error,
+        updateSettings,
+        selectFolder,
+        addGlobalTracker,
+        removeGlobalTracker,
+    } = useSettings();
 
     const [downloadLimit, setDownloadLimit] = useState('');
     const [uploadLimit, setUploadLimit] = useState('');
@@ -39,6 +48,10 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
     const [maxConcurrentError, setMaxConcurrentError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [currentThemeId, setCurrentThemeId] = useState(DEFAULT_THEME_ID);
+
+    // ── Estado local para trackers globais ────────────────────────────────────
+    const [newGlobalTracker, setNewGlobalTracker] = useState('');
+    const [globalTrackerError, setGlobalTrackerError] = useState<string | null>(null);
 
     // Sync local form state when settings load from the main process.
     // This is intentional: the effect bridges async IPC data into local form state.
@@ -109,6 +122,48 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
         setNotificationsEnabled(e.target.checked);
     }, []);
 
+    // ── Handlers de trackers globais ──────────────────────────────────────────
+
+    const handleAddGlobalTracker = useCallback(async () => {
+        const url = newGlobalTracker.trim();
+        if (!url) {
+            setGlobalTrackerError('Informe a URL do tracker.');
+            return;
+        }
+
+        setGlobalTrackerError(null);
+        const success = await addGlobalTracker(url);
+        if (success) {
+            setNewGlobalTracker('');
+        } else {
+            setGlobalTrackerError(error ?? 'Erro ao adicionar tracker.');
+        }
+    }, [newGlobalTracker, addGlobalTracker, error]);
+
+    const handleRemoveGlobalTracker = useCallback(
+        async (url: string) => {
+            await removeGlobalTracker(url);
+        },
+        [removeGlobalTracker],
+    );
+
+    const handleGlobalTrackerKeyDown = useCallback(
+        (e: React.KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleAddGlobalTracker();
+            }
+        },
+        [handleAddGlobalTracker],
+    );
+
+    const handleAutoApplyChange = useCallback(
+        (e: React.ChangeEvent<HTMLInputElement>) => {
+            updateSettings({ autoApplyGlobalTrackers: e.target.checked });
+        },
+        [updateSettings],
+    );
+
     const handleSave = useCallback(
         async (e: React.FormEvent) => {
             e.preventDefault();
@@ -167,131 +222,239 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
             )}
 
             {settings && (
-                <form onSubmit={handleSave} noValidate>
-                    {/* Seletor de tema — aplicação imediata, sem "Salvar" */}
-                    <div className={styles.fieldGroup}>
-                        <label htmlFor="theme-select" className="label">
-                            Tema
-                        </label>
-                        <ThemeSwitcher
-                            currentThemeId={currentThemeId}
-                            onThemeChange={handleThemeChange}
-                        />
-                    </div>
-
-                    {/* Destination folder */}
-                    <div className={styles.fieldGroup}>
-                        <label htmlFor="destination-folder" className="label">
-                            Pasta de destino
-                        </label>
-                        <div className={styles.folderRow}>
-                            <input
-                                id="destination-folder"
-                                type="text"
-                                className={`input input--readonly ${styles.folderInput}`}
-                                value={settings.destinationFolder}
-                                readOnly
+                <>
+                    <form onSubmit={handleSave} noValidate>
+                        {/* Seletor de tema — aplicação imediata, sem "Salvar" */}
+                        <div className={styles.fieldGroup}>
+                            <label htmlFor="theme-select" className="label">
+                                Tema
+                            </label>
+                            <ThemeSwitcher
+                                currentThemeId={currentThemeId}
+                                onThemeChange={handleThemeChange}
                             />
-                            <button type="button" className="btn" onClick={handleSelectFolder}>
-                                Selecionar pasta
+                        </div>
+
+                        {/* Destination folder */}
+                        <div className={styles.fieldGroup}>
+                            <label htmlFor="destination-folder" className="label">
+                                Pasta de destino
+                            </label>
+                            <div className={styles.folderRow}>
+                                <input
+                                    id="destination-folder"
+                                    type="text"
+                                    className={`input input--readonly ${styles.folderInput}`}
+                                    value={settings.destinationFolder}
+                                    readOnly
+                                />
+                                <button
+                                    type="button"
+                                    className="btn"
+                                    onClick={handleSelectFolder}
+                                >
+                                    Selecionar pasta
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Download speed limit */}
+                        <div className={styles.fieldGroup}>
+                            <label htmlFor="download-speed-limit" className="label">
+                                Limite de download (KB/s, 0 = sem limite)
+                            </label>
+                            <input
+                                id="download-speed-limit"
+                                type="number"
+                                min={0}
+                                step={1}
+                                className={dlInputClass}
+                                value={downloadLimit}
+                                onChange={handleDownloadLimitChange}
+                                aria-describedby={
+                                    downloadLimitError ? 'download-limit-error' : undefined
+                                }
+                                aria-invalid={downloadLimitError !== null}
+                            />
+                            {downloadLimitError && (
+                                <p
+                                    id="download-limit-error"
+                                    role="alert"
+                                    className="modal__error"
+                                >
+                                    {downloadLimitError}
+                                </p>
+                            )}
+                        </div>
+
+                        {/* Upload speed limit */}
+                        <div className={styles.fieldGroup}>
+                            <label htmlFor="upload-speed-limit" className="label">
+                                Limite de upload (KB/s, 0 = sem limite)
+                            </label>
+                            <input
+                                id="upload-speed-limit"
+                                type="number"
+                                min={0}
+                                step={1}
+                                className={ulInputClass}
+                                value={uploadLimit}
+                                onChange={handleUploadLimitChange}
+                                aria-describedby={
+                                    uploadLimitError ? 'upload-limit-error' : undefined
+                                }
+                                aria-invalid={uploadLimitError !== null}
+                            />
+                            {uploadLimitError && (
+                                <p
+                                    id="upload-limit-error"
+                                    role="alert"
+                                    className="modal__error"
+                                >
+                                    {uploadLimitError}
+                                </p>
+                            )}
+                        </div>
+
+                        {/* Max concurrent downloads */}
+                        <div className={styles.fieldGroup}>
+                            <label htmlFor="max-concurrent-downloads" className="label">
+                                Downloads simultâneos (máx)
+                            </label>
+                            <input
+                                id="max-concurrent-downloads"
+                                type="number"
+                                min={MIN_CONCURRENT_DOWNLOADS}
+                                max={MAX_CONCURRENT_DOWNLOADS}
+                                step={1}
+                                className={mcInputClass}
+                                value={maxConcurrent}
+                                onChange={handleMaxConcurrentChange}
+                                aria-describedby={
+                                    maxConcurrentError ? 'max-concurrent-error' : undefined
+                                }
+                                aria-invalid={maxConcurrentError !== null}
+                            />
+                            {maxConcurrentError && (
+                                <p
+                                    id="max-concurrent-error"
+                                    role="alert"
+                                    className="modal__error"
+                                >
+                                    {maxConcurrentError}
+                                </p>
+                            )}
+                        </div>
+
+                        {/* Notificações nativas */}
+                        <div className={styles.fieldGroupLast}>
+                            <label className={styles.checkboxLabel}>
+                                <input
+                                    type="checkbox"
+                                    checked={notificationsEnabled}
+                                    onChange={handleNotificationsChange}
+                                    className={styles.checkbox}
+                                />
+                                Notificações do sistema (download concluído ou com erro)
+                            </label>
+                        </div>
+
+                        {/* Actions */}
+                        <div className={styles.actions}>
+                            <button
+                                type="submit"
+                                className="btn btn--primary"
+                                disabled={isSaving}
+                            >
+                                {isSaving ? 'Salvando...' : 'Salvar'}
                             </button>
                         </div>
-                    </div>
+                    </form>
 
-                    {/* Download speed limit */}
-                    <div className={styles.fieldGroup}>
-                        <label htmlFor="download-speed-limit" className="label">
-                            Limite de download (KB/s, 0 = sem limite)
-                        </label>
-                        <input
-                            id="download-speed-limit"
-                            type="number"
-                            min={0}
-                            step={1}
-                            className={dlInputClass}
-                            value={downloadLimit}
-                            onChange={handleDownloadLimitChange}
-                            aria-describedby={
-                                downloadLimitError ? 'download-limit-error' : undefined
-                            }
-                            aria-invalid={downloadLimitError !== null}
-                        />
-                        {downloadLimitError && (
-                            <p id="download-limit-error" role="alert" className="modal__error">
-                                {downloadLimitError}
+                    {/* ── Seção de Trackers Globais ─────────────────────────── */}
+                    <section
+                        className={styles.globalTrackersSection}
+                        aria-labelledby="global-trackers-title"
+                    >
+                        <h3 id="global-trackers-title" className={styles.sectionTitle}>
+                            Trackers Globais (Favoritos)
+                        </h3>
+
+                        {/* Lista de trackers globais */}
+                        {settings.globalTrackers.length > 0 ? (
+                            <ul
+                                className={styles.globalTrackerList}
+                                aria-label="Lista de trackers globais"
+                            >
+                                {settings.globalTrackers.map((url) => (
+                                    <li key={url} className={styles.globalTrackerItem}>
+                                        <span
+                                            className={styles.globalTrackerUrl}
+                                            title={url}
+                                        >
+                                            {url}
+                                        </span>
+                                        <button
+                                            className={styles.globalTrackerRemoveButton}
+                                            onClick={() => handleRemoveGlobalTracker(url)}
+                                            aria-label={`Remover tracker ${url}`}
+                                        >
+                                            <VscTrash />
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <p className={styles.globalTrackerEmpty}>
+                                Nenhum tracker global adicionado.
                             </p>
                         )}
-                    </div>
 
-                    {/* Upload speed limit */}
-                    <div className={styles.fieldGroup}>
-                        <label htmlFor="upload-speed-limit" className="label">
-                            Limite de upload (KB/s, 0 = sem limite)
-                        </label>
-                        <input
-                            id="upload-speed-limit"
-                            type="number"
-                            min={0}
-                            step={1}
-                            className={ulInputClass}
-                            value={uploadLimit}
-                            onChange={handleUploadLimitChange}
-                            aria-describedby={uploadLimitError ? 'upload-limit-error' : undefined}
-                            aria-invalid={uploadLimitError !== null}
-                        />
-                        {uploadLimitError && (
-                            <p id="upload-limit-error" role="alert" className="modal__error">
-                                {uploadLimitError}
-                            </p>
-                        )}
-                    </div>
-
-                    {/* Max concurrent downloads */}
-                    <div className={styles.fieldGroup}>
-                        <label htmlFor="max-concurrent-downloads" className="label">
-                            Downloads simultâneos (máx)
-                        </label>
-                        <input
-                            id="max-concurrent-downloads"
-                            type="number"
-                            min={MIN_CONCURRENT_DOWNLOADS}
-                            max={MAX_CONCURRENT_DOWNLOADS}
-                            step={1}
-                            className={mcInputClass}
-                            value={maxConcurrent}
-                            onChange={handleMaxConcurrentChange}
-                            aria-describedby={
-                                maxConcurrentError ? 'max-concurrent-error' : undefined
-                            }
-                            aria-invalid={maxConcurrentError !== null}
-                        />
-                        {maxConcurrentError && (
-                            <p id="max-concurrent-error" role="alert" className="modal__error">
-                                {maxConcurrentError}
-                            </p>
-                        )}
-                    </div>
-
-                    {/* Notificações nativas */}
-                    <div className={styles.fieldGroupLast}>
-                        <label className={styles.checkboxLabel}>
+                        {/* Campo para adicionar tracker global */}
+                        <div className={styles.globalTrackerAddRow}>
                             <input
-                                type="checkbox"
-                                checked={notificationsEnabled}
-                                onChange={handleNotificationsChange}
-                                className={styles.checkbox}
+                                type="text"
+                                className="input"
+                                placeholder="udp://tracker.example.com:6969/announce"
+                                value={newGlobalTracker}
+                                onChange={(e) => {
+                                    setNewGlobalTracker(e.target.value);
+                                    setGlobalTrackerError(null);
+                                }}
+                                onKeyDown={handleGlobalTrackerKeyDown}
+                                aria-label="URL do tracker global"
                             />
-                            Notificações do sistema (download concluído ou com erro)
-                        </label>
-                    </div>
+                            <button
+                                type="button"
+                                className="btn btn--primary"
+                                onClick={handleAddGlobalTracker}
+                                disabled={!newGlobalTracker.trim()}
+                            >
+                                Adicionar
+                            </button>
+                        </div>
 
-                    {/* Actions */}
-                    <div className={styles.actions}>
-                        <button type="submit" className="btn btn--primary" disabled={isSaving}>
-                            {isSaving ? 'Salvando...' : 'Salvar'}
-                        </button>
-                    </div>
-                </form>
+                        {/* Erro de adição */}
+                        {globalTrackerError && (
+                            <p className="modal__error" role="alert">
+                                {globalTrackerError}
+                            </p>
+                        )}
+
+                        {/* Toggle de aplicação automática */}
+                        <div className={styles.globalTrackerToggle}>
+                            <label className={styles.checkboxLabel}>
+                                <input
+                                    type="checkbox"
+                                    checked={settings.autoApplyGlobalTrackers}
+                                    onChange={handleAutoApplyChange}
+                                    className={styles.checkbox}
+                                />
+                                Aplicar trackers globais automaticamente a novos torrents
+                            </label>
+                        </div>
+                    </section>
+                </>
             )}
         </>
     );

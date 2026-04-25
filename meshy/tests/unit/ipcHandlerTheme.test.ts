@@ -52,6 +52,8 @@ function makeMockSettingsManager(): SettingsManager {
         maxConcurrentDownloads: 3,
         notificationsEnabled: true,
         theme: 'vs-code-dark',
+        globalTrackers: [],
+        autoApplyGlobalTrackers: false,
     };
     return {
         get: jest.fn().mockReturnValue(settings),

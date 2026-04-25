@@ -1,6 +1,10 @@
 import ElectronStoreDefault from 'electron-store';
 import type { AppSettings } from '../shared/types';
-import { DEFAULT_MAX_CONCURRENT_DOWNLOADS } from '../shared/validators';
+import {
+    DEFAULT_MAX_CONCURRENT_DOWNLOADS,
+    isValidTrackerUrl,
+    normalizeTrackerUrl,
+} from '../shared/validators';
 
 export type { AppSettings } from '../shared/types';
 
@@ -13,6 +17,8 @@ interface PersistedSettings {
     maxConcurrentDownloads: number;
     notificationsEnabled: boolean;
     theme: string; // identificador do tema ativo (ex: "vs-code-dark")
+    globalTrackers: string[]; // lista de Tracker URLs favoritas
+    autoApplyGlobalTrackers: boolean; // aplicar automaticamente a novos torrents
     schemaVersion: number; // para migrações futuras
 }
 
@@ -20,6 +26,10 @@ export interface SettingsManager {
     get(): AppSettings;
     set(partial: Partial<AppSettings>): void;
     getDefaultDownloadFolder(): string;
+    getGlobalTrackers(): string[];
+    addGlobalTracker(url: string): void;
+    removeGlobalTracker(url: string): void;
+    setAutoApplyGlobalTrackers(enabled: boolean): void;
 }
 
 // ─── Store interface (subset used by SettingsManager) ─────────────────────────
@@ -104,6 +114,8 @@ export function createSettingsManager(options: CreateSettingsManagerOptions = {}
                     store.get('maxConcurrentDownloads') ?? DEFAULT_MAX_CONCURRENT_DOWNLOADS,
                 notificationsEnabled: store.get('notificationsEnabled') ?? true,
                 theme: store.get('theme') ?? 'vs-code-dark',
+                globalTrackers: store.get('globalTrackers') ?? [],
+                autoApplyGlobalTrackers: store.get('autoApplyGlobalTrackers') ?? false,
             };
         },
 
@@ -126,10 +138,48 @@ export function createSettingsManager(options: CreateSettingsManagerOptions = {}
             if (partial.theme !== undefined) {
                 store.set('theme', partial.theme);
             }
+            if (partial.globalTrackers !== undefined) {
+                store.set('globalTrackers', partial.globalTrackers);
+            }
+            if (partial.autoApplyGlobalTrackers !== undefined) {
+                store.set('autoApplyGlobalTrackers', partial.autoApplyGlobalTrackers);
+            }
         },
 
         getDefaultDownloadFolder(): string {
             return getDownloadsPath();
+        },
+
+        getGlobalTrackers(): string[] {
+            return store.get('globalTrackers') ?? [];
+        },
+
+        addGlobalTracker(url: string): void {
+            if (!isValidTrackerUrl(url)) {
+                throw new Error('URL de tracker inválida');
+            }
+
+            const normalized = normalizeTrackerUrl(url);
+            const current = store.get('globalTrackers') ?? [];
+
+            if (current.includes(normalized)) {
+                throw new Error('Tracker já existe na lista global');
+            }
+
+            store.set('globalTrackers', [...current, normalized]);
+        },
+
+        removeGlobalTracker(url: string): void {
+            const normalized = normalizeTrackerUrl(url);
+            const current = store.get('globalTrackers') ?? [];
+            store.set(
+                'globalTrackers',
+                current.filter((t) => t !== normalized),
+            );
+        },
+
+        setAutoApplyGlobalTrackers(enabled: boolean): void {
+            store.set('autoApplyGlobalTrackers', enabled);
         },
     };
 }
@@ -150,6 +200,8 @@ function createElectronStore(): SettingsStore {
             maxConcurrentDownloads: DEFAULT_MAX_CONCURRENT_DOWNLOADS,
             notificationsEnabled: true,
             theme: 'vs-code-dark',
+            globalTrackers: [],
+            autoApplyGlobalTrackers: false,
             schemaVersion: SCHEMA_VERSION,
         },
     });

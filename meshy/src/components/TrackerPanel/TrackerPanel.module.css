@@ -1,0 +1,154 @@
+/* ─── TrackerPanel Component ──────────────────────────────────────────────── */
+
+.container {
+    padding: var(--space-sm) 0;
+}
+
+/* ─── Title ───────────────────────────────────────────────────────────────── */
+
+.title {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: var(--space-sm);
+}
+
+/* ─── Loading & Error & Success ───────────────────────────────────────────── */
+
+.loading {
+    padding: var(--space-xs) 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+.error {
+    padding: var(--space-xs) 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-danger);
+}
+
+.success {
+    padding: var(--space-xs) 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-success);
+}
+
+.emptyMessage {
+    padding: var(--space-sm) 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+/* ─── Tracker List ────────────────────────────────────────────────────────── */
+
+.trackerList {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: var(--space-sm);
+}
+
+.trackerItem {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-sm);
+    transition: background-color var(--transition-fast);
+}
+
+.trackerItem:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+/* ─── Status Indicators ───────────────────────────────────────────────────── */
+
+.statusIndicator {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.statusConnected {
+    background-color: var(--color-success);
+}
+
+.statusError {
+    background-color: var(--color-danger);
+}
+
+.statusPending {
+    background-color: var(--color-warning);
+}
+
+/* ─── Tracker URL & Message ───────────────────────────────────────────────── */
+
+.trackerUrl {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+}
+
+.trackerMessage {
+    flex-shrink: 0;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ─── Remove Button ───────────────────────────────────────────────────────── */
+
+.removeButton {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    padding: 2px;
+    border-radius: var(--radius-sm);
+    transition:
+        color var(--transition-fast),
+        background-color var(--transition-fast);
+}
+
+.removeButton:hover {
+    color: var(--color-danger);
+    background-color: var(--color-danger-light);
+}
+
+.removeButton:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* ─── Add Tracker Row ─────────────────────────────────────────────────────── */
+
+.addTrackerRow {
+    display: flex;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-xs);
+}
+
+.addTrackerRow .input {
+    flex: 1;
+}
+
+/* ─── Apply Favorites Row ─────────────────────────────────────────────────── */
+
+.applyRow {
+    margin-top: var(--space-sm);
+}

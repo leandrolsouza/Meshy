@@ -2,8 +2,15 @@ import { ipcMain, dialog, BrowserWindow } from 'electron';
 import type { DownloadManager } from './downloadManager';
 import type { SettingsManager } from './settingsManager';
 import type { TorrentEngine } from './torrentEngine';
-import type { DownloadItem, AppSettings, IPCResponse, TorrentFileInfo } from '../shared/types';
+import type {
+    DownloadItem,
+    AppSettings,
+    IPCResponse,
+    TorrentFileInfo,
+    TrackerInfo,
+} from '../shared/types';
 import { isValidSpeedLimit, isValidMaxConcurrentDownloads, isValidThemeId } from './validators';
+import { isValidTrackerUrl } from '../shared/validators';
 import { logger } from './logger';
 
 export type { IPCResponse } from '../shared/types';
@@ -425,6 +432,216 @@ export function registerIpcHandlers(
                 return ok(updatedFiles);
             } catch (err) {
                 return failWithLog('torrent:set-file-selection', err);
+            }
+        },
+    );
+
+    // ── tracker:get ───────────────────────────────────────────────────────────
+    // payload: { infoHash: string }
+    ipcMain.handle(
+        'tracker:get',
+        async (_event, payload: unknown): Promise<IPCResponse<TrackerInfo[]>> => {
+            try {
+                if (
+                    typeof payload !== 'object' ||
+                    payload === null ||
+                    typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
+                    (payload as Record<string, unknown>).infoHash === ''
+                ) {
+                    return fail('Parâmetros inválidos: infoHash deve ser uma string não-vazia');
+                }
+
+                if (!torrentEngine) {
+                    return fail('TorrentEngine não disponível');
+                }
+
+                const { infoHash } = payload as { infoHash: string };
+                const trackers = torrentEngine.getTrackers(infoHash);
+                return ok(trackers);
+            } catch (err) {
+                return failWithLog('tracker:get', err);
+            }
+        },
+    );
+
+    // ── tracker:add ───────────────────────────────────────────────────────────
+    // payload: { infoHash: string, url: string }
+    ipcMain.handle(
+        'tracker:add',
+        async (_event, payload: unknown): Promise<IPCResponse<TrackerInfo[]>> => {
+            try {
+                if (
+                    typeof payload !== 'object' ||
+                    payload === null ||
+                    typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
+                    (payload as Record<string, unknown>).infoHash === '' ||
+                    typeof (payload as Record<string, unknown>).url !== 'string' ||
+                    (payload as Record<string, unknown>).url === ''
+                ) {
+                    return fail(
+                        'Parâmetros inválidos: infoHash e url devem ser strings não-vazias',
+                    );
+                }
+
+                if (!torrentEngine) {
+                    return fail('TorrentEngine não disponível');
+                }
+
+                const { infoHash, url } = payload as { infoHash: string; url: string };
+
+                if (!isValidTrackerUrl(url)) {
+                    return fail(
+                        'URL de tracker inválida. Protocolos aceitos: http://, https://, udp://',
+                    );
+                }
+
+                torrentEngine.addTracker(infoHash, url);
+                const trackers = torrentEngine.getTrackers(infoHash);
+                return ok(trackers);
+            } catch (err) {
+                return failWithLog('tracker:add', err);
+            }
+        },
+    );
+
+    // ── tracker:remove ────────────────────────────────────────────────────────
+    // payload: { infoHash: string, url: string }
+    ipcMain.handle(
+        'tracker:remove',
+        async (_event, payload: unknown): Promise<IPCResponse<TrackerInfo[]>> => {
+            try {
+                if (
+                    typeof payload !== 'object' ||
+                    payload === null ||
+                    typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
+                    (payload as Record<string, unknown>).infoHash === '' ||
+                    typeof (payload as Record<string, unknown>).url !== 'string' ||
+                    (payload as Record<string, unknown>).url === ''
+                ) {
+                    return fail(
+                        'Parâmetros inválidos: infoHash e url devem ser strings não-vazias',
+                    );
+                }
+
+                if (!torrentEngine) {
+                    return fail('TorrentEngine não disponível');
+                }
+
+                const { infoHash, url } = payload as { infoHash: string; url: string };
+                torrentEngine.removeTracker(infoHash, url);
+                const trackers = torrentEngine.getTrackers(infoHash);
+                return ok(trackers);
+            } catch (err) {
+                return failWithLog('tracker:remove', err);
+            }
+        },
+    );
+
+    // ── tracker:apply-global ──────────────────────────────────────────────────
+    // payload: { infoHash: string }
+    ipcMain.handle(
+        'tracker:apply-global',
+        async (_event, payload: unknown): Promise<IPCResponse<TrackerInfo[]>> => {
+            try {
+                if (
+                    typeof payload !== 'object' ||
+                    payload === null ||
+                    typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
+                    (payload as Record<string, unknown>).infoHash === ''
+                ) {
+                    return fail('Parâmetros inválidos: infoHash deve ser uma string não-vazia');
+                }
+
+                if (!torrentEngine) {
+                    return fail('TorrentEngine não disponível');
+                }
+
+                const { infoHash } = payload as { infoHash: string };
+                const globalTrackers = settingsManager.getGlobalTrackers();
+
+                for (const url of globalTrackers) {
+                    try {
+                        torrentEngine.addTracker(infoHash, url);
+                    } catch {
+                        // Silenciosamente ignora erros individuais (ex: duplicatas)
+                    }
+                }
+
+                const trackers = torrentEngine.getTrackers(infoHash);
+                return ok(trackers);
+            } catch (err) {
+                return failWithLog('tracker:apply-global', err);
+            }
+        },
+    );
+
+    // ── tracker:get-global ────────────────────────────────────────────────────
+    // payload: (nenhum)
+    ipcMain.handle(
+        'tracker:get-global',
+        async (_event): Promise<IPCResponse<string[]>> => {
+            try {
+                const trackers = settingsManager.getGlobalTrackers();
+                return ok(trackers);
+            } catch (err) {
+                return failWithLog('tracker:get-global', err);
+            }
+        },
+    );
+
+    // ── tracker:add-global ────────────────────────────────────────────────────
+    // payload: { url: string }
+    ipcMain.handle(
+        'tracker:add-global',
+        async (_event, payload: unknown): Promise<IPCResponse<string[]>> => {
+            try {
+                if (
+                    typeof payload !== 'object' ||
+                    payload === null ||
+                    typeof (payload as Record<string, unknown>).url !== 'string' ||
+                    (payload as Record<string, unknown>).url === ''
+                ) {
+                    return fail('Parâmetros inválidos: url deve ser uma string não-vazia');
+                }
+
+                const { url } = payload as { url: string };
+
+                if (!isValidTrackerUrl(url)) {
+                    return fail(
+                        'URL de tracker inválida. Protocolos aceitos: http://, https://, udp://',
+                    );
+                }
+
+                settingsManager.addGlobalTracker(url);
+                const trackers = settingsManager.getGlobalTrackers();
+                return ok(trackers);
+            } catch (err) {
+                return failWithLog('tracker:add-global', err);
+            }
+        },
+    );
+
+    // ── tracker:remove-global ─────────────────────────────────────────────────
+    // payload: { url: string }
+    ipcMain.handle(
+        'tracker:remove-global',
+        async (_event, payload: unknown): Promise<IPCResponse<string[]>> => {
+            try {
+                if (
+                    typeof payload !== 'object' ||
+                    payload === null ||
+                    typeof (payload as Record<string, unknown>).url !== 'string' ||
+                    (payload as Record<string, unknown>).url === ''
+                ) {
+                    return fail('Parâmetros inválidos: url deve ser uma string não-vazia');
+                }
+
+                const { url } = payload as { url: string };
+                settingsManager.removeGlobalTracker(url);
+                const trackers = settingsManager.getGlobalTrackers();
+                return ok(trackers);
+            } catch (err) {
+                return failWithLog('tracker:remove-global', err);
             }
         },
     );

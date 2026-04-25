@@ -3,6 +3,18 @@
 // Single source of truth for types used across both processes.
 // Both tsconfig.node.json and tsconfig.web.json include this directory.
 
+// ─── TrackerStatus ─────────────────────────────────────────────────────────────
+
+/** Status de conexão de um tracker */
+export type TrackerStatus = 'connected' | 'error' | 'pending';
+
+/** Informações de um tracker associado a um torrent */
+export interface TrackerInfo {
+    url: string; // Tracker URL completa
+    status: TrackerStatus; // Status de conexão atual
+    message?: string; // Mensagem de erro (quando status === 'error')
+}
+
 // ─── TorrentStatus ────────────────────────────────────────────────────────────
 
 export type TorrentStatus =
@@ -76,6 +88,8 @@ export interface AppSettings {
     maxConcurrentDownloads: number; // máx downloads simultâneos (1–10, padrão 3)
     notificationsEnabled: boolean; // notificações nativas do OS (padrão: true)
     theme: string; // identificador do tema ativo (ex: "vs-code-dark")
+    globalTrackers: string[]; // lista de Tracker URLs favoritas (padrão: [])
+    autoApplyGlobalTrackers: boolean; // aplicar automaticamente a novos torrents (padrão: false)
 }
 
 // ─── IPCResponse ──────────────────────────────────────────────────────────────
@@ -101,6 +115,15 @@ export interface MeshyAPI {
         infoHash: string,
         selectedIndices: number[],
     ): Promise<IPCResponse<TorrentFileInfo[]>>;
+    // Trackers (por torrent)
+    getTrackers(infoHash: string): Promise<IPCResponse<TrackerInfo[]>>;
+    addTracker(infoHash: string, url: string): Promise<IPCResponse<TrackerInfo[]>>;
+    removeTracker(infoHash: string, url: string): Promise<IPCResponse<TrackerInfo[]>>;
+    applyGlobalTrackers(infoHash: string): Promise<IPCResponse<TrackerInfo[]>>;
+    // Trackers globais
+    getGlobalTrackers(): Promise<IPCResponse<string[]>>;
+    addGlobalTracker(url: string): Promise<IPCResponse<string[]>>;
+    removeGlobalTracker(url: string): Promise<IPCResponse<string[]>>;
     // Events
     onProgress(callback: (items: DownloadItem[]) => void): () => void;
     onError(callback: (data: { infoHash: string; message: string }) => void): () => void;
