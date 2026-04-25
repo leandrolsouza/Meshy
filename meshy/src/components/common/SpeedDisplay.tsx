@@ -4,25 +4,33 @@ import { formatBytes } from '../../utils/formatters';
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface SpeedDisplayProps {
-    /** Speed in bytes per second */
+    /** Velocidade em bytes por segundo */
     speedBytesPerSec: number;
-    /** Optional label prefix, e.g. "↓" or "↑" */
+    /** Ícone opcional exibido antes da velocidade */
+    icon?: React.ReactNode;
+    /** @deprecated Use `icon` em vez de `label`. Prefixo de texto, ex: "↓" ou "↑" */
     label?: string;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 /**
- * Displays a transfer speed in a human-readable format (KB/s or MB/s).
- * Converts bytes/s to the appropriate unit using `formatBytes`.
+ * Exibe uma velocidade de transferência em formato legível (KB/s ou MB/s).
+ * Converte bytes/s para a unidade apropriada usando `formatBytes`.
  *
  * @example
- * <SpeedDisplay speedBytesPerSec={1572864} label="↓" />
- * // renders: "↓ 1.50 MB/s"
+ * import { VscArrowDown } from 'react-icons/vsc';
+ * <SpeedDisplay speedBytesPerSec={1572864} icon={<VscArrowDown />} />
+ * // renderiza: [↓ icon] 1.50 MB/s
  */
-export function SpeedDisplay({ speedBytesPerSec, label }: SpeedDisplayProps): React.JSX.Element {
-    const formatted = formatBytes(speedBytesPerSec);
-    const display = label ? `${label} ${formatted}/s` : `${formatted}/s`;
+export function SpeedDisplay({ speedBytesPerSec, icon, label }: SpeedDisplayProps): React.JSX.Element {
+    const formatted = `${formatBytes(speedBytesPerSec)}/s`;
 
-    return <span className="speed-display">{display}</span>;
+    return (
+        <span className="speed-display">
+            {icon && <>{icon} </>}
+            {!icon && label && <>{label} </>}
+            {formatted}
+        </span>
+    );
 }

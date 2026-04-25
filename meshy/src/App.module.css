@@ -3,10 +3,10 @@
 .app {
     display: grid;
     grid-template-areas:
-        "titlebar titlebar"
-        "activitybar editor"
-        "statusbar statusbar";
-    grid-template-columns: var(--activitybar-width) 1fr;
+        "titlebar titlebar titlebar"
+        "activitybar sidebar editor"
+        "statusbar statusbar statusbar";
+    grid-template-columns: var(--activitybar-width) auto 1fr;
     grid-template-rows: auto 1fr auto;
     width: 100vw;
     height: 100vh;
@@ -76,6 +76,12 @@
 }
 
 /* ─── Editor Area ─────────────────────────────────────────────────────────── */
+
+.sidebarArea {
+    grid-area: sidebar;
+    overflow-y: auto;
+    width: 220px;
+}
 
 .editorArea {
     grid-area: editor;

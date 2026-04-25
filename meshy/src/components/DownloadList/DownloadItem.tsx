@@ -1,4 +1,13 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import {
+    VscArrowDown,
+    VscArrowUp,
+    VscDebugPause,
+    VscPlay,
+    VscTrash,
+    VscChevronDown,
+    VscChevronRight,
+} from 'react-icons/vsc';
 import type { DownloadItem as DownloadItemType, TorrentFileInfo } from '../../../shared/types';
 import { ProgressBar } from '../common/ProgressBar';
 import { SpeedDisplay } from '../common/SpeedDisplay';
@@ -192,8 +201,8 @@ export function DownloadItem({
             {/* Details */}
             <div className={styles.details}>
                 <span>{formatBytes(item.downloadedSize)} / {formatBytes(item.totalSize)} ({progressPercent}%)</span>
-                {!isCompleted && <SpeedDisplay speedBytesPerSec={item.downloadSpeed} label="↓" />}
-                {!isCompleted && <SpeedDisplay speedBytesPerSec={item.uploadSpeed} label="↑" />}
+                {!isCompleted && <SpeedDisplay speedBytesPerSec={item.downloadSpeed} icon={<VscArrowDown />} />}
+                {!isCompleted && <SpeedDisplay speedBytesPerSec={item.uploadSpeed} icon={<VscArrowUp />} />}
                 {!isCompleted && (
                     <span>{item.numSeeders} seeders · {item.numPeers} peers</span>
                 )}
@@ -213,28 +222,26 @@ export function DownloadItem({
                         aria-label={expanded ? 'Recolher lista de arquivos' : 'Expandir lista de arquivos'}
                         aria-expanded={expanded}
                     >
-                        {expanded ? 'Recolher arquivos' : 'Arquivos'}
+                        {expanded ? <VscChevronDown /> : <VscChevronRight />} Arquivos
                     </button>
                 )}
                 {item.status === 'downloading' && (
                     <button className="btn" onClick={() => onPause(item.infoHash)} aria-label={`Pausar ${item.name}`}>
-                        Pausar
+                        <VscDebugPause /> Pausar
                     </button>
                 )}
                 {item.status === 'paused' && (
                     <button className="btn" onClick={() => onResume(item.infoHash)} aria-label={`Retomar ${item.name}`}>
-                        Retomar
+                        <VscPlay /> Retomar
                     </button>
                 )}
-                {item.status !== 'completed' && (
-                    <button
-                        className="btn btn--danger"
-                        onClick={() => setIsConfirmDialogOpen(true)}
-                        aria-label={`Remover ${item.name}`}
-                    >
-                        Remover
-                    </button>
-                )}
+                <button
+                    className="btn btn--danger"
+                    onClick={() => setIsConfirmDialogOpen(true)}
+                    aria-label={`Remover ${item.name}`}
+                >
+                    <VscTrash /> Remover
+                </button>
             </div>
 
             {/* Expanded file selector section (Task 6.2) */}

@@ -1,0 +1,32 @@
+/* ─── DownloadListToolbar — Barra de ferramentas da lista de downloads ──── */
+
+.toolbar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    padding: var(--space-sm) 0;
+}
+
+/* Linha 1: busca + ordenação + botão limpar concluídos */
+.topRow {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+/* A barra de busca ocupa o espaço disponível */
+.searchBarWrapper {
+    flex: 1 1 200px;
+    min-width: 0;
+}
+
+/* Linha 2: filtros de status (largura total) */
+.bottomRow {
+    display: flex;
+    align-items: center;
+}
+
+/* Botão de limpar concluídos */
+.clearButton {
+    white-space: nowrap;
+}

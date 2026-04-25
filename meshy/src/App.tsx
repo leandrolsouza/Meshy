@@ -1,9 +1,18 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import {
+    VscCloudDownload,
+    VscSearch,
+    VscAdd,
+    VscSettingsGear,
+    VscArrowDown,
+    VscArrowUp,
+} from 'react-icons/vsc';
 import { useDownloadStore } from './store/downloadStore';
 import { DownloadList } from './components/DownloadList/DownloadList';
 import { DropZone } from './components/AddTorrent/DropZone';
 import { AddTorrentModal } from './components/AddTorrent/AddTorrentModal';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
+import { FilterSidebar } from './components/DownloadList/FilterSidebar';
 import { formatBytes } from './utils/formatters';
 import styles from './App.module.css';
 
@@ -29,6 +38,7 @@ function App(): React.JSX.Element {
     const setItems = useDownloadStore((state) => state.setItems);
     const items = useDownloadStore((state) => state.items);
     const [activeView, setActiveView] = useState<ActiveView>('downloads');
+    const [isFilterSidebarOpen, setIsFilterSidebarOpen] = useState(false);
 
     useEffect(() => {
         async function loadInitialState(): Promise<void> {
@@ -79,7 +89,16 @@ function App(): React.JSX.Element {
                     aria-label="Downloads"
                     title="Downloads"
                 >
-                    ↓
+                    <VscCloudDownload />
+                </button>
+                <button
+                    className={isFilterSidebarOpen ? styles.activityIconActive : styles.activityIcon}
+                    onClick={() => setIsFilterSidebarOpen((prev) => !prev)}
+                    aria-label="Buscar e filtrar"
+                    title="Buscar e filtrar"
+                    aria-expanded={isFilterSidebarOpen}
+                >
+                    <VscSearch />
                 </button>
                 <button
                     className={activeView === 'add-torrent' ? styles.activityIconActive : styles.activityIcon}
@@ -87,7 +106,7 @@ function App(): React.JSX.Element {
                     aria-label="Adicionar torrent"
                     title="Adicionar torrent"
                 >
-                    +
+                    <VscAdd />
                 </button>
                 <button
                     className={activeView === 'settings' ? styles.activityIconActive : styles.activityIcon}
@@ -95,9 +114,16 @@ function App(): React.JSX.Element {
                     aria-label="Configurações"
                     title="Configurações"
                 >
-                    ⚙
+                    <VscSettingsGear />
                 </button>
             </nav>
+
+            {/* ── Filter Sidebar ─────────────────────────────────────── */}
+            {isFilterSidebarOpen && (
+                <div className={styles.sidebarArea}>
+                    <FilterSidebar />
+                </div>
+            )}
 
             {/* ── Editor Area ───────────────────────────────────────────── */}
             <main className={styles.editorArea}>
@@ -125,7 +151,7 @@ function App(): React.JSX.Element {
             {/* ── Status Bar ────────────────────────────────────────────── */}
             <footer className={styles.statusBar}>
                 <span>{activeDownloadCount} {activeDownloadCount === 1 ? 'download ativo' : 'downloads ativos'}</span>
-                <span>↓ {formatBytes(totalDownloadSpeed)}/s · ↑ {formatBytes(totalUploadSpeed)}/s</span>
+                <span><VscArrowDown /> {formatBytes(totalDownloadSpeed)}/s · <VscArrowUp /> {formatBytes(totalUploadSpeed)}/s</span>
             </footer>
         </div>
     );
