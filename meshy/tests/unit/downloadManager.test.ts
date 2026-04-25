@@ -81,6 +81,7 @@ function makeMockSettings(folder = '/downloads'): SettingsManager {
             downloadSpeedLimit: 0,
             uploadSpeedLimit: 0,
             maxConcurrentDownloads: 3,
+            notificationsEnabled: true,
         }),
         set: jest.fn(),
         getDefaultDownloadFolder: jest.fn().mockReturnValue(folder),
@@ -1139,6 +1140,17 @@ describe('DownloadManager — Property 16: Auto-retomada seletiva na restauraç�
                 const store = makeMockStore(persistedItems);
                 const engine = makeMockEngine();
 
+                // Usar um limite alto para que todos os itens ativos caibam em slots
+                const activeCount = items.filter(i => i.status === 'downloading' || i.status === 'resolving-metadata').length;
+                const settings = makeMockSettings('/downloads');
+                (settings.get as jest.Mock).mockReturnValue({
+                    destinationFolder: '/downloads',
+                    downloadSpeedLimit: 0,
+                    uploadSpeedLimit: 0,
+                    maxConcurrentDownloads: Math.max(activeCount, 10),
+                    notificationsEnabled: true,
+                });
+
                 // Make addMagnetLink resolve for each downloading item
                 for (const item of items) {
                     if (item.status === 'downloading') {
@@ -1152,7 +1164,6 @@ describe('DownloadManager — Property 16: Auto-retomada seletiva na restauraç�
                     }
                 }
 
-                const settings = makeMockSettings('/downloads');
                 const manager = createDownloadManager(engine, settings, store);
 
                 await manager.restoreSession();

@@ -25,6 +25,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
     const [downloadLimit, setDownloadLimit] = useState('');
     const [uploadLimit, setUploadLimit] = useState('');
     const [maxConcurrent, setMaxConcurrent] = useState('');
+    const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [downloadLimitError, setDownloadLimitError] = useState<string | null>(null);
     const [uploadLimitError, setUploadLimitError] = useState<string | null>(null);
     const [maxConcurrentError, setMaxConcurrentError] = useState<string | null>(null);
@@ -37,6 +38,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
             setDownloadLimit(String(settings.downloadSpeedLimit)); // eslint-disable-line react-hooks/set-state-in-effect
             setUploadLimit(String(settings.uploadSpeedLimit));
             setMaxConcurrent(String(settings.maxConcurrentDownloads));
+            setNotificationsEnabled(settings.notificationsEnabled);
         }
     }, [settings]);
 
@@ -57,6 +59,10 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
     const handleMaxConcurrentChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         setMaxConcurrent(e.target.value);
         setMaxConcurrentError(null);
+    }, []);
+
+    const handleNotificationsChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        setNotificationsEnabled(e.target.checked);
     }, []);
 
     const handleSave = useCallback(
@@ -90,12 +96,13 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
                     downloadSpeedLimit: Number(downloadLimit),
                     uploadSpeedLimit: Number(uploadLimit),
                     maxConcurrentDownloads: Number(maxConcurrent),
+                    notificationsEnabled,
                 });
             } finally {
                 setIsSaving(false);
             }
         },
-        [downloadLimit, uploadLimit, maxConcurrent, updateSettings],
+        [downloadLimit, uploadLimit, maxConcurrent, notificationsEnabled, updateSettings],
     );
 
     if (!isOpen) return null;
@@ -183,7 +190,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
                     </div>
 
                     {/* Max concurrent downloads */}
-                    <div className={styles.fieldGroupLast}>
+                    <div className={styles.fieldGroup}>
                         <label htmlFor="max-concurrent-downloads" className="label">
                             Downloads simultâneos (máx)
                         </label>
@@ -204,6 +211,19 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
                                 {maxConcurrentError}
                             </p>
                         )}
+                    </div>
+
+                    {/* Notificações nativas */}
+                    <div className={styles.fieldGroupLast}>
+                        <label className={styles.checkboxLabel}>
+                            <input
+                                type="checkbox"
+                                checked={notificationsEnabled}
+                                onChange={handleNotificationsChange}
+                                className={styles.checkbox}
+                            />
+                            Notificações do sistema (download concluído ou com erro)
+                        </label>
                     </div>
 
                     {/* Actions */}

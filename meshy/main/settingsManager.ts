@@ -11,6 +11,7 @@ interface PersistedSettings {
     downloadSpeedLimit: number;
     uploadSpeedLimit: number;
     maxConcurrentDownloads: number;
+    notificationsEnabled: boolean;
     schemaVersion: number; // para migrações futuras
 }
 
@@ -100,6 +101,7 @@ export function createSettingsManager(options: CreateSettingsManagerOptions = {}
                 uploadSpeedLimit: store.get('uploadSpeedLimit') ?? 0,
                 maxConcurrentDownloads:
                     store.get('maxConcurrentDownloads') ?? DEFAULT_MAX_CONCURRENT_DOWNLOADS,
+                notificationsEnabled: store.get('notificationsEnabled') ?? true,
             };
         },
 
@@ -115,6 +117,9 @@ export function createSettingsManager(options: CreateSettingsManagerOptions = {}
             }
             if (partial.maxConcurrentDownloads !== undefined) {
                 store.set('maxConcurrentDownloads', partial.maxConcurrentDownloads);
+            }
+            if (partial.notificationsEnabled !== undefined) {
+                store.set('notificationsEnabled', partial.notificationsEnabled);
             }
         },
 
@@ -138,6 +143,7 @@ function createElectronStore(): SettingsStore {
             downloadSpeedLimit: 0,
             uploadSpeedLimit: 0,
             maxConcurrentDownloads: DEFAULT_MAX_CONCURRENT_DOWNLOADS,
+            notificationsEnabled: true,
             schemaVersion: SCHEMA_VERSION,
         },
     });

@@ -80,6 +80,7 @@ export function DownloadItem({
     const canExpand = item.status !== 'resolving-metadata' && item.status !== 'queued';
 
     // ── Fetch files when expanded (Task 6.2) ─────────────────────────────────
+    // Busca inicial ao expandir
     useEffect(() => {
         if (!expanded) return;
 
@@ -103,6 +104,31 @@ export function DownloadItem({
 
         return () => { cancelled = true; };
     }, [expanded, item.infoHash]);
+
+    // ── Atualizar progresso dos arquivos periodicamente enquanto baixando ─────
+    const isActive = item.status === 'downloading' || item.status === 'resolving-metadata';
+
+    useEffect(() => {
+        if (!expanded || !isActive || files.length === 0) return;
+
+        let cancelled = false;
+
+        const interval = setInterval(() => {
+            window.meshy.getFiles(item.infoHash).then((response) => {
+                if (cancelled) return;
+                if (response.success) {
+                    setFiles(response.data);
+                }
+            }).catch(() => {
+                // Silenciar erros de polling — não sobrescrever o estado
+            });
+        }, 1500);
+
+        return () => {
+            cancelled = true;
+            clearInterval(interval);
+        };
+    }, [expanded, isActive, item.infoHash, files.length]);
 
     // ── Handle selection change (Task 6.3) ───────────────────────────────────
     const handleSelectionChange = useCallback(

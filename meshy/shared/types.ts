@@ -74,6 +74,7 @@ export interface AppSettings {
     downloadSpeedLimit: number; // KB/s, 0 = sem limite
     uploadSpeedLimit: number;   // KB/s, 0 = sem limite
     maxConcurrentDownloads: number; // máx downloads simultâneos (1–10, padrão 3)
+    notificationsEnabled: boolean; // notificações nativas do OS (padrão: true)
 }
 
 // ─── IPCResponse ──────────────────────────────────────────────────────────────

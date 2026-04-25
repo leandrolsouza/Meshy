@@ -56,7 +56,7 @@ describe('SettingsManager.get()', () => {
         const manager = makeManager();
         const settings = manager.get();
         expect(Object.keys(settings).sort()).toEqual(
-            ['destinationFolder', 'downloadSpeedLimit', 'maxConcurrentDownloads', 'uploadSpeedLimit'].sort()
+            ['destinationFolder', 'downloadSpeedLimit', 'maxConcurrentDownloads', 'notificationsEnabled', 'uploadSpeedLimit'].sort()
         );
     });
 });

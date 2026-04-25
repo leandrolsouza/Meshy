@@ -63,11 +63,11 @@
     background-color: var(--color-hover);
 }
 
-/* ─── File Label (checkbox + name + size) ─────────────────────────────────── */
+/* ─── File Label (checkbox + info) ────────────────────────────────────────── */
 
 .fileLabel {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: var(--space-sm);
     cursor: pointer;
     font-size: var(--font-size-sm);
@@ -77,11 +77,28 @@
 .checkbox {
     flex-shrink: 0;
     cursor: pointer;
+    margin-top: 2px;
 }
 
 .checkbox:disabled {
     cursor: not-allowed;
     opacity: 0.5;
+}
+
+/* ─── File Info (name row + progress bar) ─────────────────────────────────── */
+
+.fileInfo {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.fileNameRow {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
 }
 
 .fileName {
@@ -95,4 +112,26 @@
     flex-shrink: 0;
     color: var(--color-text-secondary);
     font-size: var(--font-size-xs);
+    white-space: nowrap;
+}
+
+/* ─── Per-file Progress Bar ───────────────────────────────────────────────── */
+
+.fileProgressBar {
+    width: 100%;
+    height: 3px;
+    background-color: var(--color-border-light);
+    border-radius: 1.5px;
+    overflow: hidden;
+}
+
+.fileProgressFill {
+    height: 100%;
+    border-radius: 1.5px;
+    background-color: var(--color-primary);
+    transition: width var(--transition-normal);
+}
+
+.fileProgressComplete {
+    background-color: var(--color-success);
 }

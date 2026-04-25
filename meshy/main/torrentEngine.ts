@@ -138,21 +138,66 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
                 return reject(new Error('Formato inválido. Esperado: magnet:?xt=urn:btih:<40 hex chars>'));
             }
 
-            this.client.add(magnetUri, { path: this.downloadPath }, (torrent) => {
+            // Para magnet links, precisamos escutar o evento 'metadata' ANTES
+            // de chamar client.add(), porque no WebTorrent 2.x o callback do
+            // client.add() pode disparar DEPOIS que os metadados já foram
+            // resolvidos, fazendo com que o torrent.once('metadata') nunca
+            // dispare e o status fique preso em 'resolving-metadata'.
+            //
+            // Estratégia: usamos o evento 'torrent' do client para capturar
+            // o torrent assim que ele é adicionado internamente, registramos
+            // o listener de 'metadata' imediatamente, e resolvemos a Promise
+            // com status 'resolving-metadata'. Se os metadados já estiverem
+            // disponíveis (torrent.length > 0), transicionamos direto.
+
+            let resolved = false;
+
+            const onTorrent = (torrent: Torrent): void => {
+                // Verificar se este é o torrent que acabamos de adicionar
+                const expectedHash = magnetUri.match(/xt=urn:btih:([a-fA-F0-9]{40})/i);
+                if (expectedHash && torrent.infoHash !== expectedHash[1].toLowerCase()) {
+                    return; // Não é o nosso torrent
+                }
+
+                this.client.removeListener('torrent', onTorrent);
+
                 this.statusMap.set(torrent.infoHash, 'resolving-metadata');
                 this._attachTorrentListeners(torrent);
 
-                // Once metadata is ready the torrent name/length become available
+                // Se os metadados já estão disponíveis (torrent.length > 0),
+                // transicionar direto para 'downloading'
+                if (torrent.length > 0) {
+                    this.statusMap.set(torrent.infoHash, 'downloading');
+                    this._initSelectionMap(torrent);
+                    if (!resolved) {
+                        resolved = true;
+                        resolve(torrentToInfo(torrent, 'downloading'));
+                    }
+                    return;
+                }
+
+                // Metadados ainda não disponíveis — escutar o evento
                 torrent.once('metadata', () => {
                     this.statusMap.set(torrent.infoHash, 'downloading');
                     this._initSelectionMap(torrent);
                 });
 
-                resolve(torrentToInfo(torrent, 'resolving-metadata'));
-            });
+                if (!resolved) {
+                    resolved = true;
+                    resolve(torrentToInfo(torrent, 'resolving-metadata'));
+                }
+            };
+
+            this.client.on('torrent', onTorrent);
+
+            this.client.add(magnetUri, { path: this.downloadPath });
 
             this.client.once('error', (err) => {
-                reject(err instanceof Error ? err : new Error(String(err)));
+                this.client.removeListener('torrent', onTorrent);
+                if (!resolved) {
+                    resolved = true;
+                    reject(err instanceof Error ? err : new Error(String(err)));
+                }
             });
         });
     }

@@ -35,3 +35,23 @@
     justify-content: flex-start;
     gap: var(--space-sm);
 }
+
+/* ─── Checkbox / Toggle ───────────────────────────────────────────────────── */
+
+.checkboxLabel {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    color: var(--color-text);
+    font-size: 13px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.checkbox {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--color-accent);
+    cursor: pointer;
+    flex-shrink: 0;
+}

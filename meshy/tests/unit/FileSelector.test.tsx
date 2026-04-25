@@ -171,8 +171,14 @@ describe('Feature: torrent-file-selection, Property 5: Tamanho total reflete sel
                     .filter((f) => f.selected)
                     .reduce((sum, f) => sum + f.length, 0);
 
+                const expectedDownloaded = files
+                    .filter((f) => f.selected)
+                    .reduce((sum, f) => sum + f.downloaded, 0);
+
                 const totalSizeElement = screen.getByTestId('total-selected-size');
-                expect(totalSizeElement.textContent).toBe(formatBytes(expectedTotal));
+                expect(totalSizeElement.textContent).toBe(
+                    `${formatBytes(expectedDownloaded)} / ${formatBytes(expectedTotal)}`,
+                );
 
                 unmount();
             }),

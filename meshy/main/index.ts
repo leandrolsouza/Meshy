@@ -3,6 +3,7 @@ import { join } from 'path'
 import { createSettingsManager } from './settingsManager'
 import { createTorrentEngine } from './torrentEngine'
 import { createDownloadManager } from './downloadManager'
+import { createNotificationManager } from './notificationManager'
 import { registerIpcHandlers, attachWindowEvents } from './ipcHandler'
 import type { DownloadManager } from './downloadManager'
 
@@ -33,6 +34,9 @@ app.whenReady().then(async () => {
 
     // Restore previous session
     await downloadManager.restoreSession()
+
+    // ── Inicializar notificações nativas do OS ────────────────────────────────
+    createNotificationManager(downloadManager, settingsManager)
 
     // ── Register before-quit handler to persist session ────────────────────────
     // Requirements: 7.1 — serialize all DownloadItems to PersistedDownloadItem

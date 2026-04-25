@@ -84,6 +84,7 @@ function makeMockSettingsManager(): SettingsManager {
         downloadSpeedLimit: 0,
         uploadSpeedLimit: 0,
         maxConcurrentDownloads: 3,
+        notificationsEnabled: true,
     };
     return {
         get: jest.fn().mockReturnValue(settings),
@@ -432,6 +433,7 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                     downloadSpeedLimit: 0,
                     uploadSpeedLimit: 0,
                     maxConcurrentDownloads: 3,
+                    notificationsEnabled: true,
                 });
             }
         });
@@ -442,6 +444,7 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                 downloadSpeedLimit: 1024,
                 uploadSpeedLimit: 0,
                 maxConcurrentDownloads: 3,
+                notificationsEnabled: true,
             };
             (settingsManager.get as jest.Mock).mockReturnValue(updatedSettings);
 
@@ -461,6 +464,7 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                 downloadSpeedLimit: 0,
                 uploadSpeedLimit: 512,
                 maxConcurrentDownloads: 3,
+                notificationsEnabled: true,
             };
             (settingsManager.get as jest.Mock).mockReturnValue(updatedSettings);
 
@@ -480,6 +484,7 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                 downloadSpeedLimit: 0,
                 uploadSpeedLimit: 0,
                 maxConcurrentDownloads: 3,
+                notificationsEnabled: true,
             };
             (settingsManager.get as jest.Mock).mockReturnValue(updatedSettings);
 

@@ -111,6 +111,13 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             const existing = this.items.get(info.infoHash);
             if (!existing) return;
 
+            // Ignorar eventos de progresso para downloads já concluídos.
+            // O WebTorrent continua emitindo 'download'/'upload' mesmo após
+            // marcarmos como completed (porque o torrent inteiro pode não ter
+            // terminado). Sem este guard, a detecção de conclusão por arquivos
+            // selecionados dispara repetidamente.
+            if (existing.status === 'completed') return;
+
             // Detect metadata resolution: resolving-metadata → downloading
             // When this transition happens, clear the 60s timeout and update
             // name + totalSize from the now-resolved metadata.
@@ -143,6 +150,44 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                 }
             } catch {
                 // If getFiles fails (e.g., torrent not in engine yet), use engine values
+            }
+
+            // Detectar conclusão baseada nos arquivos selecionados:
+            // O WebTorrent só emite 'done' quando TODOS os arquivos do torrent
+            // são baixados. Quando o usuário desmarca arquivos, o 'done' nunca
+            // dispara. Verificamos manualmente se todos os selecionados já foram
+            // baixados (progress >= 1) e o torrent está ativo.
+            const selectedFilesComplete =
+                totalSize > 0 &&
+                downloadedSize >= totalSize &&
+                info.status === 'downloading';
+
+            if (selectedFilesComplete) {
+                const completedAt = Date.now();
+                const elapsedMs = completedAt - existing.addedAt;
+                const completed: DownloadItem = {
+                    ...existing,
+                    name: wasResolvingMetadata && isNowDownloading ? info.name : existing.name,
+                    totalSize,
+                    downloadedSize,
+                    progress: 1,
+                    downloadSpeed: 0,
+                    uploadSpeed: 0,
+                    numPeers: info.numPeers,
+                    numSeeders: info.numSeeders,
+                    timeRemaining: 0,
+                    status: 'completed',
+                    selectedFileCount,
+                    totalFileCount,
+                    completedAt,
+                    elapsedMs,
+                };
+                this.items.set(info.infoHash, completed);
+                this.emit('update', completed);
+
+                // Liberar slot para a fila
+                this._processQueue();
+                return;
             }
 
             const updated: DownloadItem = {
@@ -303,17 +348,22 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
         const addedAt = Date.now();
 
         if (hasSlot) {
-            // Magnet links start with resolving-metadata status
+            // Se o engine já resolveu os metadados (status 'downloading'),
+            // usar esse status diretamente. Caso contrário, iniciar como
+            // 'resolving-metadata' com timeout de 60s.
+            const initialStatus = info.status === 'downloading' ? 'downloading' : 'resolving-metadata';
             const item: DownloadItem = {
                 ...torrentInfoToDownloadItem(info, destinationFolder, addedAt),
-                status: 'resolving-metadata',
+                status: initialStatus,
             };
 
             this.items.set(item.infoHash, item);
             this.emit('update', item);
 
-            // Start 60s metadata-resolution timeout.
-            this._startMetadataTimer(item.infoHash);
+            // Só iniciar o timer de metadados se ainda estiver resolvendo
+            if (initialStatus === 'resolving-metadata') {
+                this._startMetadataTimer(item.infoHash);
+            }
 
             return item;
         }

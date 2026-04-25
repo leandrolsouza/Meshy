@@ -240,6 +240,11 @@ export function registerIpcHandlers(
                 return fail('Valor inválido: maxConcurrentDownloads deve ser um inteiro entre 1 e 10');
             }
 
+            // Validate notificationsEnabled if provided
+            if (partial.notificationsEnabled !== undefined && typeof partial.notificationsEnabled !== 'boolean') {
+                return fail('Valor inválido: notificationsEnabled deve ser um booleano');
+            }
+
             settingsManager.set(partial);
 
             // Notificar o downloadManager sobre a mudança no limite de downloads simultâneos
