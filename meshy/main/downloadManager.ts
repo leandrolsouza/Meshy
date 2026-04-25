@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { existsSync } from 'fs';
+import { existsSync, accessSync, constants as fsConstants } from 'fs';
 import type { TorrentEngine, TorrentInfo } from './torrentEngine';
 import type { SettingsManager } from './settingsManager';
 import type { DownloadItem, PersistedDownloadItem, TorrentStatus } from '../shared/types';
@@ -57,6 +57,23 @@ function torrentInfoToDownloadItem(
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const METADATA_TIMEOUT_MS = 60_000;
+
+// ─── Folder validation ────────────────────────────────────────────────────────
+
+/**
+ * Validates that the given folder path exists and is writable.
+ * Throws an Error with a descriptive message if validation fails.
+ */
+function validateDestinationFolder(folderPath: string): void {
+    if (!existsSync(folderPath)) {
+        throw new Error('Pasta inválida ou sem permissão de escrita');
+    }
+    try {
+        accessSync(folderPath, fsConstants.W_OK);
+    } catch {
+        throw new Error('Pasta inválida ou sem permissão de escrita');
+    }
+}
 
 // ─── Implementation ───────────────────────────────────────────────────────────
 
@@ -146,6 +163,9 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
     // ── addTorrentFile ──────────────────────────────────────────────────────────
 
     async addTorrentFile(filePath: string): Promise<DownloadItem> {
+        const destinationFolder = this.settings.get().destinationFolder;
+        validateDestinationFolder(destinationFolder);
+
         const info = await this.engine.addTorrentFile(filePath);
 
         // Duplicate detection: check if infoHash already exists
@@ -154,7 +174,6 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             throw new Error('Torrent já existe na lista');
         }
 
-        const destinationFolder = this.settings.get().destinationFolder;
         const addedAt = Date.now();
         const item = torrentInfoToDownloadItem(info, destinationFolder, addedAt);
 
@@ -167,6 +186,10 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
     // ── addMagnetLink ───────────────────────────────────────────────────────────
 
     async addMagnetLink(magnetUri: string): Promise<DownloadItem> {
+        // Validate destination folder before starting the transfer
+        const destinationFolder = this.settings.get().destinationFolder;
+        validateDestinationFolder(destinationFolder);
+
         // Extract infoHash from magnet URI for early duplicate detection
         const hashMatch = magnetUri.match(/xt=urn:btih:([a-fA-F0-9]{40})/i);
         if (hashMatch) {
@@ -184,7 +207,6 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             throw new Error('Torrent já existe na lista');
         }
 
-        const destinationFolder = this.settings.get().destinationFolder;
         const addedAt = Date.now();
 
         // Magnet links start with resolving-metadata status

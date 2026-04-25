@@ -10,3 +10,16 @@ jest.mock('electron-log', () => ({
         debug: jest.fn(),
     },
 }));
+
+jest.mock('electron-store', () => {
+    return {
+        __esModule: true,
+        default: jest.fn().mockImplementation(() => {
+            const data = new Map<string, unknown>();
+            return {
+                get: jest.fn((key: string) => data.get(key)),
+                set: jest.fn((key: string, value: unknown) => data.set(key, value)),
+            };
+        }),
+    };
+});

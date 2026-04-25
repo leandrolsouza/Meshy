@@ -245,3 +245,152 @@ describe('TorrentEngine speed limits — applied synchronously (Requirement 6.5)
         expect(mockClient.throttleUpload).not.toHaveBeenCalled();
     });
 });
+
+
+// ─── Property-Based Tests ─────────────────────────────────────────────────────
+
+import fc from 'fast-check';
+
+// Feature: meshy-torrent-client, Property 13: Aplicação de limite de velocidade
+// **Validates: Requirements 6.2, 6.3, 6.4**
+describe('Property 13: Aplicação de limite de velocidade', () => {
+    it('setDownloadSpeedLimit(n) sets throttleDownload to n * 1024 for any non-negative integer n', () => {
+        fc.assert(
+            fc.property(fc.nat(), (n) => {
+                const mockClient = makeMockClient();
+                const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+
+                engine.setDownloadSpeedLimit(n);
+
+                const expectedBytes = n * 1024;
+                expect(mockClient.throttleDownload).toHaveBeenCalledWith(expectedBytes);
+
+                // When n = 0, the value passed should be 0 (no limit)
+                if (n === 0) {
+                    expect(mockClient.throttleDownload).toHaveBeenCalledWith(0);
+                }
+            }),
+            { numRuns: 100 },
+        );
+    });
+
+    it('setUploadSpeedLimit(n) sets throttleUpload to n * 1024 for any non-negative integer n', () => {
+        fc.assert(
+            fc.property(fc.nat(), (n) => {
+                const mockClient = makeMockClient();
+                const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+
+                engine.setUploadSpeedLimit(n);
+
+                const expectedBytes = n * 1024;
+                expect(mockClient.throttleUpload).toHaveBeenCalledWith(expectedBytes);
+
+                // When n = 0, the value passed should be 0 (no limit)
+                if (n === 0) {
+                    expect(mockClient.throttleUpload).toHaveBeenCalledWith(0);
+                }
+            }),
+            { numRuns: 100 },
+        );
+    });
+
+    it('both download and upload limits are correctly applied for the same arbitrary value', () => {
+        fc.assert(
+            fc.property(fc.nat(), (n) => {
+                const mockClient = makeMockClient();
+                const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+
+                engine.setDownloadSpeedLimit(n);
+                engine.setUploadSpeedLimit(n);
+
+                const expectedBytes = n * 1024;
+                expect(mockClient.throttleDownload).toHaveBeenCalledWith(expectedBytes);
+                expect(mockClient.throttleUpload).toHaveBeenCalledWith(expectedBytes);
+            }),
+            { numRuns: 100 },
+        );
+    });
+});
+
+// Feature: meshy-torrent-client, Property 6: Payload de progresso contém todos os campos obrigatórios
+// **Validates: Requirements 3.1, 3.2, 3.5**
+describe('Property 6: Payload de progresso contém todos os campos obrigatórios', () => {
+    /**
+     * Arbitrary that generates a single fake torrent with random but realistic field values.
+     * Some fields may be undefined to exercise the `?? 0` / `?? Infinity` fallback in torrentToInfo().
+     */
+    const fakeTorrentArb = fc.record({
+        infoHash: fc.hexaString({ minLength: 40, maxLength: 40 }),
+        name: fc.oneof(fc.string({ minLength: 1 }), fc.constant(undefined)),
+        length: fc.oneof(fc.nat(), fc.constant(undefined)),
+        progress: fc.oneof(fc.double({ min: 0, max: 1, noNaN: true }), fc.constant(undefined)),
+        downloadSpeed: fc.oneof(fc.nat(), fc.constant(undefined)),
+        uploadSpeed: fc.oneof(fc.nat(), fc.constant(undefined)),
+        numPeers: fc.oneof(fc.nat(), fc.constant(undefined)),
+        timeRemaining: fc.oneof(fc.nat(), fc.constant(Infinity), fc.constant(undefined)),
+        downloaded: fc.oneof(fc.nat(), fc.constant(undefined)),
+    });
+
+    const fakeTorrentArrayArb = fc.array(fakeTorrentArb, { minLength: 1, maxLength: 10 });
+
+    it('getAll() returns items where every item has all mandatory progress fields with correct constraints', () => {
+        fc.assert(
+            fc.property(fakeTorrentArrayArb, (fakeTorrents) => {
+                const mockClient = makeMockClient();
+                const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+
+                // Inject fake torrents into the mock client
+                for (const ft of fakeTorrents) {
+                    const torrent = makeFakeTorrent(ft.infoHash, {
+                        name: ft.name as unknown as string,
+                        length: ft.length as unknown as number,
+                        progress: ft.progress as unknown as number,
+                        downloadSpeed: ft.downloadSpeed as unknown as number,
+                        uploadSpeed: ft.uploadSpeed as unknown as number,
+                        numPeers: ft.numPeers as unknown as number,
+                        timeRemaining: ft.timeRemaining as unknown as number,
+                        downloaded: ft.downloaded as unknown as number,
+                    });
+                    mockClient.torrents.push(torrent);
+                }
+
+                const items = engine.getAll();
+
+                // Must return the same number of items as torrents in the client
+                expect(items).toHaveLength(fakeTorrents.length);
+
+                for (const item of items) {
+                    // progress: number between 0 and 1
+                    expect(typeof item.progress).toBe('number');
+                    expect(item.progress).toBeGreaterThanOrEqual(0);
+                    expect(item.progress).toBeLessThanOrEqual(1);
+
+                    // downloadSpeed: number >= 0
+                    expect(typeof item.downloadSpeed).toBe('number');
+                    expect(item.downloadSpeed).toBeGreaterThanOrEqual(0);
+
+                    // uploadSpeed: number >= 0
+                    expect(typeof item.uploadSpeed).toBe('number');
+                    expect(item.uploadSpeed).toBeGreaterThanOrEqual(0);
+
+                    // timeRemaining: number >= 0 (Infinity is >= 0 in JS)
+                    expect(typeof item.timeRemaining).toBe('number');
+                    expect(item.timeRemaining).toBeGreaterThanOrEqual(0);
+
+                    // numPeers: integer >= 0
+                    expect(typeof item.numPeers).toBe('number');
+                    expect(Number.isFinite(item.numPeers)).toBe(true);
+                    expect(item.numPeers).toBeGreaterThanOrEqual(0);
+                    expect(Number.isInteger(item.numPeers)).toBe(true);
+
+                    // numSeeders: integer >= 0
+                    expect(typeof item.numSeeders).toBe('number');
+                    expect(Number.isFinite(item.numSeeders)).toBe(true);
+                    expect(item.numSeeders).toBeGreaterThanOrEqual(0);
+                    expect(Number.isInteger(item.numSeeders)).toBe(true);
+                }
+            }),
+            { numRuns: 100 },
+        );
+    });
+});
