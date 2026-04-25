@@ -80,6 +80,7 @@ function makeMockSettings(folder = '/downloads'): SettingsManager {
             destinationFolder: folder,
             downloadSpeedLimit: 0,
             uploadSpeedLimit: 0,
+            maxConcurrentDownloads: 3,
         }),
         set: jest.fn(),
         getDefaultDownloadFolder: jest.fn().mockReturnValue(folder),

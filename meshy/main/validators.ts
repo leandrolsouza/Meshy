@@ -5,4 +5,8 @@ export {
     isValidTorrentFile,
     hasTorrentMagicBytes,
     isValidSpeedLimit,
+    isValidMaxConcurrentDownloads,
+    MIN_CONCURRENT_DOWNLOADS,
+    MAX_CONCURRENT_DOWNLOADS,
+    DEFAULT_MAX_CONCURRENT_DOWNLOADS,
 } from '../shared/validators';

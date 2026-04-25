@@ -42,3 +42,27 @@ export function hasTorrentMagicBytes(buffer: Buffer): boolean {
 export function isValidSpeedLimit(value: unknown): boolean {
     return typeof value === 'number' && Number.isInteger(value) && value >= 0;
 }
+
+// ─── Max concurrent downloads ─────────────────────────────────────────────────
+
+/** Limite mínimo de downloads simultâneos */
+export const MIN_CONCURRENT_DOWNLOADS = 1;
+
+/** Limite máximo de downloads simultâneos */
+export const MAX_CONCURRENT_DOWNLOADS = 10;
+
+/** Valor padrão de downloads simultâneos */
+export const DEFAULT_MAX_CONCURRENT_DOWNLOADS = 3;
+
+/**
+ * Valida se um valor é um limite de downloads simultâneos válido.
+ * Deve ser um inteiro entre MIN_CONCURRENT_DOWNLOADS e MAX_CONCURRENT_DOWNLOADS (inclusive).
+ */
+export function isValidMaxConcurrentDownloads(value: unknown): boolean {
+    return (
+        typeof value === 'number' &&
+        Number.isInteger(value) &&
+        value >= MIN_CONCURRENT_DOWNLOADS &&
+        value <= MAX_CONCURRENT_DOWNLOADS
+    );
+}

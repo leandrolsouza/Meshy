@@ -1,5 +1,6 @@
 import ElectronStoreDefault from 'electron-store';
 import type { AppSettings } from '../shared/types';
+import { DEFAULT_MAX_CONCURRENT_DOWNLOADS } from '../shared/validators';
 
 export type { AppSettings } from '../shared/types';
 
@@ -9,6 +10,7 @@ interface PersistedSettings {
     destinationFolder: string;
     downloadSpeedLimit: number;
     uploadSpeedLimit: number;
+    maxConcurrentDownloads: number;
     schemaVersion: number; // para migrações futuras
 }
 
@@ -96,6 +98,8 @@ export function createSettingsManager(options: CreateSettingsManagerOptions = {}
                 destinationFolder: store.get('destinationFolder'),
                 downloadSpeedLimit: store.get('downloadSpeedLimit') ?? 0,
                 uploadSpeedLimit: store.get('uploadSpeedLimit') ?? 0,
+                maxConcurrentDownloads:
+                    store.get('maxConcurrentDownloads') ?? DEFAULT_MAX_CONCURRENT_DOWNLOADS,
             };
         },
 
@@ -108,6 +112,9 @@ export function createSettingsManager(options: CreateSettingsManagerOptions = {}
             }
             if (partial.uploadSpeedLimit !== undefined) {
                 store.set('uploadSpeedLimit', partial.uploadSpeedLimit);
+            }
+            if (partial.maxConcurrentDownloads !== undefined) {
+                store.set('maxConcurrentDownloads', partial.maxConcurrentDownloads);
             }
         },
 
@@ -130,6 +137,7 @@ function createElectronStore(): SettingsStore {
             destinationFolder: '',
             downloadSpeedLimit: 0,
             uploadSpeedLimit: 0,
+            maxConcurrentDownloads: DEFAULT_MAX_CONCURRENT_DOWNLOADS,
             schemaVersion: SCHEMA_VERSION,
         },
     });

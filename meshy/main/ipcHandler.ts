@@ -3,7 +3,7 @@ import type { DownloadManager } from './downloadManager';
 import type { SettingsManager } from './settingsManager';
 import type { TorrentEngine } from './torrentEngine';
 import type { DownloadItem, AppSettings, IPCResponse, TorrentFileInfo } from '../shared/types';
-import { isValidSpeedLimit } from './validators';
+import { isValidSpeedLimit, isValidMaxConcurrentDownloads } from './validators';
 import { logger } from './logger';
 
 export type { IPCResponse } from '../shared/types';
@@ -235,7 +235,18 @@ export function registerIpcHandlers(
                 return fail('Parâmetros inválidos: destinationFolder deve ser uma string');
             }
 
+            // Validate maxConcurrentDownloads if provided
+            if (partial.maxConcurrentDownloads !== undefined && !isValidMaxConcurrentDownloads(partial.maxConcurrentDownloads)) {
+                return fail('Valor inválido: maxConcurrentDownloads deve ser um inteiro entre 1 e 10');
+            }
+
             settingsManager.set(partial);
+
+            // Notificar o downloadManager sobre a mudança no limite de downloads simultâneos
+            if (partial.maxConcurrentDownloads !== undefined) {
+                downloadManager.setMaxConcurrentDownloads(partial.maxConcurrentDownloads);
+            }
+
             const updated = settingsManager.get();
             return ok(updated);
         } catch (err) {

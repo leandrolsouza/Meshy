@@ -73,6 +73,7 @@ function makeMockDownloadManager(): DownloadManager {
         getAll: jest.fn().mockReturnValue([item]),
         restoreSession: jest.fn().mockResolvedValue(undefined),
         persistSession: jest.fn(),
+        setMaxConcurrentDownloads: jest.fn(),
         on: jest.fn(),
     } as unknown as DownloadManager;
 }
@@ -82,6 +83,7 @@ function makeMockSettingsManager(): SettingsManager {
         destinationFolder: '/downloads',
         downloadSpeedLimit: 0,
         uploadSpeedLimit: 0,
+        maxConcurrentDownloads: 3,
     };
     return {
         get: jest.fn().mockReturnValue(settings),
@@ -116,8 +118,8 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
     // ── Smoke tests: all channels registered ─────────────────────────────────
 
     describe('Smoke: all 9 IPC channels are registered and respond', () => {
-        it('registers exactly 9 IPC channels', () => {
-            expect(mockIpcMain.handle).toHaveBeenCalledTimes(9);
+        it('registers exactly 11 IPC channels', () => {
+            expect(mockIpcMain.handle).toHaveBeenCalledTimes(11);
         });
 
         it.each(EXPECTED_CHANNELS)('channel "%s" is registered', (channel) => {
@@ -429,6 +431,7 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                     destinationFolder: '/downloads',
                     downloadSpeedLimit: 0,
                     uploadSpeedLimit: 0,
+                    maxConcurrentDownloads: 3,
                 });
             }
         });
@@ -438,6 +441,7 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                 destinationFolder: '/downloads',
                 downloadSpeedLimit: 1024,
                 uploadSpeedLimit: 0,
+                maxConcurrentDownloads: 3,
             };
             (settingsManager.get as jest.Mock).mockReturnValue(updatedSettings);
 
@@ -456,6 +460,7 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                 destinationFolder: '/downloads',
                 downloadSpeedLimit: 0,
                 uploadSpeedLimit: 512,
+                maxConcurrentDownloads: 3,
             };
             (settingsManager.get as jest.Mock).mockReturnValue(updatedSettings);
 
@@ -474,6 +479,7 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                 destinationFolder: '/new/folder',
                 downloadSpeedLimit: 0,
                 uploadSpeedLimit: 0,
+                maxConcurrentDownloads: 3,
             };
             (settingsManager.get as jest.Mock).mockReturnValue(updatedSettings);
 

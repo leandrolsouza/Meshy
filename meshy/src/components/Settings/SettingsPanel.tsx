@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSettings } from '../../hooks/useSettings';
-import { isValidSpeedLimit } from '../../../shared/validators';
+import { isValidSpeedLimit, isValidMaxConcurrentDownloads, MIN_CONCURRENT_DOWNLOADS, MAX_CONCURRENT_DOWNLOADS } from '../../../shared/validators';
 import styles from './SettingsPanel.module.css';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -24,8 +24,10 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
 
     const [downloadLimit, setDownloadLimit] = useState('');
     const [uploadLimit, setUploadLimit] = useState('');
+    const [maxConcurrent, setMaxConcurrent] = useState('');
     const [downloadLimitError, setDownloadLimitError] = useState<string | null>(null);
     const [uploadLimitError, setUploadLimitError] = useState<string | null>(null);
+    const [maxConcurrentError, setMaxConcurrentError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
 
     // Sync local form state when settings load from the main process.
@@ -34,6 +36,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
         if (settings) {
             setDownloadLimit(String(settings.downloadSpeedLimit)); // eslint-disable-line react-hooks/set-state-in-effect
             setUploadLimit(String(settings.uploadSpeedLimit));
+            setMaxConcurrent(String(settings.maxConcurrentDownloads));
         }
     }, [settings]);
 
@@ -49,6 +52,11 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
     const handleUploadLimitChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         setUploadLimit(e.target.value);
         setUploadLimitError(null);
+    }, []);
+
+    const handleMaxConcurrentChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        setMaxConcurrent(e.target.value);
+        setMaxConcurrentError(null);
     }, []);
 
     const handleSave = useCallback(
@@ -67,6 +75,13 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
                 hasError = true;
             }
 
+            if (!isValidMaxConcurrentDownloads(Number(maxConcurrent))) {
+                setMaxConcurrentError(
+                    `Valor inválido: deve ser um inteiro entre ${MIN_CONCURRENT_DOWNLOADS} e ${MAX_CONCURRENT_DOWNLOADS}.`,
+                );
+                hasError = true;
+            }
+
             if (hasError) return;
 
             setIsSaving(true);
@@ -74,18 +89,20 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
                 await updateSettings({
                     downloadSpeedLimit: Number(downloadLimit),
                     uploadSpeedLimit: Number(uploadLimit),
+                    maxConcurrentDownloads: Number(maxConcurrent),
                 });
             } finally {
                 setIsSaving(false);
             }
         },
-        [downloadLimit, uploadLimit, updateSettings],
+        [downloadLimit, uploadLimit, maxConcurrent, updateSettings],
     );
 
     if (!isOpen) return null;
 
     const dlInputClass = downloadLimitError ? 'input input--error' : 'input';
     const ulInputClass = uploadLimitError ? 'input input--error' : 'input';
+    const mcInputClass = maxConcurrentError ? 'input input--error' : 'input';
 
     // ── Form content shared between inline and modal rendering ────────────
 
@@ -143,7 +160,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
                     </div>
 
                     {/* Upload speed limit */}
-                    <div className={styles.fieldGroupLast}>
+                    <div className={styles.fieldGroup}>
                         <label htmlFor="upload-speed-limit" className="label">
                             Limite de upload (KB/s, 0 = sem limite)
                         </label>
@@ -161,6 +178,30 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
                         {uploadLimitError && (
                             <p id="upload-limit-error" role="alert" className="modal__error">
                                 {uploadLimitError}
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Max concurrent downloads */}
+                    <div className={styles.fieldGroupLast}>
+                        <label htmlFor="max-concurrent-downloads" className="label">
+                            Downloads simultâneos (máx)
+                        </label>
+                        <input
+                            id="max-concurrent-downloads"
+                            type="number"
+                            min={MIN_CONCURRENT_DOWNLOADS}
+                            max={MAX_CONCURRENT_DOWNLOADS}
+                            step={1}
+                            className={mcInputClass}
+                            value={maxConcurrent}
+                            onChange={handleMaxConcurrentChange}
+                            aria-describedby={maxConcurrentError ? 'max-concurrent-error' : undefined}
+                            aria-invalid={maxConcurrentError !== null}
+                        />
+                        {maxConcurrentError && (
+                            <p id="max-concurrent-error" role="alert" className="modal__error">
+                                {maxConcurrentError}
                             </p>
                         )}
                     </div>

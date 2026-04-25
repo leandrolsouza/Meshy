@@ -56,7 +56,7 @@ describe('SettingsManager.get()', () => {
         const manager = makeManager();
         const settings = manager.get();
         expect(Object.keys(settings).sort()).toEqual(
-            ['destinationFolder', 'downloadSpeedLimit', 'uploadSpeedLimit'].sort()
+            ['destinationFolder', 'downloadSpeedLimit', 'maxConcurrentDownloads', 'uploadSpeedLimit'].sort()
         );
     });
 });
@@ -197,6 +197,8 @@ function makeMockEngine(infoHash: string): TorrentEngine & EventEmitter {
         setDownloadSpeedLimit: jest.fn(),
         setUploadSpeedLimit: jest.fn(),
         getAll: jest.fn().mockReturnValue([]),
+        getFiles: jest.fn().mockReturnValue([]),
+        setFileSelection: jest.fn().mockReturnValue([]),
     });
 
     return engine;

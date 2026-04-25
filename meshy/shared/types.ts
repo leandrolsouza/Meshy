@@ -73,6 +73,7 @@ export interface AppSettings {
     destinationFolder: string;
     downloadSpeedLimit: number; // KB/s, 0 = sem limite
     uploadSpeedLimit: number;   // KB/s, 0 = sem limite
+    maxConcurrentDownloads: number; // máx downloads simultâneos (1–10, padrão 3)
 }
 
 // ─── IPCResponse ──────────────────────────────────────────────────────────────

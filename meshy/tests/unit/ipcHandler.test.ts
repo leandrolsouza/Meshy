@@ -49,6 +49,7 @@ function makeMockDownloadManager(): DownloadManager {
         getAll: jest.fn().mockReturnValue([]),
         restoreSession: jest.fn().mockResolvedValue(undefined),
         persistSession: jest.fn(),
+        setMaxConcurrentDownloads: jest.fn(),
         on: jest.fn(),
     } as unknown as DownloadManager;
 }
@@ -59,6 +60,7 @@ function makeMockSettingsManager(): SettingsManager {
             destinationFolder: '/downloads',
             downloadSpeedLimit: 0,
             uploadSpeedLimit: 0,
+            maxConcurrentDownloads: 3,
         } as AppSettings),
         set: jest.fn(),
         getDefaultDownloadFolder: jest.fn().mockReturnValue('/downloads'),
