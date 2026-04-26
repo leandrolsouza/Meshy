@@ -32,6 +32,7 @@ const { ipcMain: mockIpcMain } = require('electron') as {
 function makeMockDownloadManager(): DownloadManager {
     return {
         addTorrentFile: jest.fn(),
+        addTorrentBuffer: jest.fn(),
         addMagnetLink: jest.fn(),
         pause: jest.fn().mockResolvedValue(undefined),
         resume: jest.fn().mockResolvedValue(undefined),

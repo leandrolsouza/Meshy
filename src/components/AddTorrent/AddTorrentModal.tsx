@@ -6,12 +6,6 @@ import { FileSelector } from '../FileSelector/FileSelector';
 import { resolveErrorMessage } from '../../utils/resolveErrorMessage';
 import styles from './AddTorrentModal.module.css';
 
-// ─── Electron File augmentation ───────────────────────────────────────────────
-
-interface ElectronFile extends File {
-    path: string;
-}
-
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface AddTorrentModalProps {
@@ -84,67 +78,59 @@ export function AddTorrentModal({
     }, []);
 
     // ── Handle .torrent file selection (Task 7.1) ─────────────────────────
-    const handleTorrentFileSelect = useCallback(
-        async (e: React.ChangeEvent<HTMLInputElement>) => {
-            const file = e.target.files?.[0] as ElectronFile | undefined;
-            if (!file) return;
+    const handleTorrentFileSelect = useCallback(async () => {
+        // Usa o diálogo nativo do SO via IPC (sandbox: true impede File.path no renderer)
+        const dialogResponse = await window.meshy.selectTorrentFile();
+        if (!dialogResponse.success) {
+            // Usuário cancelou o diálogo — não exibir erro
+            return;
+        }
 
-            if (!file.name.toLowerCase().endsWith('.torrent')) {
-                setSubmitError(intl.formatMessage({ id: 'addTorrent.torrentFile.onlyTorrent' }));
-                return;
-            }
+        const filePath = dialogResponse.data;
 
-            const filePath = file.path;
-            if (!filePath) {
-                setSubmitError(intl.formatMessage({ id: 'addTorrent.torrentFile.noPath' }));
-                return;
-            }
+        setIsSubmitting(true);
+        setSubmitError(null);
 
-            setIsSubmitting(true);
-            setSubmitError(null);
-
-            try {
-                // Add the torrent to the engine
-                const addResponse = await window.meshy.addTorrentFile(filePath);
-                if (!addResponse.success) {
-                    setSubmitError(resolveErrorMessage(intl, addResponse.error));
-                    setIsSubmitting(false);
-                    return;
-                }
-
-                const { infoHash } = addResponse.data;
-
-                // Fetch file list from the engine
-                const filesResponse = await window.meshy.getFiles(infoHash);
-                if (!filesResponse.success) {
-                    // Torrent was added but we couldn't get files — close anyway
-                    handleClose();
-                    return;
-                }
-
-                const files = filesResponse.data;
-
-                if (files.length === 0) {
-                    // No metadata available yet (e.g., resolving-metadata) — close
-                    handleClose();
-                    return;
-                }
-
-                // Show file selector with all files pre-selected
-                const allIndices = files.map((f) => f.index);
-                setFileSelection({ infoHash, files, selectedIndices: allIndices });
-            } catch (err: unknown) {
-                setSubmitError(
-                    err instanceof Error
-                        ? err.message
-                        : intl.formatMessage({ id: 'addTorrent.errorGeneric' }),
-                );
-            } finally {
+        try {
+            // Add the torrent to the engine
+            const addResponse = await window.meshy.addTorrentFile(filePath);
+            if (!addResponse.success) {
+                setSubmitError(resolveErrorMessage(intl, addResponse.error));
                 setIsSubmitting(false);
+                return;
             }
-        },
-        [handleClose, intl],
-    );
+
+            const { infoHash } = addResponse.data;
+
+            // Fetch file list from the engine
+            const filesResponse = await window.meshy.getFiles(infoHash);
+            if (!filesResponse.success) {
+                // Torrent was added but we couldn't get files — close anyway
+                handleClose();
+                return;
+            }
+
+            const files = filesResponse.data;
+
+            if (files.length === 0) {
+                // No metadata available yet (e.g., resolving-metadata) — close
+                handleClose();
+                return;
+            }
+
+            // Show file selector with all files pre-selected
+            const allIndices = files.map((f) => f.index);
+            setFileSelection({ infoHash, files, selectedIndices: allIndices });
+        } catch (err: unknown) {
+            setSubmitError(
+                err instanceof Error
+                    ? err.message
+                    : intl.formatMessage({ id: 'addTorrent.errorGeneric' }),
+            );
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [handleClose, intl]);
 
     // ── Handle file selection change in FileSelector (Task 7.2) ───────────
     const handleFileSelectionChange = useCallback(
@@ -384,17 +370,14 @@ export function AddTorrentModal({
 
             <div className={styles.torrentFileSection}>
                 <span className={styles.separator}>{intl.formatMessage({ id: 'common.or' })}</span>
-                <label htmlFor="torrent-file-input" className={styles.torrentFileLabel}>
-                    {intl.formatMessage({ id: 'addTorrent.torrentFile.label' })}
-                </label>
-                <input
-                    id="torrent-file-input"
-                    type="file"
-                    accept=".torrent"
-                    onChange={handleTorrentFileSelect}
+                <button
+                    type="button"
+                    className={styles.torrentFileButton}
+                    onClick={handleTorrentFileSelect}
                     disabled={isSubmitting}
-                    className={styles.torrentFileInput}
-                />
+                >
+                    {intl.formatMessage({ id: 'addTorrent.torrentFile.label' })}
+                </button>
             </div>
 
             {submitError && (

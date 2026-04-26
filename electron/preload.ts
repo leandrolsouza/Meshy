@@ -17,6 +17,10 @@ const meshyAPI: MeshyAPI = {
         return ipcRenderer.invoke('torrent:add-file', { filePath });
     },
 
+    addTorrentFileBuffer(buffer: Uint8Array): Promise<IPCResponse<DownloadItem>> {
+        return ipcRenderer.invoke('torrent:add-file-buffer', { buffer });
+    },
+
     addMagnetLink(magnetUri: string): Promise<IPCResponse<DownloadItem>> {
         return ipcRenderer.invoke('torrent:add-magnet', { magnetUri });
     },
@@ -47,6 +51,10 @@ const meshyAPI: MeshyAPI = {
 
     selectFolder(): Promise<IPCResponse<string>> {
         return ipcRenderer.invoke('settings:select-folder');
+    },
+
+    selectTorrentFile(): Promise<IPCResponse<string>> {
+        return ipcRenderer.invoke('dialog:select-torrent-file');
     },
 
     // ── File Selection ──────────────────────────────────────────────────────────

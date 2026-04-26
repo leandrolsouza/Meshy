@@ -282,6 +282,55 @@ export function registerIpcHandlers(
         },
     );
 
+    // ── torrent:add-file-buffer ───────────────────────────────────────────────
+    // Adiciona um torrent a partir de um buffer (Uint8Array) enviado pelo renderer.
+    // Necessário para drag-and-drop com sandbox: true, onde File.path não está disponível.
+    trackedHandle(
+        'torrent:add-file-buffer',
+        async (_event, payload: unknown): Promise<IPCResponse<DownloadItem>> => {
+            try {
+                if (torrentEngine?.isRestarting()) {
+                    return fail(ErrorCodes.ENGINE_RESTARTING);
+                }
+
+                if (
+                    typeof payload !== 'object' ||
+                    payload === null ||
+                    !('buffer' in payload)
+                ) {
+                    return fail(ErrorCodes.INVALID_FILE_PATH);
+                }
+
+                const raw = (payload as Record<string, unknown>).buffer;
+
+                // O IPC do Electron serializa Uint8Array como objeto com dados numéricos.
+                // Aceitar Buffer, Uint8Array, ou ArrayBuffer.
+                let buffer: Buffer;
+                if (Buffer.isBuffer(raw)) {
+                    buffer = raw;
+                } else if (raw instanceof Uint8Array) {
+                    buffer = Buffer.from(raw);
+                } else if (raw instanceof ArrayBuffer) {
+                    buffer = Buffer.from(raw);
+                } else {
+                    return fail(ErrorCodes.INVALID_FILE_PATH);
+                }
+
+                if (buffer.length === 0) {
+                    return fail(ErrorCodes.INVALID_FILE_PATH);
+                }
+
+                const item = await withTimeout(
+                    downloadManager.addTorrentBuffer(buffer),
+                    'torrent:add-file-buffer',
+                );
+                return ok(item);
+            } catch (err) {
+                return failWithLog('torrent:add-file-buffer', err);
+            }
+        },
+    );
+
     // ── torrent:add-magnet ────────────────────────────────────────────────────
     trackedHandle(
         'torrent:add-magnet',
@@ -475,6 +524,29 @@ export function registerIpcHandlers(
             return failWithLog('settings:select-folder', err);
         }
     });
+
+    // ── dialog:select-torrent-file ────────────────────────────────────────────
+    // Abre o diálogo nativo do SO para selecionar um arquivo .torrent.
+    // Necessário porque sandbox: true impede o acesso a File.path no renderer.
+    trackedHandle(
+        'dialog:select-torrent-file',
+        async (_event): Promise<IPCResponse<string>> => {
+            try {
+                const result = await dialog.showOpenDialog({
+                    properties: ['openFile'],
+                    filters: [{ name: 'Torrent', extensions: ['torrent'] }],
+                });
+
+                if (result.canceled || result.filePaths.length === 0) {
+                    return fail(ErrorCodes.NO_FILE_SELECTED);
+                }
+
+                return ok(result.filePaths[0]);
+            } catch (err) {
+                return failWithLog('dialog:select-torrent-file', err);
+            }
+        },
+    );
 
     // ── torrent:get-files ─────────────────────────────────────────────────────
     trackedHandle(

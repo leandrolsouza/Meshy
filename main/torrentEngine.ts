@@ -53,6 +53,7 @@ export interface TorrentInfo {
 
 export interface TorrentEngine {
     addTorrentFile(filePath: string): Promise<TorrentInfo>;
+    addTorrentBuffer(buffer: Buffer): Promise<TorrentInfo>;
     addMagnetLink(magnetUri: string): Promise<TorrentInfo>;
     pause(infoHash: string): Promise<void>;
     resume(infoHash: string): Promise<void>;
@@ -173,6 +174,12 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
             throw new Error(`Não foi possível ler o arquivo: ${(err as Error).message}`);
         }
 
+        return this.addTorrentBuffer(buffer);
+    }
+
+    // ── addTorrentBuffer ────────────────────────────────────────────────────────
+
+    addTorrentBuffer(buffer: Buffer): Promise<TorrentInfo> {
         if (!hasTorrentMagicBytes(buffer)) {
             throw new Error(
                 'Arquivo inválido: não é um arquivo .torrent válido (magic bytes incorretos)',

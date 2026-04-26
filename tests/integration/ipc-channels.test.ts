@@ -40,6 +40,7 @@ const { ipcMain: mockIpcMain, dialog: mockDialog } = require('electron') as {
 
 const EXPECTED_CHANNELS = [
     'torrent:add-file',
+    'torrent:add-file-buffer',
     'torrent:add-magnet',
     'torrent:pause',
     'torrent:resume',
@@ -51,6 +52,7 @@ const EXPECTED_CHANNELS = [
     'settings:get',
     'settings:set',
     'settings:select-folder',
+    'dialog:select-torrent-file',
     'tracker:get',
     'tracker:add',
     'tracker:remove',
@@ -87,6 +89,7 @@ function makeMockDownloadManager(): DownloadManager {
     const item = makeSampleDownloadItem();
     return {
         addTorrentFile: jest.fn().mockResolvedValue(item),
+        addTorrentBuffer: jest.fn().mockResolvedValue(item),
         addMagnetLink: jest.fn().mockResolvedValue(item),
         pause: jest.fn().mockResolvedValue(undefined),
         resume: jest.fn().mockResolvedValue(undefined),
@@ -167,9 +170,9 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
 
     // ── Smoke tests: all channels registered ─────────────────────────────────
 
-    describe('Smoke: all 23 IPC channels are registered and respond', () => {
-        it('registers exactly 23 IPC channels', () => {
-            expect(mockIpcMain.handle).toHaveBeenCalledTimes(23);
+    describe('Smoke: all 25 IPC channels are registered and respond', () => {
+        it('registers exactly 25 IPC channels', () => {
+            expect(mockIpcMain.handle).toHaveBeenCalledTimes(25);
         });
 
         it.each(EXPECTED_CHANNELS)('channel "%s" is registered', (channel) => {

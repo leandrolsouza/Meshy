@@ -56,6 +56,7 @@ function makeMockEngine(): TorrentEngine & EventEmitter {
 
     const engine: TorrentEngine & EventEmitter = Object.assign(emitter, {
         addTorrentFile: jest.fn().mockResolvedValue(makeTorrentInfo()),
+        addTorrentBuffer: jest.fn().mockResolvedValue(makeTorrentInfo()),
         addMagnetLink: jest
             .fn()
             .mockResolvedValue(makeTorrentInfo({ status: 'resolving-metadata' as TorrentStatus })),

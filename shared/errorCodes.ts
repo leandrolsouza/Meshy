@@ -31,6 +31,7 @@ export const ErrorCodes = {
     // Seleção de arquivos
     FILE_SELECTION_EMPTY: 'error.files.selectionEmpty',
     FILE_INDEX_INVALID: 'error.files.indexInvalid',
+    NO_FILE_SELECTED: 'error.files.noFileSelected',
 
     // Destino (pasta/arquivo)
     DESTINATION_FOLDER_NOT_FOUND: 'error.destination.folderNotFound',

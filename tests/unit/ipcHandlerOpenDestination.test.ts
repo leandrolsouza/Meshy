@@ -92,6 +92,7 @@ function makeFileInfo(overrides: Partial<TorrentFileInfo> = {}): TorrentFileInfo
 function makeMockDownloadManager(items: DownloadItem[] = []): DownloadManager {
     return {
         addTorrentFile: jest.fn(),
+        addTorrentBuffer: jest.fn(),
         addMagnetLink: jest.fn(),
         pause: jest.fn().mockResolvedValue(undefined),
         resume: jest.fn().mockResolvedValue(undefined),

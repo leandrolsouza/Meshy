@@ -108,6 +108,7 @@ export type IPCResponse<T> = { success: true; data: T } | { success: false; erro
 export interface MeshyAPI {
     // Commands
     addTorrentFile(filePath: string): Promise<IPCResponse<DownloadItem>>;
+    addTorrentFileBuffer(buffer: Uint8Array): Promise<IPCResponse<DownloadItem>>;
     addMagnetLink(magnetUri: string): Promise<IPCResponse<DownloadItem>>;
     pause(infoHash: string): Promise<IPCResponse<void>>;
     resume(infoHash: string): Promise<IPCResponse<void>>;
@@ -116,6 +117,7 @@ export interface MeshyAPI {
     getSettings(): Promise<IPCResponse<AppSettings>>;
     setSettings(partial: Partial<AppSettings>): Promise<IPCResponse<AppSettings>>;
     selectFolder(): Promise<IPCResponse<string>>;
+    selectTorrentFile(): Promise<IPCResponse<string>>;
     // File selection
     getFiles(infoHash: string): Promise<IPCResponse<TorrentFileInfo[]>>;
     setFileSelection(

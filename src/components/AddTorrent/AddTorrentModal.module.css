@@ -117,7 +117,7 @@
     font-size: var(--font-size-sm);
 }
 
-.torrentFileLabel {
+.torrentFileButton {
     display: inline-block;
     padding: 6px 14px;
     border-radius: 2px;
@@ -129,12 +129,13 @@
     transition: background-color var(--transition-fast);
 }
 
-.torrentFileLabel:hover {
+.torrentFileButton:hover {
     background-color: var(--color-hover);
 }
 
-.torrentFileInput {
-    display: none;
+.torrentFileButton:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 /* ─── File Selection Section (FileSelector in modal) ──────────────────────── */

@@ -6,12 +6,6 @@ import { useDownloadStore } from '../../store/downloadStore';
 import { resolveErrorMessage } from '../../utils/resolveErrorMessage';
 import styles from './DropZone.module.css';
 
-// ─── Electron File augmentation ───────────────────────────────────────────────
-
-interface ElectronFile extends File {
-    path: string;
-}
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 /**
@@ -109,21 +103,27 @@ export function DropZone(): React.JSX.Element {
             setSuccess(null);
 
             // 1. Tenta arquivo .torrent
-            const file = e.dataTransfer.files[0] as ElectronFile | undefined;
+            const file = e.dataTransfer.files[0];
             if (file) {
                 if (!file.name.toLowerCase().endsWith('.torrent')) {
                     // Arquivo não é .torrent — continua para verificar texto abaixo
                 } else {
-                    const filePath = file.path;
-                    if (!filePath) {
-                        setError(intl.formatMessage({ id: 'dropZone.noFilePath' }));
-                        return;
-                    }
-                    const response = await window.meshy.addTorrentFile(filePath);
-                    if (response.success) {
-                        updateItem(response.data);
-                    } else {
-                        setError(resolveErrorMessage(intl, response.error));
+                    // Ler conteúdo do arquivo via FileReader (sandbox: true impede File.path)
+                    setIsLoading(true);
+                    try {
+                        const arrayBuffer = await file.arrayBuffer();
+                        const buffer = new Uint8Array(arrayBuffer);
+                        const response = await window.meshy.addTorrentFileBuffer(buffer);
+                        if (response.success) {
+                            updateItem(response.data);
+                            setSuccess(intl.formatMessage({ id: 'dropZone.success' }));
+                        } else {
+                            setError(resolveErrorMessage(intl, response.error));
+                        }
+                    } catch {
+                        setError(intl.formatMessage({ id: 'dropZone.errorGeneric' }));
+                    } finally {
+                        setIsLoading(false);
                     }
                     return;
                 }

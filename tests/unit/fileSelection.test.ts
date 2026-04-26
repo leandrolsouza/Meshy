@@ -347,6 +347,7 @@ function makeDMMockEngine(): TorrentEngine & EventEmitter {
 
     const engine: TorrentEngine & EventEmitter = Object.assign(emitter, {
         addTorrentFile: jest.fn(),
+        addTorrentBuffer: jest.fn(),
         addMagnetLink: jest.fn(),
         pause: jest.fn().mockResolvedValue(undefined),
         resume: jest.fn().mockResolvedValue(undefined),

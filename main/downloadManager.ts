@@ -16,6 +16,7 @@ export type { DownloadItem, PersistedDownloadItem } from '../shared/types';
 
 export interface DownloadManager {
     addTorrentFile(filePath: string): Promise<DownloadItem>;
+    addTorrentBuffer(buffer: Buffer): Promise<DownloadItem>;
     addMagnetLink(magnetUri: string): Promise<DownloadItem>;
     pause(infoHash: string): Promise<void>;
     resume(infoHash: string): Promise<void>;
@@ -304,6 +305,49 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
         validateDestinationFolder(destinationFolder);
 
         const info = await this.engine.addTorrentFile(filePath);
+
+        // Duplicate detection: check if infoHash already exists
+        const existing = this.items.get(info.infoHash);
+        if (existing) {
+            throw new Error('Torrent já existe na lista');
+        }
+
+        const addedAt = Date.now();
+
+        // Verificar se há slots disponíveis
+        if (this._activeCount() < this.maxConcurrent) {
+            const item = torrentInfoToDownloadItem(info, destinationFolder, addedAt);
+            this.items.set(item.infoHash, item);
+            this.emit('update', item);
+
+            // Aplicar trackers globais automaticamente (não bloqueia o retorno)
+            this._applyGlobalTrackers(item.infoHash);
+
+            return item;
+        }
+
+        // Sem slots — pausar imediatamente e enfileirar
+        await this.engine.pause(info.infoHash);
+
+        const item: DownloadItem = {
+            ...torrentInfoToDownloadItem(info, destinationFolder, addedAt),
+            status: 'queued',
+        };
+
+        this.items.set(item.infoHash, item);
+        this.queue.push(item.infoHash);
+        this.emit('update', item);
+
+        return item;
+    }
+
+    // ── addTorrentBuffer ────────────────────────────────────────────────────────
+
+    async addTorrentBuffer(buffer: Buffer): Promise<DownloadItem> {
+        const destinationFolder = this.settings.get().destinationFolder;
+        validateDestinationFolder(destinationFolder);
+
+        const info = await this.engine.addTorrentBuffer(buffer);
 
         // Duplicate detection: check if infoHash already exists
         const existing = this.items.get(info.infoHash);

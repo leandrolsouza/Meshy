@@ -502,6 +502,7 @@ function makeMockEngine(infoHash: string): TorrentEngine & EventEmitter {
 
     const engine: TorrentEngine & EventEmitter = Object.assign(emitter, {
         addTorrentFile: jest.fn().mockResolvedValue(info),
+        addTorrentBuffer: jest.fn().mockResolvedValue(info),
         addMagnetLink: jest.fn().mockResolvedValue(info),
         pause: jest.fn().mockResolvedValue(undefined),
         resume: jest.fn().mockResolvedValue(undefined),
