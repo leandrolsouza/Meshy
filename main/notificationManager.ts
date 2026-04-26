@@ -2,6 +2,7 @@ import { Notification, BrowserWindow } from 'electron';
 import type { DownloadManager } from './downloadManager';
 import type { SettingsManager } from './settingsManager';
 import type { DownloadItem } from '../shared/types';
+import { formatBytes, formatDuration } from '../shared/formatters';
 import { logger as defaultLogger } from './logger';
 import type { Logger } from './logger';
 
@@ -17,35 +18,6 @@ export interface CreateNotificationManagerOptions {
     mainWindow?: BrowserWindow;
     /** Logger injetável (padrão: electron-log) */
     log?: Logger;
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Formata o tamanho em bytes para uma string legível (ex: "1.5 GB").
- */
-function formatBytes(bytes: number): string {
-    if (bytes === 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    const value = bytes / Math.pow(1024, i);
-    return `${value.toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
-}
-
-/**
- * Formata duração em milissegundos para uma string legível (ex: "2 min 30 s").
- */
-function formatDuration(ms: number): string {
-    const totalSeconds = Math.floor(ms / 1000);
-    if (totalSeconds < 60) return `${totalSeconds} s`;
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    if (minutes < 60) {
-        return seconds > 0 ? `${minutes} min ${seconds} s` : `${minutes} min`;
-    }
-    const hours = Math.floor(minutes / 60);
-    const remainingMinutes = minutes % 60;
-    return remainingMinutes > 0 ? `${hours} h ${remainingMinutes} min` : `${hours} h`;
 }
 
 /**
@@ -145,8 +117,8 @@ export function createNotificationManager(
 
     return {
         dispose(): void {
-            (downloadManager as NodeJS.EventEmitter).removeListener('update', onUpdate);
-            (downloadManager as NodeJS.EventEmitter).removeListener('remove', onRemove);
+            downloadManager.removeListener('update', onUpdate);
+            downloadManager.removeListener('remove', onRemove);
             previousStatus.clear();
         },
     };

@@ -117,51 +117,41 @@ export function useSettings() {
      * Adiciona uma URL de tracker à lista global de favoritos.
      * Atualiza o estado local de settings em caso de sucesso.
      */
-    const addGlobalTracker = useCallback(
-        async (url: string): Promise<boolean> => {
-            try {
-                const response = await window.meshy.addGlobalTracker(url);
-                if (response.success) {
-                    setSettings((prev) =>
-                        prev ? { ...prev, globalTrackers: response.data } : prev,
-                    );
-                    return true;
-                } else {
-                    setError(response.error);
-                    return false;
-                }
-            } catch (err) {
-                setError(err instanceof Error ? err.message : String(err));
+    const addGlobalTracker = useCallback(async (url: string): Promise<boolean> => {
+        try {
+            const response = await window.meshy.addGlobalTracker(url);
+            if (response.success) {
+                setSettings((prev) => (prev ? { ...prev, globalTrackers: response.data } : prev));
+                return true;
+            } else {
+                setError(response.error);
                 return false;
             }
-        },
-        [],
-    );
+        } catch (err) {
+            setError(err instanceof Error ? err.message : String(err));
+            return false;
+        }
+    }, []);
 
     /**
      * Remove uma URL de tracker da lista global de favoritos.
      * Atualiza o estado local de settings em caso de sucesso.
      */
-    const removeGlobalTracker = useCallback(
-        async (url: string): Promise<boolean> => {
-            try {
-                const response = await window.meshy.removeGlobalTracker(url);
-                if (response.success) {
-                    setSettings((prev) =>
-                        prev ? { ...prev, globalTrackers: response.data } : prev,
-                    );
-                    return true;
-                } else {
-                    setError(response.error);
-                    return false;
-                }
-            } catch (err) {
-                setError(err instanceof Error ? err.message : String(err));
+    const removeGlobalTracker = useCallback(async (url: string): Promise<boolean> => {
+        try {
+            const response = await window.meshy.removeGlobalTracker(url);
+            if (response.success) {
+                setSettings((prev) => (prev ? { ...prev, globalTrackers: response.data } : prev));
+                return true;
+            } else {
+                setError(response.error);
                 return false;
             }
-        },
-        [],
-    );
+        } catch (err) {
+            setError(err instanceof Error ? err.message : String(err));
+            return false;
+        }
+    }, []);
 
     return {
         settings,

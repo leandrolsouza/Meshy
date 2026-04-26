@@ -147,8 +147,8 @@ export function DropZone(): React.JSX.Element {
     const zoneClass = isDragOver
         ? `${styles.zone} ${styles.active}`
         : isLoading
-            ? `${styles.zone} ${styles.loading}`
-            : styles.zone;
+          ? `${styles.zone} ${styles.loading}`
+          : styles.zone;
 
     return (
         <div
@@ -167,9 +167,7 @@ export function DropZone(): React.JSX.Element {
                     <div className={styles.icon}>
                         <VscCloudUpload />
                     </div>
-                    <p className={styles.text}>
-                        {intl.formatMessage({ id: 'dropZone.text' })}
-                    </p>
+                    <p className={styles.text}>{intl.formatMessage({ id: 'dropZone.text' })}</p>
                     <p className={styles.hint}>{intl.formatMessage({ id: 'dropZone.hint' })}</p>
                 </>
             )}

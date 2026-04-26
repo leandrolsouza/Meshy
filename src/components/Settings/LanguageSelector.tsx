@@ -18,9 +18,7 @@ interface LanguageSelectorProps {
  * Renderiza um `<select>` listando todos os locales suportados pelo nome nativo.
  * A troca é imediata — o onChange atualiza o store e chama onLocaleChange para persistir via IPC.
  */
-export function LanguageSelector({
-    onLocaleChange,
-}: LanguageSelectorProps): React.JSX.Element {
+export function LanguageSelector({ onLocaleChange }: LanguageSelectorProps): React.JSX.Element {
     const intl = useIntl();
     const locale = useLocaleStore((s) => s.locale);
     const setLocale = useLocaleStore((s) => s.setLocale);

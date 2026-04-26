@@ -55,10 +55,7 @@ describe('Property 4: Interpolation resolution', () => {
         const placeholderSetArb = fc
             .uniqueArray(placeholderNameArb, { minLength: 1, maxLength: 4 })
             .chain((names) =>
-                fc.tuple(
-                    fc.constant(names),
-                    fc.tuple(...names.map(() => safeValueArb)),
-                ),
+                fc.tuple(fc.constant(names), fc.tuple(...names.map(() => safeValueArb))),
             );
 
         fc.assert(
@@ -74,10 +71,7 @@ describe('Property 4: Interpolation resolution', () => {
                 });
 
                 const intl = makeIntl('en-US', { 'test.interpolation': icuMessage });
-                const result = intl.formatMessage(
-                    { id: 'test.interpolation' },
-                    valuesObj,
-                );
+                const result = intl.formatMessage({ id: 'test.interpolation' }, valuesObj);
 
                 // Each provided value must appear in the formatted output
                 for (const value of values) {
@@ -120,10 +114,7 @@ describe('Property 5: ICU MessageFormat pluralization', () => {
 
         fc.assert(
             fc.property(fc.integer({ min: 0, max: 100_000 }), (count) => {
-                const result = intl.formatMessage(
-                    { id: 'statusBar.activeDownloads' },
-                    { count },
-                );
+                const result = intl.formatMessage({ id: 'statusBar.activeDownloads' }, { count });
 
                 // ICU # formats numbers with locale-specific grouping (e.g., 1,000 in en-US).
                 // Use Intl.NumberFormat to get the expected formatted count.
@@ -148,10 +139,7 @@ describe('Property 5: ICU MessageFormat pluralization', () => {
 
         fc.assert(
             fc.property(fc.integer({ min: 0, max: 100_000 }), (count) => {
-                const result = intl.formatMessage(
-                    { id: 'statusBar.activeDownloads' },
-                    { count },
-                );
+                const result = intl.formatMessage({ id: 'statusBar.activeDownloads' }, { count });
 
                 // ICU # formats numbers with locale-specific grouping (e.g., 1.000 in pt-BR).
                 // Use Intl.NumberFormat to get the expected formatted count.
@@ -236,12 +224,10 @@ describe('Property 10: Error code resolution', () => {
         // Mix: pick from actual error codes OR generate random strings
         const mixedCodeArb = fc.oneof(
             fc.constantFrom(...allErrorCodeValues),
-            fc.stringOf(
-                fc.constantFrom(
-                    ...'abcdefghijklmnopqrstuvwxyz.0123456789'.split(''),
-                ),
-                { minLength: 3, maxLength: 40 },
-            ),
+            fc.stringOf(fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz.0123456789'.split('')), {
+                minLength: 3,
+                maxLength: 40,
+            }),
         );
 
         fc.assert(

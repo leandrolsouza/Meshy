@@ -18,22 +18,31 @@ export function FilterSidebar(): React.JSX.Element {
     const intl = useIntl();
 
     return (
-        <aside className={styles.sidebar} aria-label={intl.formatMessage({ id: 'filter.sidebar.ariaLabel' })}>
+        <aside
+            className={styles.sidebar}
+            aria-label={intl.formatMessage({ id: 'filter.sidebar.ariaLabel' })}
+        >
             {/* Busca por nome */}
             <div className={styles.section}>
-                <span className={styles.sectionTitle}>{intl.formatMessage({ id: 'filter.sidebar.search' })}</span>
+                <span className={styles.sectionTitle}>
+                    {intl.formatMessage({ id: 'filter.sidebar.search' })}
+                </span>
                 <SearchBar />
             </div>
 
             {/* Filtro por status */}
             <div className={styles.section}>
-                <span className={styles.sectionTitle}>{intl.formatMessage({ id: 'filter.sidebar.status' })}</span>
+                <span className={styles.sectionTitle}>
+                    {intl.formatMessage({ id: 'filter.sidebar.status' })}
+                </span>
                 <StatusFilter />
             </div>
 
             {/* Ordenação */}
             <div className={styles.section}>
-                <span className={styles.sectionTitle}>{intl.formatMessage({ id: 'filter.sidebar.sort' })}</span>
+                <span className={styles.sectionTitle}>
+                    {intl.formatMessage({ id: 'filter.sidebar.sort' })}
+                </span>
                 <SortSelector />
             </div>
         </aside>

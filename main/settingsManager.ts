@@ -218,11 +218,7 @@ export function createSettingsManager(options: CreateSettingsManagerOptions = {}
  * Cada campo é verificado individualmente — se inválido, é resetado para o default.
  * Loga um warning para cada correção aplicada.
  */
-function sanitizeOnLoad(
-    store: SettingsStore,
-    getDownloadsPath: () => string,
-    log: Logger,
-): void {
+function sanitizeOnLoad(store: SettingsStore, getDownloadsPath: () => string, log: Logger): void {
     // downloadSpeedLimit: inteiro >= 0
     const dl = store.get('downloadSpeedLimit');
     if (dl !== undefined && !isValidSpeedLimit(dl)) {
@@ -250,7 +246,10 @@ function sanitizeOnLoad(
     // notificationsEnabled: boolean
     const ne = store.get('notificationsEnabled');
     if (ne !== undefined && typeof ne !== 'boolean') {
-        log.warn('[SettingsManager] notificationsEnabled inválido, resetando para true:', String(ne));
+        log.warn(
+            '[SettingsManager] notificationsEnabled inválido, resetando para true:',
+            String(ne),
+        );
         store.set('notificationsEnabled', true);
     }
 

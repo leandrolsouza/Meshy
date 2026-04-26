@@ -34,26 +34,28 @@ const mockThrottleGroupInstances: Array<{
 }> = [];
 
 jest.mock('speed-limiter', () => {
-    const MockThrottleGroup = jest.fn().mockImplementation((opts: { rate?: number; enabled?: boolean } = {}) => {
-        const state = {
-            _rate: opts.rate ?? 0,
-            _enabled: opts.enabled ?? true,
-        };
-        const instance = {
-            setRate: jest.fn((rate: number) => {
-                state._rate = rate;
-            }),
-            setEnabled: jest.fn((val: boolean) => {
-                state._enabled = val;
-            }),
-            getEnabled: jest.fn(() => state._enabled),
-            getRate: jest.fn(() => state._rate),
-            throttle: jest.fn(() => ({ pipe: jest.fn() })),
-            destroy: jest.fn(),
-        };
-        mockThrottleGroupInstances.push(instance);
-        return instance;
-    });
+    const MockThrottleGroup = jest
+        .fn()
+        .mockImplementation((opts: { rate?: number; enabled?: boolean } = {}) => {
+            const state = {
+                _rate: opts.rate ?? 0,
+                _enabled: opts.enabled ?? true,
+            };
+            const instance = {
+                setRate: jest.fn((rate: number) => {
+                    state._rate = rate;
+                }),
+                setEnabled: jest.fn((val: boolean) => {
+                    state._enabled = val;
+                }),
+                getEnabled: jest.fn(() => state._enabled),
+                getRate: jest.fn(() => state._rate),
+                throttle: jest.fn(() => ({ pipe: jest.fn() })),
+                destroy: jest.fn(),
+            };
+            mockThrottleGroupInstances.push(instance);
+            return instance;
+        });
     return { ThrottleGroup: MockThrottleGroup };
 });
 
@@ -459,12 +461,10 @@ function makeFakeTorrentWithTrackers(
     const torrent = makeFakeTorrent(infoHash, overrides);
     (torrent as unknown as { announce: string[] }).announce = announce;
     (torrent as unknown as { _trackers: typeof trackers })._trackers = trackers;
-    (torrent as unknown as { addTracker: jest.Mock }).addTracker = jest.fn(
-        (url: string) => {
-            const ann = (torrent as unknown as { announce: string[] }).announce;
-            ann.push(url);
-        },
-    );
+    (torrent as unknown as { addTracker: jest.Mock }).addTracker = jest.fn((url: string) => {
+        const ann = (torrent as unknown as { announce: string[] }).announce;
+        ann.push(url);
+    });
     return torrent;
 }
 
@@ -501,11 +501,9 @@ describe('TorrentEngine.getTrackers() — unit tests', () => {
     it('retorna status "connected" para tracker ativo', () => {
         const infoHash = 'e'.repeat(40);
         const url = 'http://tracker.example.com/announce';
-        const fakeTorrent = makeFakeTorrentWithTrackers(
-            infoHash,
-            [url],
-            { [url]: { destroyed: false } },
-        );
+        const fakeTorrent = makeFakeTorrentWithTrackers(infoHash, [url], {
+            [url]: { destroyed: false },
+        });
         const mockClient = makeMockClient();
         mockClient.torrents.push(fakeTorrent);
 
@@ -518,11 +516,9 @@ describe('TorrentEngine.getTrackers() — unit tests', () => {
     it('retorna status "error" para tracker destruído', () => {
         const infoHash = 'f'.repeat(40);
         const url = 'https://tracker.example.com/announce';
-        const fakeTorrent = makeFakeTorrentWithTrackers(
-            infoHash,
-            [url],
-            { [url]: { destroyed: true } },
-        );
+        const fakeTorrent = makeFakeTorrentWithTrackers(infoHash, [url], {
+            [url]: { destroyed: true },
+        });
         const mockClient = makeMockClient();
         mockClient.torrents.push(fakeTorrent);
 
@@ -603,9 +599,9 @@ describe('TorrentEngine.addTracker() — unit tests', () => {
 
         const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
 
-        expect(() =>
-            engine.addTracker(infoHash, 'HTTP://tracker.example.com/announce'),
-        ).toThrow(/Tracker já presente/);
+        expect(() => engine.addTracker(infoHash, 'HTTP://tracker.example.com/announce')).toThrow(
+            /Tracker já presente/,
+        );
     });
 });
 
@@ -614,11 +610,9 @@ describe('TorrentEngine.removeTracker() — unit tests', () => {
         const infoHash = 'a'.repeat(40);
         const url = 'udp://tracker.example.com:6969/announce';
         const destroyMock = jest.fn();
-        const fakeTorrent = makeFakeTorrentWithTrackers(
-            infoHash,
-            [url],
-            { [url]: { destroy: destroyMock } },
-        );
+        const fakeTorrent = makeFakeTorrentWithTrackers(infoHash, [url], {
+            [url]: { destroy: destroyMock },
+        });
         const mockClient = makeMockClient();
         mockClient.torrents.push(fakeTorrent);
 
@@ -638,9 +632,9 @@ describe('TorrentEngine.removeTracker() — unit tests', () => {
 
         const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
 
-        expect(() =>
-            engine.removeTracker(infoHash, 'http://nonexistent.com/announce'),
-        ).toThrow(/Tracker não encontrado/);
+        expect(() => engine.removeTracker(infoHash, 'http://nonexistent.com/announce')).toThrow(
+            /Tracker não encontrado/,
+        );
     });
 
     it('lança erro quando torrent não é encontrado', () => {
@@ -1169,7 +1163,6 @@ describe('Propriedade 4: Mapeamento correto de opções para o construtor WebTor
     });
 });
 
-
 // ─── TorrentEngine.restart() — Testes Unitários (Task 4.5) ──────────────────
 
 /**
@@ -1256,14 +1249,12 @@ function setupMockWebTorrentForRestart(
                 listeners[event].push(listener);
                 return newClient;
             }),
-            removeListener: jest.fn(
-                (event: string, listener: (...args: unknown[]) => void) => {
-                    if (listeners[event]) {
-                        listeners[event] = listeners[event].filter((l) => l !== listener);
-                    }
-                    return newClient;
-                },
-            ),
+            removeListener: jest.fn((event: string, listener: (...args: unknown[]) => void) => {
+                if (listeners[event]) {
+                    listeners[event] = listeners[event].filter((l) => l !== listener);
+                }
+                return newClient;
+            }),
             emit: jest.fn(),
         };
         return newClient;
@@ -1289,7 +1280,7 @@ describe('TorrentEngine.restart() — fluxo completo', () => {
         setupMockWebTorrentForRestart(MockWebTorrent);
 
         // Escutar erros para evitar "unhandled error" (torrent sem status será re-adicionado)
-        engine.on('error', () => { });
+        engine.on('error', () => {});
 
         const newOptions = {
             ...DEFAULT_OPTIONS,
@@ -1301,10 +1292,7 @@ describe('TorrentEngine.restart() — fluxo completo', () => {
 
         // Cada torrent deve ter sido destruído sem deletar arquivos
         for (const t of fakeTorrents) {
-            expect(t.destroy).toHaveBeenCalledWith(
-                { destroyStore: false },
-                expect.any(Function),
-            );
+            expect(t.destroy).toHaveBeenCalledWith({ destroyStore: false }, expect.any(Function));
         }
 
         // O cliente original deve ter sido destruído
@@ -1365,7 +1353,7 @@ describe('TorrentEngine.restart() — fluxo completo', () => {
 
         // Setar status como 'paused' via pause()
         const torrent = client.torrents[0];
-        (torrent.pause as jest.Mock).mockImplementation(() => { });
+        (torrent.pause as jest.Mock).mockImplementation(() => {});
         await engine.pause(infoHash);
 
         setupMockWebTorrentForRestart(MockWebTorrent);
@@ -1421,16 +1409,12 @@ describe('TorrentEngine.restart() — fluxo completo', () => {
             }),
             once: jest.fn(),
             emit: jest.fn(),
-            removeListener: jest.fn(
-                (event: string, listener: (...args: unknown[]) => void) => {
-                    if (clientListeners[event]) {
-                        clientListeners[event] = clientListeners[event].filter(
-                            (l) => l !== listener,
-                        );
-                    }
-                    return client;
-                },
-            ),
+            removeListener: jest.fn((event: string, listener: (...args: unknown[]) => void) => {
+                if (clientListeners[event]) {
+                    clientListeners[event] = clientListeners[event].filter((l) => l !== listener);
+                }
+                return client;
+            }),
         } as unknown as WebTorrent.Instance;
 
         const engine = createTorrentEngine(DEFAULT_OPTIONS, client);

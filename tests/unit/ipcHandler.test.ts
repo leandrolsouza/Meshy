@@ -423,9 +423,7 @@ describe('registerIpcHandlers — tracker handlers', () => {
 
     describe('tracker:get', () => {
         it('retorna trackers do torrent com sucesso', async () => {
-            const trackers = [
-                { url: 'udp://tracker.example.com:6969', status: 'connected' },
-            ];
+            const trackers = [{ url: 'udp://tracker.example.com:6969', status: 'connected' }];
             (mockTorrentEngine.getTrackers as jest.Mock).mockReturnValue(trackers);
 
             const handler = getHandler('tracker:get')!;
@@ -469,9 +467,7 @@ describe('registerIpcHandlers — tracker handlers', () => {
 
     describe('tracker:add', () => {
         it('adiciona tracker e retorna lista atualizada', async () => {
-            const trackers = [
-                { url: 'udp://tracker.example.com:6969', status: 'pending' },
-            ];
+            const trackers = [{ url: 'udp://tracker.example.com:6969', status: 'pending' }];
             (mockTorrentEngine.getTrackers as jest.Mock).mockReturnValue(trackers);
 
             const handler = getHandler('tracker:add')!;
@@ -588,7 +584,7 @@ describe('registerIpcHandlers — tracker handlers', () => {
                 'udp://fail.example.com:6969',
             ]);
             (mockTorrentEngine.addTracker as jest.Mock)
-                .mockImplementationOnce(() => { }) // primeiro sucesso
+                .mockImplementationOnce(() => {}) // primeiro sucesso
                 .mockImplementationOnce(() => {
                     throw new Error('Tracker já presente');
                 }); // segundo falha
@@ -1050,9 +1046,7 @@ describe('registerIpcHandlers — torrent speed limit handlers', () => {
 
             expect(response.success).toBe(true);
             expect(response.data).toEqual(limits);
-            expect(mockDownloadManager.getTorrentSpeedLimits).toHaveBeenCalledWith(
-                'a'.repeat(40),
-            );
+            expect(mockDownloadManager.getTorrentSpeedLimits).toHaveBeenCalledWith('a'.repeat(40));
         });
 
         it('retorna erro para payload null', async () => {
@@ -1344,8 +1338,8 @@ describe('Property 19: Evento de progresso IPC contém todos os itens ativos', (
             hashes.length === 0
                 ? fc.constant([])
                 : fc
-                    .tuple(...hashes.map((h) => downloadItemArb(h)))
-                    .map((items) => items as DownloadItem[]),
+                      .tuple(...hashes.map((h) => downloadItemArb(h)))
+                      .map((items) => items as DownloadItem[]),
         );
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -1437,20 +1431,11 @@ describe('Property 19: Evento de progresso IPC contém todos os itens ativos', (
 
 describe('Property 8: payloads inválidos retornam { success: false } sem lançar exceção', () => {
     // Canais de tracker que exigem payload com campos específicos
-    const TRACKER_CHANNELS_WITH_INFOHASH = [
-        'tracker:get',
-        'tracker:apply-global',
-    ];
+    const TRACKER_CHANNELS_WITH_INFOHASH = ['tracker:get', 'tracker:apply-global'];
 
-    const TRACKER_CHANNELS_WITH_INFOHASH_AND_URL = [
-        'tracker:add',
-        'tracker:remove',
-    ];
+    const TRACKER_CHANNELS_WITH_INFOHASH_AND_URL = ['tracker:add', 'tracker:remove'];
 
-    const TRACKER_CHANNELS_WITH_URL = [
-        'tracker:add-global',
-        'tracker:remove-global',
-    ];
+    const TRACKER_CHANNELS_WITH_URL = ['tracker:add-global', 'tracker:remove-global'];
 
     const ALL_TRACKER_CHANNELS = [
         ...TRACKER_CHANNELS_WITH_INFOHASH,
@@ -1965,26 +1950,23 @@ describe('registerIpcHandlers — rejeição de operações durante restart do m
         'torrent:remove': { infoHash: 'a'.repeat(40), deleteFiles: false },
     };
 
-    it.each(GUARDED_CHANNELS)(
-        '%s retorna erro quando motor está reiniciando',
-        async (channel) => {
-            jest.clearAllMocks();
+    it.each(GUARDED_CHANNELS)('%s retorna erro quando motor está reiniciando', async (channel) => {
+        jest.clearAllMocks();
 
-            const dm = makeMockDownloadManager();
-            const sm = makeMockSettingsManager();
-            const te = makeMockTorrentEngine();
-            (te as any).restart = jest.fn().mockResolvedValue(undefined);
-            (te as any).isRestarting = jest.fn().mockReturnValue(true);
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        const te = makeMockTorrentEngine();
+        (te as any).restart = jest.fn().mockResolvedValue(undefined);
+        (te as any).isRestarting = jest.fn().mockReturnValue(true);
 
-            registerIpcHandlers(dm, sm, te as any);
+        registerIpcHandlers(dm, sm, te as any);
 
-            const handler = getHandler(channel)!;
-            const response = (await handler(null, VALID_PAYLOADS[channel])) as any;
+        const handler = getHandler(channel)!;
+        const response = (await handler(null, VALID_PAYLOADS[channel])) as any;
 
-            expect(response.success).toBe(false);
-            expect(response.error).toBe(ErrorCodes.ENGINE_RESTARTING);
-        },
-    );
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.ENGINE_RESTARTING);
+    });
 
     it.each(GUARDED_CHANNELS)(
         '%s permite operação quando motor NÃO está reiniciando',
@@ -2062,56 +2044,52 @@ describe('Property 2: Reinício acionado somente quando valores de rede mudam', 
         });
 
         await fc.assert(
-            fc.asyncProperty(
-                networkSettingsArb,
-                networkSettingsArb,
-                async (previous, next) => {
-                    jest.clearAllMocks();
+            fc.asyncProperty(networkSettingsArb, networkSettingsArb, async (previous, next) => {
+                jest.clearAllMocks();
 
-                    const dm = makeMockDownloadManager();
-                    const sm = makeMockSettingsManager();
-                    const te = makeMockTorrentEngine();
-                    (te as any).restart = jest.fn().mockResolvedValue(undefined);
-                    (te as any).isRestarting = jest.fn().mockReturnValue(false);
+                const dm = makeMockDownloadManager();
+                const sm = makeMockSettingsManager();
+                const te = makeMockTorrentEngine();
+                (te as any).restart = jest.fn().mockResolvedValue(undefined);
+                (te as any).isRestarting = jest.fn().mockReturnValue(false);
 
-                    // Configurar settingsManager.get() para retornar os valores "anteriores"
-                    (sm.get as jest.Mock).mockReturnValue({
-                        destinationFolder: '/downloads',
-                        downloadSpeedLimit: 0,
-                        uploadSpeedLimit: 0,
-                        maxConcurrentDownloads: 3,
-                        notificationsEnabled: true,
-                        theme: 'vs-code-dark',
-                        locale: 'pt-BR',
-                        globalTrackers: [],
-                        autoApplyGlobalTrackers: false,
-                        dhtEnabled: previous.dhtEnabled,
-                        pexEnabled: previous.pexEnabled,
-                        utpEnabled: previous.utpEnabled,
-                    });
+                // Configurar settingsManager.get() para retornar os valores "anteriores"
+                (sm.get as jest.Mock).mockReturnValue({
+                    destinationFolder: '/downloads',
+                    downloadSpeedLimit: 0,
+                    uploadSpeedLimit: 0,
+                    maxConcurrentDownloads: 3,
+                    notificationsEnabled: true,
+                    theme: 'vs-code-dark',
+                    locale: 'pt-BR',
+                    globalTrackers: [],
+                    autoApplyGlobalTrackers: false,
+                    dhtEnabled: previous.dhtEnabled,
+                    pexEnabled: previous.pexEnabled,
+                    utpEnabled: previous.utpEnabled,
+                });
 
-                    registerIpcHandlers(dm, sm, te as any);
+                registerIpcHandlers(dm, sm, te as any);
 
-                    const handler = getHandler('settings:set')!;
-                    await handler(null, {
-                        dhtEnabled: next.dhtEnabled,
-                        pexEnabled: next.pexEnabled,
-                        utpEnabled: next.utpEnabled,
-                    });
+                const handler = getHandler('settings:set')!;
+                await handler(null, {
+                    dhtEnabled: next.dhtEnabled,
+                    pexEnabled: next.pexEnabled,
+                    utpEnabled: next.utpEnabled,
+                });
 
-                    // Calcular se pelo menos um campo de rede difere
-                    const shouldRestart =
-                        previous.dhtEnabled !== next.dhtEnabled ||
-                        previous.pexEnabled !== next.pexEnabled ||
-                        previous.utpEnabled !== next.utpEnabled;
+                // Calcular se pelo menos um campo de rede difere
+                const shouldRestart =
+                    previous.dhtEnabled !== next.dhtEnabled ||
+                    previous.pexEnabled !== next.pexEnabled ||
+                    previous.utpEnabled !== next.utpEnabled;
 
-                    if (shouldRestart) {
-                        expect((te as any).restart).toHaveBeenCalledTimes(1);
-                    } else {
-                        expect((te as any).restart).not.toHaveBeenCalled();
-                    }
-                },
-            ),
+                if (shouldRestart) {
+                    expect((te as any).restart).toHaveBeenCalledTimes(1);
+                } else {
+                    expect((te as any).restart).not.toHaveBeenCalled();
+                }
+            }),
             { numRuns: 200 },
         );
     });

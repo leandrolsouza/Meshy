@@ -146,7 +146,13 @@ export function FileSelector({
                                             aria-valuenow={Math.round(fileProgress)}
                                             aria-valuemin={0}
                                             aria-valuemax={100}
-                                            aria-label={intl.formatMessage({ id: 'fileSelector.progressLabel' }, { name: file.name, percent: Math.round(fileProgress) })}
+                                            aria-label={intl.formatMessage(
+                                                { id: 'fileSelector.progressLabel' },
+                                                {
+                                                    name: file.name,
+                                                    percent: Math.round(fileProgress),
+                                                },
+                                            )}
                                         >
                                             <div
                                                 className={`${styles.fileProgressFill} ${fileCompleted ? styles.fileProgressComplete : ''}`}

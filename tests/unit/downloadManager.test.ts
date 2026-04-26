@@ -1457,7 +1457,6 @@ describe('DownloadManager — Property 17: Arquivos ausentes resultam em status 
     });
 });
 
-
 // ─── Aplicação automática de trackers globais ─────────────────────────────────
 
 describe('DownloadManager — Aplicação automática de trackers globais (Requisito 6)', () => {
@@ -1584,10 +1583,7 @@ describe('DownloadManager — Aplicação automática de trackers globais (Requi
 
         expect(queuedItem.status).toBe('queued');
         // addTracker NÃO deve ter sido chamado para o item enfileirado
-        expect(engine.addTracker).not.toHaveBeenCalledWith(
-            '2'.repeat(40),
-            expect.any(String),
-        );
+        expect(engine.addTracker).not.toHaveBeenCalledWith('2'.repeat(40), expect.any(String));
     });
 
     it('ignora silenciosamente erros de addTracker individuais (ex: duplicata)', async () => {
@@ -1611,11 +1607,11 @@ describe('DownloadManager — Aplicação automática de trackers globais (Requi
 
         // Segundo tracker lança erro (duplicata)
         (engine.addTracker as jest.Mock)
-            .mockImplementationOnce(() => { }) // tracker1 OK
+            .mockImplementationOnce(() => {}) // tracker1 OK
             .mockImplementationOnce(() => {
                 throw new Error('Tracker já presente');
             }) // tracker2 falha
-            .mockImplementationOnce(() => { }); // tracker3 OK
+            .mockImplementationOnce(() => {}); // tracker3 OK
 
         const info = makeTorrentInfo({
             infoHash: INFO_HASH,
@@ -1690,7 +1686,9 @@ describe('DownloadManager — Propriedade 7: Após aplicar trackers globais, sup
                 host: fc.stringMatching(/^[a-z][a-z0-9]{2,15}$/).filter((h) => h.length >= 3),
                 port: fc.integer({ min: 1024, max: 65535 }),
             })
-            .map(({ protocol, host, port }) => `${protocol}://${host}.example.com:${port}/announce`);
+            .map(
+                ({ protocol, host, port }) => `${protocol}://${host}.example.com:${port}/announce`,
+            );
 
         const arbGlobalTrackers = fc
             .array(arbTrackerUrl, { minLength: 1, maxLength: 10 })
@@ -1748,7 +1746,6 @@ describe('DownloadManager — Propriedade 7: Após aplicar trackers globais, sup
         );
     });
 });
-
 
 // ─── Limites de velocidade por torrent ────────────────────────────────────────
 
@@ -2038,8 +2035,7 @@ describe('DownloadManager — Property 2: Round-trip de armazenamento de limites
                     const result = manager.getTorrentSpeedLimits(normalizedHash);
 
                     return (
-                        result.downloadSpeedLimitKBps === dl &&
-                        result.uploadSpeedLimitKBps === ul
+                        result.downloadSpeedLimitKBps === dl && result.uploadSpeedLimitKBps === ul
                     );
                 },
             ),
@@ -2226,12 +2222,8 @@ describe('DownloadManager — Property 5: Recálculo ao alterar limite global', 
                         const expectedDl = calcularLimiteEfetivo(t.dl, globalDl);
                         const expectedUl = calcularLimiteEfetivo(t.ul, globalUl);
 
-                        const dlCall = dlCalls.find(
-                            (c: [string, number]) => c[0] === t.hash,
-                        );
-                        const ulCall = ulCalls.find(
-                            (c: [string, number]) => c[0] === t.hash,
-                        );
+                        const dlCall = dlCalls.find((c: [string, number]) => c[0] === t.hash);
+                        const ulCall = ulCalls.find((c: [string, number]) => c[0] === t.hash);
 
                         if (!dlCall || dlCall[1] !== expectedDl) return false;
                         if (!ulCall || ulCall[1] !== expectedUl) return false;

@@ -249,17 +249,13 @@ describe('SettingsManager.addGlobalTracker()', () => {
     it('adiciona tracker válido à lista global', () => {
         const manager = makeManager();
         manager.addGlobalTracker('udp://tracker.example.com:6969/announce');
-        expect(manager.getGlobalTrackers()).toEqual([
-            'udp://tracker.example.com:6969/announce',
-        ]);
+        expect(manager.getGlobalTrackers()).toEqual(['udp://tracker.example.com:6969/announce']);
     });
 
     it('normaliza a URL antes de armazenar', () => {
         const manager = makeManager();
         manager.addGlobalTracker('  UDP://Tracker.Example.com:6969/announce  ');
-        expect(manager.getGlobalTrackers()).toEqual([
-            'udp://Tracker.Example.com:6969/announce',
-        ]);
+        expect(manager.getGlobalTrackers()).toEqual(['udp://Tracker.Example.com:6969/announce']);
     });
 
     it('rejeita URL inválida com erro de validação', () => {
@@ -278,9 +274,9 @@ describe('SettingsManager.addGlobalTracker()', () => {
     it('rejeita URL duplicada com erro de duplicidade', () => {
         const manager = makeManager();
         manager.addGlobalTracker('udp://tracker.example.com:6969/announce');
-        expect(() =>
-            manager.addGlobalTracker('udp://tracker.example.com:6969/announce'),
-        ).toThrow('Tracker já existe na lista global');
+        expect(() => manager.addGlobalTracker('udp://tracker.example.com:6969/announce')).toThrow(
+            'Tracker já existe na lista global',
+        );
     });
 
     it('rejeita duplicata mesmo com espaços e casing diferente no protocolo', () => {
@@ -321,9 +317,7 @@ describe('SettingsManager.removeGlobalTracker()', () => {
             globalTrackers: ['udp://tracker.example.com:6969/announce'],
         });
         manager.removeGlobalTracker('udp://nonexistent.com:6969/announce');
-        expect(manager.getGlobalTrackers()).toEqual([
-            'udp://tracker.example.com:6969/announce',
-        ]);
+        expect(manager.getGlobalTrackers()).toEqual(['udp://tracker.example.com:6969/announce']);
     });
 
     it('normaliza a URL antes de comparar para remoção', () => {
@@ -423,21 +417,25 @@ describe('Property 6: Lista global persiste entre sessões', () => {
             .record({
                 protocol: fc.constantFrom('udp', 'http', 'https'),
                 host: fc
-                    .stringOf(fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')), {
-                        minLength: 3,
-                        maxLength: 12,
-                    })
+                    .stringOf(
+                        fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')),
+                        {
+                            minLength: 3,
+                            maxLength: 12,
+                        },
+                    )
                     .filter((h) => /^[a-z]/.test(h)),
                 port: fc.integer({ min: 1, max: 65535 }),
             })
-            .map(({ protocol, host, port }) => `${protocol}://${host}.example.com:${port}/announce`);
+            .map(
+                ({ protocol, host, port }) => `${protocol}://${host}.example.com:${port}/announce`,
+            );
 
-        const uniqueTrackerListArb = fc
-            .uniqueArray(validTrackerUrlArb, {
-                minLength: 0,
-                maxLength: 10,
-                comparator: (a, b) => a === b,
-            });
+        const uniqueTrackerListArb = fc.uniqueArray(validTrackerUrlArb, {
+            minLength: 0,
+            maxLength: 10,
+            comparator: (a, b) => a === b,
+        });
 
         fc.assert(
             fc.property(uniqueTrackerListArb, (trackerList) => {
@@ -553,10 +551,10 @@ describe('Property 11: Novos downloads usam a pasta de destino atual', () => {
                     const magnetUri = `magnet:?xt=urn:btih:${infoHash}`;
 
                     const silentLogger = {
-                        info: () => { },
-                        warn: () => { },
-                        error: () => { },
-                        debug: () => { },
+                        info: () => {},
+                        warn: () => {},
+                        error: () => {},
+                        debug: () => {},
                     };
 
                     const downloadManager = createDownloadManager(
@@ -620,10 +618,10 @@ describe('Property 12: Pasta inválida resulta em erro antes de iniciar download
                     const magnetUri = `magnet:?xt=urn:btih:${infoHash}`;
 
                     const silentLogger = {
-                        info: () => { },
-                        warn: () => { },
-                        error: () => { },
-                        debug: () => { },
+                        info: () => {},
+                        warn: () => {},
+                        error: () => {},
+                        debug: () => {},
                     };
 
                     const downloadManager = createDownloadManager(

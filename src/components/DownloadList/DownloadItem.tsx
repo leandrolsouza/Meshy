@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useIntl } from 'react-intl';
 import {
     VscArrowDown,
@@ -96,47 +96,67 @@ export function DownloadItem({
     const [dlValidationError, setDlValidationError] = useState<string | null>(null);
     const [ulValidationError, setUlValidationError] = useState<string | null>(null);
 
-    // Sincronizar inputs quando o item muda externamente (ex: via onProgress)
+    // Ref para rastrear se está salvando — evita sobrescrever inputs durante save.
+    // Lida apenas dentro de callbacks/effects, nunca no corpo do render.
+    const limitsLoadingRef = useRef(false);
+
+    // Sincronizar inputs quando o item muda externamente (ex: via onProgress).
+    // Sincronizar inputs quando o item muda externamente (ex: via onProgress).
+    // setState em effect é intencional aqui: sincroniza estado externo → local.
+    const externalDl = item.downloadSpeedLimitKBps ?? 0;
+    const externalUl = item.uploadSpeedLimitKBps ?? 0;
+
     useEffect(() => {
-        if (!limitsLoading) {
-            setDlLimitInput(String(item.downloadSpeedLimitKBps ?? 0));
-            setUlLimitInput(String(item.uploadSpeedLimitKBps ?? 0));
+        if (!limitsLoadingRef.current) {
+            setDlLimitInput(String(externalDl));
+            setUlLimitInput(String(externalUl));
         }
-    }, [item.downloadSpeedLimitKBps, item.uploadSpeedLimitKBps, limitsLoading]);
+    }, [externalDl, externalUl]);
 
     // Can expand when torrent is not in resolving-metadata state
     const canExpand = item.status !== 'resolving-metadata' && item.status !== 'queued';
 
     // ── Fetch files when expanded (Task 6.2) ─────────────────────────────────
-    // Busca inicial ao expandir
+    // Busca inicial ao expandir. O setState no início do effect é intencional:
+    // precisamos sinalizar loading antes do fetch assíncrono.
     useEffect(() => {
         if (!expanded) return;
 
         let cancelled = false;
-        setFilesLoading(true);
-        setFilesError(null);
 
-        window.meshy
-            .getFiles(item.infoHash)
-            .then((response) => {
+        const fetchFiles = async (): Promise<void> => {
+            try {
+                const response = await window.meshy.getFiles(item.infoHash);
                 if (cancelled) return;
-                setFilesLoading(false);
                 if (response.success) {
                     setFiles(response.data);
+                    setFilesError(null);
                 } else {
                     setFilesError(resolveErrorMessage(intl, response.error));
                 }
-            })
-            .catch((err: unknown) => {
+            } catch (err: unknown) {
                 if (cancelled) return;
-                setFilesLoading(false);
-                setFilesError(err instanceof Error ? err.message : intl.formatMessage({ id: 'downloads.filesError' }));
-            });
+                setFilesError(
+                    err instanceof Error
+                        ? err.message
+                        : intl.formatMessage({ id: 'downloads.filesError' }),
+                );
+            } finally {
+                if (!cancelled) {
+                    setFilesLoading(false);
+                }
+            }
+        };
+
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setFilesLoading(true);
+        setFilesError(null);
+        fetchFiles();
 
         return () => {
             cancelled = true;
         };
-    }, [expanded, item.infoHash]);
+    }, [expanded, item.infoHash, intl]);
 
     // ── Atualizar progresso dos arquivos periodicamente enquanto baixando ─────
     const isActive = item.status === 'downloading' || item.status === 'resolving-metadata';
@@ -185,7 +205,9 @@ export function DownloadItem({
                 .catch((err: unknown) => {
                     setSelectionLoading(false);
                     setSelectionError(
-                        err instanceof Error ? err.message : intl.formatMessage({ id: 'downloads.speedLimits.error' }),
+                        err instanceof Error
+                            ? err.message
+                            : intl.formatMessage({ id: 'downloads.speedLimits.error' }),
                     );
                 });
         },
@@ -193,7 +215,7 @@ export function DownloadItem({
     );
 
     // ── Handle speed limit apply ────────────────────────────────────────────
-    const handleApplySpeedLimits = useCallback(async () => {
+    const handleApplySpeedLimits = async (): Promise<void> => {
         // Validar download limit
         const dlValue = dlLimitInput.trim() === '' ? 0 : Number(dlLimitInput);
         const ulValue = ulLimitInput.trim() === '' ? 0 : Number(ulLimitInput);
@@ -219,6 +241,7 @@ export function DownloadItem({
         if (hasError) return;
 
         setLimitsLoading(true);
+        limitsLoadingRef.current = true;
         setLimitsError(null);
 
         try {
@@ -230,8 +253,9 @@ export function DownloadItem({
             setLimitsError(err instanceof Error ? err.message : errorMsg);
         } finally {
             setLimitsLoading(false);
+            limitsLoadingRef.current = false;
         }
-    }, [item.infoHash, dlLimitInput, ulLimitInput, onSetSpeedLimits, intl]);
+    };
 
     // ── Toggle expand/collapse ───────────────────────────────────────────────
     const handleToggleExpand = useCallback(() => {
@@ -259,10 +283,15 @@ export function DownloadItem({
                 <div className={styles.headerRight}>
                     {hasFileCount && (
                         <span className={styles.fileCount}>
-                            {intl.formatMessage({ id: 'downloads.fileCount' }, { selected: item.selectedFileCount, total: item.totalFileCount })}
+                            {intl.formatMessage(
+                                { id: 'downloads.fileCount' },
+                                { selected: item.selectedFileCount, total: item.totalFileCount },
+                            )}
                         </span>
                     )}
-                    <span className={styles.status}>{intl.formatMessage({ id: STATUS_LABEL_KEYS[item.status] ?? item.status })}</span>
+                    <span className={styles.status}>
+                        {intl.formatMessage({ id: STATUS_LABEL_KEYS[item.status] ?? item.status })}
+                    </span>
                 </div>
             </div>
 
@@ -270,7 +299,10 @@ export function DownloadItem({
             <ProgressBar
                 value={progressPercent}
                 max={100}
-                label={intl.formatMessage({ id: 'downloads.progress.label' }, { name: item.name, percent: progressPercent })}
+                label={intl.formatMessage(
+                    { id: 'downloads.progress.label' },
+                    { name: item.name, percent: progressPercent },
+                )}
                 variant={progressVariant(item.status)}
             />
 
@@ -288,13 +320,36 @@ export function DownloadItem({
                 )}
                 {!isCompleted && (
                     <span>
-                        {intl.formatMessage({ id: 'downloads.seedersAndPeers' }, { seeders: item.numSeeders, peers: item.numPeers })}
+                        {intl.formatMessage(
+                            { id: 'downloads.seedersAndPeers' },
+                            { seeders: item.numSeeders, peers: item.numPeers },
+                        )}
                     </span>
                 )}
                 {isCompleted ? (
-                    <span>{intl.formatMessage({ id: 'downloads.timeElapsed' }, { time: formatTimeParts(item.elapsedMs ?? 0) ?? intl.formatMessage({ id: 'downloads.timeElapsed.none' }) })}</span>
+                    <span>
+                        {intl.formatMessage(
+                            { id: 'downloads.timeElapsed' },
+                            {
+                                time:
+                                    formatTimeParts(item.elapsedMs ?? 0) ??
+                                    intl.formatMessage({ id: 'downloads.timeElapsed.none' }),
+                            },
+                        )}
+                    </span>
                 ) : (
-                    <span>{intl.formatMessage({ id: 'downloads.timeRemaining' }, { time: formatTimeParts(item.timeRemaining) ?? intl.formatMessage({ id: 'downloads.timeRemaining.calculating' }) })}</span>
+                    <span>
+                        {intl.formatMessage(
+                            { id: 'downloads.timeRemaining' },
+                            {
+                                time:
+                                    formatTimeParts(item.timeRemaining) ??
+                                    intl.formatMessage({
+                                        id: 'downloads.timeRemaining.calculating',
+                                    }),
+                            },
+                        )}
+                    </span>
                 )}
             </div>
 
@@ -306,12 +361,17 @@ export function DownloadItem({
                         onClick={handleToggleExpand}
                         aria-label={
                             expanded
-                                ? intl.formatMessage({ id: 'downloads.actions.collapseFilesAriaLabel' })
-                                : intl.formatMessage({ id: 'downloads.actions.expandFilesAriaLabel' })
+                                ? intl.formatMessage({
+                                      id: 'downloads.actions.collapseFilesAriaLabel',
+                                  })
+                                : intl.formatMessage({
+                                      id: 'downloads.actions.expandFilesAriaLabel',
+                                  })
                         }
                         aria-expanded={expanded}
                     >
-                        {expanded ? <VscChevronDown /> : <VscChevronRight />} {intl.formatMessage({ id: 'downloads.actions.expandFiles' })}
+                        {expanded ? <VscChevronDown /> : <VscChevronRight />}{' '}
+                        {intl.formatMessage({ id: 'downloads.actions.expandFiles' })}
                     </button>
                 )}
                 {canExpand && (
@@ -320,19 +380,27 @@ export function DownloadItem({
                         onClick={handleToggleTrackers}
                         aria-label={
                             trackersExpanded
-                                ? intl.formatMessage({ id: 'downloads.actions.collapseTrackersAriaLabel' })
-                                : intl.formatMessage({ id: 'downloads.actions.expandTrackersAriaLabel' })
+                                ? intl.formatMessage({
+                                      id: 'downloads.actions.collapseTrackersAriaLabel',
+                                  })
+                                : intl.formatMessage({
+                                      id: 'downloads.actions.expandTrackersAriaLabel',
+                                  })
                         }
                         aria-expanded={trackersExpanded}
                     >
-                        {trackersExpanded ? <VscChevronDown /> : <VscChevronRight />} {intl.formatMessage({ id: 'downloads.actions.expandTrackers' })}
+                        {trackersExpanded ? <VscChevronDown /> : <VscChevronRight />}{' '}
+                        {intl.formatMessage({ id: 'downloads.actions.expandTrackers' })}
                     </button>
                 )}
                 {item.status === 'downloading' && (
                     <button
                         className="btn"
                         onClick={() => onPause(item.infoHash)}
-                        aria-label={intl.formatMessage({ id: 'downloads.actions.pauseAriaLabel' }, { name: item.name })}
+                        aria-label={intl.formatMessage(
+                            { id: 'downloads.actions.pauseAriaLabel' },
+                            { name: item.name },
+                        )}
                     >
                         <VscDebugPause /> {intl.formatMessage({ id: 'downloads.actions.pause' })}
                     </button>
@@ -341,7 +409,10 @@ export function DownloadItem({
                     <button
                         className="btn"
                         onClick={() => onResume(item.infoHash)}
-                        aria-label={intl.formatMessage({ id: 'downloads.actions.resumeAriaLabel' }, { name: item.name })}
+                        aria-label={intl.formatMessage(
+                            { id: 'downloads.actions.resumeAriaLabel' },
+                            { name: item.name },
+                        )}
                     >
                         <VscPlay /> {intl.formatMessage({ id: 'downloads.actions.resume' })}
                     </button>
@@ -349,7 +420,10 @@ export function DownloadItem({
                 <button
                     className="btn btn--danger"
                     onClick={() => setIsConfirmDialogOpen(true)}
-                    aria-label={intl.formatMessage({ id: 'downloads.actions.removeAriaLabel' }, { name: item.name })}
+                    aria-label={intl.formatMessage(
+                        { id: 'downloads.actions.removeAriaLabel' },
+                        { name: item.name },
+                    )}
                 >
                     <VscTrash /> {intl.formatMessage({ id: 'common.remove' })}
                 </button>
@@ -386,14 +460,17 @@ export function DownloadItem({
             {/* Seção de limites de velocidade por torrent (Tasks 8.1–8.5) */}
             {expanded && (
                 <div className={styles.speedLimitsSection} data-testid="speed-limits-section">
-                    <div className={styles.speedLimitsTitle}>{intl.formatMessage({ id: 'downloads.speedLimits.title' })}</div>
+                    <div className={styles.speedLimitsTitle}>
+                        {intl.formatMessage({ id: 'downloads.speedLimits.title' })}
+                    </div>
                     <div className={styles.speedLimitsRow}>
                         <div className={styles.speedLimitField}>
                             <label
                                 className={styles.speedLimitLabel}
                                 htmlFor={`dl-limit-${item.infoHash}`}
                             >
-                                <VscArrowDown /> {intl.formatMessage({ id: 'downloads.speedLimits.download' })}
+                                <VscArrowDown />{' '}
+                                {intl.formatMessage({ id: 'downloads.speedLimits.download' })}
                             </label>
                             <input
                                 id={`dl-limit-${item.infoHash}`}
@@ -407,7 +484,9 @@ export function DownloadItem({
                                 min={0}
                                 step={1}
                                 disabled={limitsLoading}
-                                aria-label={intl.formatMessage({ id: 'downloads.speedLimits.downloadAriaLabel' })}
+                                aria-label={intl.formatMessage({
+                                    id: 'downloads.speedLimits.downloadAriaLabel',
+                                })}
                                 aria-invalid={!!dlValidationError}
                             />
                             {dlValidationError && (
@@ -417,7 +496,9 @@ export function DownloadItem({
                             )}
                             {Number(dlLimitInput) === 0 && !dlValidationError && (
                                 <span className={styles.speedLimitHint}>
-                                    {intl.formatMessage({ id: 'downloads.speedLimits.usingGlobal' })}
+                                    {intl.formatMessage({
+                                        id: 'downloads.speedLimits.usingGlobal',
+                                    })}
                                 </span>
                             )}
                         </div>
@@ -426,7 +507,8 @@ export function DownloadItem({
                                 className={styles.speedLimitLabel}
                                 htmlFor={`ul-limit-${item.infoHash}`}
                             >
-                                <VscArrowUp /> {intl.formatMessage({ id: 'downloads.speedLimits.upload' })}
+                                <VscArrowUp />{' '}
+                                {intl.formatMessage({ id: 'downloads.speedLimits.upload' })}
                             </label>
                             <input
                                 id={`ul-limit-${item.infoHash}`}
@@ -440,7 +522,9 @@ export function DownloadItem({
                                 min={0}
                                 step={1}
                                 disabled={limitsLoading}
-                                aria-label={intl.formatMessage({ id: 'downloads.speedLimits.uploadAriaLabel' })}
+                                aria-label={intl.formatMessage({
+                                    id: 'downloads.speedLimits.uploadAriaLabel',
+                                })}
                                 aria-invalid={!!ulValidationError}
                             />
                             {ulValidationError && (
@@ -450,7 +534,9 @@ export function DownloadItem({
                             )}
                             {Number(ulLimitInput) === 0 && !ulValidationError && (
                                 <span className={styles.speedLimitHint}>
-                                    {intl.formatMessage({ id: 'downloads.speedLimits.usingGlobal' })}
+                                    {intl.formatMessage({
+                                        id: 'downloads.speedLimits.usingGlobal',
+                                    })}
                                 </span>
                             )}
                         </div>
@@ -458,9 +544,13 @@ export function DownloadItem({
                             className={`btn ${styles.speedLimitApplyBtn}`}
                             onClick={handleApplySpeedLimits}
                             disabled={limitsLoading}
-                            aria-label={intl.formatMessage({ id: 'downloads.speedLimits.applyAriaLabel' })}
+                            aria-label={intl.formatMessage({
+                                id: 'downloads.speedLimits.applyAriaLabel',
+                            })}
                         >
-                            {limitsLoading ? intl.formatMessage({ id: 'common.applying' }) : intl.formatMessage({ id: 'common.apply' })}
+                            {limitsLoading
+                                ? intl.formatMessage({ id: 'common.applying' })
+                                : intl.formatMessage({ id: 'common.apply' })}
                         </button>
                     </div>
                     {limitsError && (
@@ -485,7 +575,10 @@ export function DownloadItem({
             <ConfirmDialog
                 isOpen={isConfirmDialogOpen}
                 title={intl.formatMessage({ id: 'downloads.confirmRemove.title' })}
-                message={intl.formatMessage({ id: 'downloads.confirmRemove.message' }, { name: item.name })}
+                message={intl.formatMessage(
+                    { id: 'downloads.confirmRemove.message' },
+                    { name: item.name },
+                )}
                 onConfirmKeepFiles={() => {
                     setIsConfirmDialogOpen(false);
                     onRemove(item.infoHash, false);

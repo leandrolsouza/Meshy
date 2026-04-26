@@ -48,9 +48,9 @@ export function validateTransferFields(
 
     const maxConcurrentMsg = intl
         ? intl.formatMessage(
-            { id: 'settings.transfer.invalidMaxConcurrent' },
-            { min: MIN_CONCURRENT_DOWNLOADS, max: MAX_CONCURRENT_DOWNLOADS },
-        )
+              { id: 'settings.transfer.invalidMaxConcurrent' },
+              { min: MIN_CONCURRENT_DOWNLOADS, max: MAX_CONCURRENT_DOWNLOADS },
+          )
         : `Valor inválido: deve ser um inteiro entre ${MIN_CONCURRENT_DOWNLOADS} e ${MAX_CONCURRENT_DOWNLOADS}.`;
 
     if (!isValidSpeedLimit(Number(downloadLimit))) {

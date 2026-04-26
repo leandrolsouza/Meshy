@@ -1,17 +1,11 @@
 import fc from 'fast-check';
-import {
-    SUPPORTED_LOCALES,
-    getLocaleMessages,
-    isSupportedLocale,
-} from '../../src/locales';
+import { SUPPORTED_LOCALES, getLocaleMessages, isSupportedLocale } from '../../src/locales';
 
 // ─── Derived constants ────────────────────────────────────────────────────────
 
 const supportedCodes = SUPPORTED_LOCALES.map((entry) => entry.code);
 
-const catalogByCode = new Map(
-    SUPPORTED_LOCALES.map((entry) => [entry.code, entry.messages]),
-);
+const catalogByCode = new Map(SUPPORTED_LOCALES.map((entry) => [entry.code, entry.messages]));
 
 // ─── Property-Based Tests ─────────────────────────────────────────────────────
 
@@ -21,27 +15,21 @@ describe('Property 2: Locale registry round-trip', () => {
 
     it('getLocaleMessages(code) returns the exact message catalog for any supported locale', () => {
         fc.assert(
-            fc.property(
-                fc.constantFrom(...supportedCodes),
-                (code) => {
-                    const messages = getLocaleMessages(code);
-                    const expected = catalogByCode.get(code);
+            fc.property(fc.constantFrom(...supportedCodes), (code) => {
+                const messages = getLocaleMessages(code);
+                const expected = catalogByCode.get(code);
 
-                    expect(messages).toBe(expected);
-                },
-            ),
+                expect(messages).toBe(expected);
+            }),
             { numRuns: 100 },
         );
     });
 
     it('isSupportedLocale(code) returns true for any supported locale', () => {
         fc.assert(
-            fc.property(
-                fc.constantFrom(...supportedCodes),
-                (code) => {
-                    expect(isSupportedLocale(code)).toBe(true);
-                },
-            ),
+            fc.property(fc.constantFrom(...supportedCodes), (code) => {
+                expect(isSupportedLocale(code)).toBe(true);
+            }),
             { numRuns: 100 },
         );
     });
@@ -49,9 +37,9 @@ describe('Property 2: Locale registry round-trip', () => {
     it('isSupportedLocale returns false for random non-supported strings', () => {
         fc.assert(
             fc.property(
-                fc.string({ minLength: 1, maxLength: 30 }).filter(
-                    (s) => !supportedCodes.includes(s),
-                ),
+                fc
+                    .string({ minLength: 1, maxLength: 30 })
+                    .filter((s) => !supportedCodes.includes(s)),
                 (randomStr) => {
                     expect(isSupportedLocale(randomStr)).toBe(false);
                 },
@@ -65,9 +53,9 @@ describe('Property 2: Locale registry round-trip', () => {
 
         fc.assert(
             fc.property(
-                fc.string({ minLength: 1, maxLength: 30 }).filter(
-                    (s) => !supportedCodes.includes(s),
-                ),
+                fc
+                    .string({ minLength: 1, maxLength: 30 })
+                    .filter((s) => !supportedCodes.includes(s)),
                 (randomStr) => {
                     const messages = getLocaleMessages(randomStr);
 

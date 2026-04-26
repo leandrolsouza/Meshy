@@ -10,7 +10,7 @@ import App from './App';
 if (typeof window.meshy === 'undefined') {
     console.warn(
         '[Meshy] window.meshy is not available. ' +
-        'The app must run inside Electron with the preload script configured.',
+            'The app must run inside Electron with the preload script configured.',
     );
 }
 

@@ -194,9 +194,7 @@ describe('SortSelector', () => {
 
 describe('DownloadListToolbar', () => {
     it('renderiza SearchBar, StatusFilter e SortSelector juntos', () => {
-        renderWithIntl(
-            <DownloadListToolbar completedCount={0} onClearCompleted={jest.fn()} />,
-        );
+        renderWithIntl(<DownloadListToolbar completedCount={0} onClearCompleted={jest.fn()} />);
 
         // SearchBar presente
         expect(
@@ -215,9 +213,7 @@ describe('DownloadListToolbar', () => {
     });
 
     it('não exibe botão "Limpar concluídos" quando completedCount é 0', () => {
-        renderWithIntl(
-            <DownloadListToolbar completedCount={0} onClearCompleted={jest.fn()} />,
-        );
+        renderWithIntl(<DownloadListToolbar completedCount={0} onClearCompleted={jest.fn()} />);
 
         expect(
             screen.queryByRole('button', { name: 'Limpar downloads concluídos' }),
@@ -225,9 +221,7 @@ describe('DownloadListToolbar', () => {
     });
 
     it('exibe botão "Limpar concluídos" com contagem quando há itens concluídos', () => {
-        renderWithIntl(
-            <DownloadListToolbar completedCount={3} onClearCompleted={jest.fn()} />,
-        );
+        renderWithIntl(<DownloadListToolbar completedCount={3} onClearCompleted={jest.fn()} />);
 
         const button = screen.getByRole('button', { name: 'Limpar downloads concluídos' });
         expect(button).toBeInTheDocument();
@@ -235,9 +229,7 @@ describe('DownloadListToolbar', () => {
     });
 
     it('clicar no botão abre diálogo de confirmação', () => {
-        renderWithIntl(
-            <DownloadListToolbar completedCount={2} onClearCompleted={jest.fn()} />,
-        );
+        renderWithIntl(<DownloadListToolbar completedCount={2} onClearCompleted={jest.fn()} />);
 
         fireEvent.click(screen.getByRole('button', { name: 'Limpar downloads concluídos' }));
 
@@ -247,9 +239,7 @@ describe('DownloadListToolbar', () => {
 
     it('confirmar "Manter arquivos" chama onClearCompleted(false)', () => {
         const onClear = jest.fn();
-        renderWithIntl(
-            <DownloadListToolbar completedCount={1} onClearCompleted={onClear} />,
-        );
+        renderWithIntl(<DownloadListToolbar completedCount={1} onClearCompleted={onClear} />);
 
         fireEvent.click(screen.getByRole('button', { name: 'Limpar downloads concluídos' }));
         fireEvent.click(screen.getByRole('button', { name: 'Manter arquivos' }));
@@ -259,9 +249,7 @@ describe('DownloadListToolbar', () => {
 
     it('confirmar "Excluir arquivos" chama onClearCompleted(true)', () => {
         const onClear = jest.fn();
-        renderWithIntl(
-            <DownloadListToolbar completedCount={1} onClearCompleted={onClear} />,
-        );
+        renderWithIntl(<DownloadListToolbar completedCount={1} onClearCompleted={onClear} />);
 
         fireEvent.click(screen.getByRole('button', { name: 'Limpar downloads concluídos' }));
         fireEvent.click(screen.getByRole('button', { name: 'Excluir arquivos' }));

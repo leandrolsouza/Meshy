@@ -39,8 +39,15 @@ const STATUS_LABEL_KEYS: Record<string, string> = {
 
 export function TrackerPanel({ infoHash }: TrackerPanelProps): React.JSX.Element {
     const intl = useIntl();
-    const { trackers, loading, error, loadTrackers, addTracker, removeTracker, applyGlobalTrackers } =
-        useTrackers(infoHash);
+    const {
+        trackers,
+        loading,
+        error,
+        loadTrackers,
+        addTracker,
+        removeTracker,
+        applyGlobalTrackers,
+    } = useTrackers(infoHash);
 
     // ── Estado local para adicionar tracker manualmente ───────────────────────
     const [newTrackerUrl, setNewTrackerUrl] = useState('');
@@ -71,7 +78,11 @@ export function TrackerPanel({ infoHash }: TrackerPanelProps): React.JSX.Element
             setNewTrackerUrl('');
             setAddSuccess(intl.formatMessage({ id: 'trackers.addSuccess' }));
         } else {
-            setAddError(error ? resolveErrorMessage(intl, error) : intl.formatMessage({ id: 'trackers.addError.generic' }));
+            setAddError(
+                error
+                    ? resolveErrorMessage(intl, error)
+                    : intl.formatMessage({ id: 'trackers.addError.generic' }),
+            );
         }
     }, [newTrackerUrl, addTracker, error, intl]);
 
@@ -92,7 +103,11 @@ export function TrackerPanel({ infoHash }: TrackerPanelProps): React.JSX.Element
         if (success) {
             setApplyMessage(intl.formatMessage({ id: 'trackers.applyFavoritesSuccess' }));
         } else {
-            setApplyError(error ? resolveErrorMessage(intl, error) : intl.formatMessage({ id: 'trackers.applyFavoritesError' }));
+            setApplyError(
+                error
+                    ? resolveErrorMessage(intl, error)
+                    : intl.formatMessage({ id: 'trackers.applyFavoritesError' }),
+            );
         }
     }, [applyGlobalTrackers, error, intl]);
 
@@ -127,9 +142,14 @@ export function TrackerPanel({ infoHash }: TrackerPanelProps): React.JSX.Element
 
             {/* Lista de trackers */}
             {trackers.length > 0 && (
-                <ul className={styles.trackerList} aria-label={intl.formatMessage({ id: 'trackers.listAriaLabel' })}>
+                <ul
+                    className={styles.trackerList}
+                    aria-label={intl.formatMessage({ id: 'trackers.listAriaLabel' })}
+                >
                     {trackers.map((tracker) => {
-                        const label = intl.formatMessage({ id: STATUS_LABEL_KEYS[tracker.status] ?? 'trackers.status.unknown' });
+                        const label = intl.formatMessage({
+                            id: STATUS_LABEL_KEYS[tracker.status] ?? 'trackers.status.unknown',
+                        });
                         return (
                             <li key={tracker.url} className={styles.trackerItem}>
                                 <span
@@ -148,7 +168,10 @@ export function TrackerPanel({ infoHash }: TrackerPanelProps): React.JSX.Element
                                 <button
                                     className={styles.removeButton}
                                     onClick={() => handleRemoveTracker(tracker.url)}
-                                    aria-label={intl.formatMessage({ id: 'trackers.removeAriaLabel' }, { url: tracker.url })}
+                                    aria-label={intl.formatMessage(
+                                        { id: 'trackers.removeAriaLabel' },
+                                        { url: tracker.url },
+                                    )}
                                     disabled={loading}
                                 >
                                     <VscTrash />
@@ -161,7 +184,9 @@ export function TrackerPanel({ infoHash }: TrackerPanelProps): React.JSX.Element
 
             {/* Lista vazia */}
             {!loading && trackers.length === 0 && !error && (
-                <div className={styles.emptyMessage}>{intl.formatMessage({ id: 'trackers.empty' })}</div>
+                <div className={styles.emptyMessage}>
+                    {intl.formatMessage({ id: 'trackers.empty' })}
+                </div>
             )}
 
             {/* Campo para adicionar tracker manualmente */}
@@ -203,11 +228,7 @@ export function TrackerPanel({ infoHash }: TrackerPanelProps): React.JSX.Element
 
             {/* Botão Aplicar Favoritos */}
             <div className={styles.applyRow}>
-                <button
-                    className="btn"
-                    onClick={handleApplyGlobalTrackers}
-                    disabled={loading}
-                >
+                <button className="btn" onClick={handleApplyGlobalTrackers} disabled={loading}>
                     {intl.formatMessage({ id: 'trackers.applyFavorites' })}
                 </button>
             </div>

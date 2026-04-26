@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useIntl } from 'react-intl';
 import { useSettings } from '../../hooks/useSettings';
 import { applyTheme } from '../../themes/themeApplier';
@@ -26,7 +26,10 @@ interface SettingsPanelProps {
  * Aceita `isOpen` e `onClose` para compatibilidade — quando `isOpen`
  * é false o componente retorna null.
  */
-export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JSX.Element | null {
+export function SettingsPanel({
+    isOpen,
+    onClose: _onClose,
+}: SettingsPanelProps): React.JSX.Element | null {
     const intl = useIntl();
     const {
         settings,
@@ -60,8 +63,11 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
     const [restartError, setRestartError] = useState<string | null>(null);
 
     // ── Sincroniza estado local quando settings carrega via IPC ───────────────
+    // O setState em effect é intencional: sincroniza estado local com dados
+    // carregados assincronamente do main process via IPC.
     useEffect(() => {
         if (settings) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setDownloadLimit(String(settings.downloadSpeedLimit));
             setUploadLimit(String(settings.uploadSpeedLimit));
             setMaxConcurrent(String(settings.maxConcurrentDownloads));
@@ -76,17 +82,23 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
     }, [settings]);
 
     // ── Aplica tema salvo na inicialização ────────────────────────────────────
+    const lastAppliedThemeRef = useRef<string | null>(null);
+
     useEffect(() => {
-        if (settings) {
-            if (settings.theme && isValidThemeId(settings.theme)) {
-                applyTheme(settings.theme);
-            } else if (settings.theme && !isValidThemeId(settings.theme)) {
-                applyTheme(DEFAULT_THEME_ID);
-                setCurrentThemeId(DEFAULT_THEME_ID);
-                updateSettings({ theme: DEFAULT_THEME_ID });
-            } else {
-                applyTheme(DEFAULT_THEME_ID);
-            }
+        if (!settings) return;
+
+        const themeToApply =
+            settings.theme && isValidThemeId(settings.theme) ? settings.theme : DEFAULT_THEME_ID;
+
+        // Só aplica se o tema mudou desde a última aplicação
+        if (themeToApply === lastAppliedThemeRef.current) return;
+        lastAppliedThemeRef.current = themeToApply;
+
+        applyTheme(themeToApply);
+
+        // Se o tema salvo era inválido, corrige no backend
+        if (settings.theme && !isValidThemeId(settings.theme)) {
+            updateSettings({ theme: DEFAULT_THEME_ID });
         }
     }, [settings, updateSettings]);
 
@@ -154,9 +166,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
                 });
 
                 if (!success && networkChanged) {
-                    setRestartError(
-                        error ?? intl.formatMessage({ id: 'settings.restartError' }),
-                    );
+                    setRestartError(error ?? intl.formatMessage({ id: 'settings.restartError' }));
                 }
             } finally {
                 setIsSaving(false);
@@ -286,11 +296,11 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
                                     >
                                         {isRestarting
                                             ? intl.formatMessage({
-                                                id: 'settings.restartingEngine',
-                                            })
+                                                  id: 'settings.restartingEngine',
+                                              })
                                             : isSaving
-                                                ? intl.formatMessage({ id: 'common.saving' })
-                                                : intl.formatMessage({ id: 'common.save' })}
+                                              ? intl.formatMessage({ id: 'common.saving' })
+                                              : intl.formatMessage({ id: 'common.save' })}
                                     </button>
                                 </div>
                             </form>

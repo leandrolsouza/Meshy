@@ -50,8 +50,8 @@ const mockMeshy = {
     getSettings: jest.fn().mockResolvedValue({ success: true, data: {} }),
     setSettings: jest.fn().mockResolvedValue({ success: true, data: {} }),
     selectFolder: jest.fn().mockResolvedValue({ success: true, data: '' }),
-    onProgress: jest.fn().mockReturnValue(() => { }),
-    onError: jest.fn().mockReturnValue(() => { }),
+    onProgress: jest.fn().mockReturnValue(() => {}),
+    onError: jest.fn().mockReturnValue(() => {}),
 };
 
 beforeAll(() => {
@@ -287,7 +287,7 @@ describe('App — inicialização de tema', () => {
     });
 
     it('aplica tema padrão e registra erro quando getSettings lança exceção (Req 10.3)', async () => {
-        const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => { });
+        const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
         mockMeshy.getSettings.mockRejectedValueOnce(new Error('IPC falhou'));
 
         renderApp();

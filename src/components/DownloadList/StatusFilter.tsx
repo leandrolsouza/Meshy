@@ -66,7 +66,11 @@ export function StatusFilter(): React.JSX.Element {
     );
 
     return (
-        <div role="group" aria-label={intl.formatMessage({ id: 'filter.status.ariaLabel' })} className={styles.container}>
+        <div
+            role="group"
+            aria-label={intl.formatMessage({ id: 'filter.status.ariaLabel' })}
+            className={styles.container}
+        >
             <button
                 type="button"
                 className={`${styles.button} ${isAllActive ? styles.buttonActive : ''}`}

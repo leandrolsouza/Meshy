@@ -33,9 +33,7 @@ export function TrackerSettings({
     const handleAddGlobalTracker = useCallback(async () => {
         const url = newGlobalTracker.trim();
         if (!url) {
-            setGlobalTrackerError(
-                intl.formatMessage({ id: 'trackers.global.addError.empty' }),
-            );
+            setGlobalTrackerError(intl.formatMessage({ id: 'trackers.global.addError.empty' }));
             return;
         }
 

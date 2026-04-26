@@ -29,34 +29,28 @@ describe('Property 1: Translation file structural integrity', () => {
 
     it('every key in pt-BR.json is a non-empty string and every value is a non-empty string', () => {
         fc.assert(
-            fc.property(
-                fc.constantFrom(...ptBRKeys),
-                (key) => {
-                    expect(typeof key).toBe('string');
-                    expect(key.length).toBeGreaterThan(0);
+            fc.property(fc.constantFrom(...ptBRKeys), (key) => {
+                expect(typeof key).toBe('string');
+                expect(key.length).toBeGreaterThan(0);
 
-                    const value = ptBRCatalog[key];
-                    expect(typeof value).toBe('string');
-                    expect(value.length).toBeGreaterThan(0);
-                },
-            ),
+                const value = ptBRCatalog[key];
+                expect(typeof value).toBe('string');
+                expect(value.length).toBeGreaterThan(0);
+            }),
             { numRuns: Math.max(100, ptBRKeys.length) },
         );
     });
 
     it('every key in en-US.json is a non-empty string and every value is a non-empty string', () => {
         fc.assert(
-            fc.property(
-                fc.constantFrom(...enUSKeys),
-                (key) => {
-                    expect(typeof key).toBe('string');
-                    expect(key.length).toBeGreaterThan(0);
+            fc.property(fc.constantFrom(...enUSKeys), (key) => {
+                expect(typeof key).toBe('string');
+                expect(key.length).toBeGreaterThan(0);
 
-                    const value = enUSCatalog[key];
-                    expect(typeof value).toBe('string');
-                    expect(value.length).toBeGreaterThan(0);
-                },
-            ),
+                const value = enUSCatalog[key];
+                expect(typeof value).toBe('string');
+                expect(value.length).toBeGreaterThan(0);
+            }),
             { numRuns: Math.max(100, enUSKeys.length) },
         );
     });
@@ -68,24 +62,18 @@ describe('Property 3: Default locale completeness (superset invariant)', () => {
 
     it('every key present in en-US.json also exists in pt-BR.json (default locale is superset)', () => {
         fc.assert(
-            fc.property(
-                fc.constantFrom(...enUSKeys),
-                (key) => {
-                    expect(key in ptBRCatalog).toBe(true);
-                },
-            ),
+            fc.property(fc.constantFrom(...enUSKeys), (key) => {
+                expect(key in ptBRCatalog).toBe(true);
+            }),
             { numRuns: Math.max(100, enUSKeys.length) },
         );
     });
 
     it('every key present in pt-BR.json also exists in en-US.json (completeness)', () => {
         fc.assert(
-            fc.property(
-                fc.constantFrom(...ptBRKeys),
-                (key) => {
-                    expect(key in enUSCatalog).toBe(true);
-                },
-            ),
+            fc.property(fc.constantFrom(...ptBRKeys), (key) => {
+                expect(key in enUSCatalog).toBe(true);
+            }),
             { numRuns: Math.max(100, ptBRKeys.length) },
         );
     });
@@ -97,12 +85,9 @@ describe('Property 3: Default locale completeness (superset invariant)', () => {
             const localeKeys = Object.keys(locale.messages);
 
             fc.assert(
-                fc.property(
-                    fc.constantFrom(...localeKeys),
-                    (key) => {
-                        expect(key in ptBRCatalog).toBe(true);
-                    },
-                ),
+                fc.property(fc.constantFrom(...localeKeys), (key) => {
+                    expect(key in ptBRCatalog).toBe(true);
+                }),
                 { numRuns: Math.max(100, localeKeys.length) },
             );
         }
@@ -115,64 +100,55 @@ describe('Property 9: Translation key format convention', () => {
 
     it('every key in any locale file matches dot-separated segments with camelCase final segment', () => {
         fc.assert(
-            fc.property(
-                fc.constantFrom(...allLocaleKeys),
-                (key) => {
-                    const segments = key.split('.');
+            fc.property(fc.constantFrom(...allLocaleKeys), (key) => {
+                const segments = key.split('.');
 
-                    // Must have at least one segment
-                    expect(segments.length).toBeGreaterThanOrEqual(1);
+                // Must have at least one segment
+                expect(segments.length).toBeGreaterThanOrEqual(1);
 
-                    // Every segment must be a non-empty string
-                    for (const segment of segments) {
-                        expect(segment.length).toBeGreaterThan(0);
-                    }
+                // Every segment must be a non-empty string
+                for (const segment of segments) {
+                    expect(segment.length).toBeGreaterThan(0);
+                }
 
-                    // The final segment must be in camelCase format
-                    const finalSegment = segments[segments.length - 1];
-                    expect(isCamelCase(finalSegment)).toBe(true);
-                },
-            ),
+                // The final segment must be in camelCase format
+                const finalSegment = segments[segments.length - 1];
+                expect(isCamelCase(finalSegment)).toBe(true);
+            }),
             { numRuns: Math.max(100, allLocaleKeys.length) },
         );
     });
 
     it('every key in pt-BR.json follows the dot-separated camelCase convention', () => {
         fc.assert(
-            fc.property(
-                fc.constantFrom(...ptBRKeys),
-                (key) => {
-                    const segments = key.split('.');
-                    expect(segments.length).toBeGreaterThanOrEqual(1);
+            fc.property(fc.constantFrom(...ptBRKeys), (key) => {
+                const segments = key.split('.');
+                expect(segments.length).toBeGreaterThanOrEqual(1);
 
-                    for (const segment of segments) {
-                        expect(segment.length).toBeGreaterThan(0);
-                    }
+                for (const segment of segments) {
+                    expect(segment.length).toBeGreaterThan(0);
+                }
 
-                    const finalSegment = segments[segments.length - 1];
-                    expect(isCamelCase(finalSegment)).toBe(true);
-                },
-            ),
+                const finalSegment = segments[segments.length - 1];
+                expect(isCamelCase(finalSegment)).toBe(true);
+            }),
             { numRuns: Math.max(100, ptBRKeys.length) },
         );
     });
 
     it('every key in en-US.json follows the dot-separated camelCase convention', () => {
         fc.assert(
-            fc.property(
-                fc.constantFrom(...enUSKeys),
-                (key) => {
-                    const segments = key.split('.');
-                    expect(segments.length).toBeGreaterThanOrEqual(1);
+            fc.property(fc.constantFrom(...enUSKeys), (key) => {
+                const segments = key.split('.');
+                expect(segments.length).toBeGreaterThanOrEqual(1);
 
-                    for (const segment of segments) {
-                        expect(segment.length).toBeGreaterThan(0);
-                    }
+                for (const segment of segments) {
+                    expect(segment.length).toBeGreaterThan(0);
+                }
 
-                    const finalSegment = segments[segments.length - 1];
-                    expect(isCamelCase(finalSegment)).toBe(true);
-                },
-            ),
+                const finalSegment = segments[segments.length - 1];
+                expect(isCamelCase(finalSegment)).toBe(true);
+            }),
             { numRuns: Math.max(100, enUSKeys.length) },
         );
     });

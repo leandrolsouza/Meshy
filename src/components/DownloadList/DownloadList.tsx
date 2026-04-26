@@ -50,7 +50,9 @@ export function DownloadList(): React.JSX.Element {
     if (items.length === 0) {
         return (
             <div className={styles.empty}>
-                <p className={styles.emptyTitle}>{intl.formatMessage({ id: 'downloads.empty.title' })}</p>
+                <p className={styles.emptyTitle}>
+                    {intl.formatMessage({ id: 'downloads.empty.title' })}
+                </p>
                 <p className={styles.emptyHint}>
                     {intl.formatMessage({ id: 'downloads.empty.hint' })}
                 </p>
@@ -63,8 +65,11 @@ export function DownloadList(): React.JSX.Element {
         filteredItems.length === 0
             ? intl.formatMessage({ id: 'downloads.ariaLive.none' })
             : filteredItems.length === 1
-                ? intl.formatMessage({ id: 'downloads.ariaLive.one' })
-                : intl.formatMessage({ id: 'downloads.ariaLive.many' }, { count: filteredItems.length });
+              ? intl.formatMessage({ id: 'downloads.ariaLive.one' })
+              : intl.formatMessage(
+                    { id: 'downloads.ariaLive.many' },
+                    { count: filteredItems.length },
+                );
 
     // Verifica se algum filtro está ativo
     const hasActiveFilters = searchTerm.trim() !== '' || selectedStatuses.length > 0;
@@ -79,7 +84,10 @@ export function DownloadList(): React.JSX.Element {
                         onClick={() => setIsConfirmOpen(true)}
                         aria-label={intl.formatMessage({ id: 'downloads.clearCompletedAriaLabel' })}
                     >
-                        {intl.formatMessage({ id: 'downloads.clearCompleted' }, { count: completedCount })}
+                        {intl.formatMessage(
+                            { id: 'downloads.clearCompleted' },
+                            { count: completedCount },
+                        )}
                     </button>
                 </div>
             )}
@@ -93,7 +101,10 @@ export function DownloadList(): React.JSX.Element {
             {hasActiveFilters && filteredItems.length > 0 && (
                 <div className={styles.filterIndicator}>
                     <span>
-                        {intl.formatMessage({ id: 'downloads.filterIndicator' }, { filtered: filteredItems.length, total: items.length })}
+                        {intl.formatMessage(
+                            { id: 'downloads.filterIndicator' },
+                            { filtered: filteredItems.length, total: items.length },
+                        )}
                     </span>
                     <button
                         type="button"
@@ -138,7 +149,10 @@ export function DownloadList(): React.JSX.Element {
             <ConfirmDialog
                 isOpen={isConfirmOpen}
                 title={intl.formatMessage({ id: 'downloads.confirmClearCompleted.title' })}
-                message={intl.formatMessage({ id: 'downloads.confirmClearCompleted.message' }, { count: completedCount })}
+                message={intl.formatMessage(
+                    { id: 'downloads.confirmClearCompleted.message' },
+                    { count: completedCount },
+                )}
                 onConfirmKeepFiles={() => {
                     setIsConfirmOpen(false);
                     handleClearCompleted(false);

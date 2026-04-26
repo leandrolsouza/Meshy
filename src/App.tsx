@@ -105,11 +105,16 @@ function App(): React.JSX.Element {
         <div className={styles.app}>
             {/* ── Title Bar ─────────────────────────────────────────────── */}
             <header className={styles.titleBar}>
-                <span className={styles.titleBarText}>{intl.formatMessage({ id: 'app.title' })}</span>
+                <span className={styles.titleBarText}>
+                    {intl.formatMessage({ id: 'app.title' })}
+                </span>
             </header>
 
             {/* ── Activity Bar ──────────────────────────────────────────── */}
-            <nav className={styles.activityBar} aria-label={intl.formatMessage({ id: 'app.nav.label' })}>
+            <nav
+                className={styles.activityBar}
+                aria-label={intl.formatMessage({ id: 'app.nav.label' })}
+            >
                 <button
                     className={
                         activeView === 'downloads' ? styles.activityIconActive : styles.activityIcon
@@ -185,7 +190,10 @@ function App(): React.JSX.Element {
             {/* ── Status Bar ────────────────────────────────────────────── */}
             <footer className={styles.statusBar}>
                 <span>
-                    {intl.formatMessage({ id: 'statusBar.activeDownloads' }, { count: activeDownloadCount })}
+                    {intl.formatMessage(
+                        { id: 'statusBar.activeDownloads' },
+                        { count: activeDownloadCount },
+                    )}
                 </span>
                 <span>
                     <VscArrowDown style={{ verticalAlign: 'middle' }} />{' '}

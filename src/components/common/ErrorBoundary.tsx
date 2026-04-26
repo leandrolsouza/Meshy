@@ -58,7 +58,10 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                     }}
                 >
                     <h1 style={{ fontSize: 20, marginBottom: 12 }}>
-                        <FormattedMessage id="errorBoundary.title" defaultMessage="Algo deu errado" />
+                        <FormattedMessage
+                            id="errorBoundary.title"
+                            defaultMessage="Algo deu errado"
+                        />
                     </h1>
                     <p style={{ color: '#666', marginBottom: 16 }}>
                         <FormattedMessage

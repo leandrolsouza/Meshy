@@ -81,9 +81,7 @@ function getIpcHandler(channel: string): (event: unknown, payload: unknown) => P
     const sm = makeMockSettingsManager();
     registerIpcHandlers(dm, sm);
 
-    const call = mockIpcMain.handle.mock.calls.find(
-        ([ch]: [string]) => ch === channel,
-    );
+    const call = mockIpcMain.handle.mock.calls.find(([ch]: [string]) => ch === channel);
     if (!call) {
         throw new Error(`IPC handler for channel "${channel}" not found`);
     }
@@ -101,17 +99,14 @@ describe('Property 6: Locale persistence round-trip', () => {
     // **Validates: Requirements 4.1, 5.3**
     it('persisting a supported locale via set() and retrieving via get().locale returns the same locale', () => {
         fc.assert(
-            fc.property(
-                fc.constantFrom(...SUPPORTED_LOCALES),
-                (locale) => {
-                    const manager = makeManager();
+            fc.property(fc.constantFrom(...SUPPORTED_LOCALES), (locale) => {
+                const manager = makeManager();
 
-                    manager.set({ locale });
-                    const result = manager.get().locale;
+                manager.set({ locale });
+                const result = manager.get().locale;
 
-                    expect(result).toBe(locale);
-                },
-            ),
+                expect(result).toBe(locale);
+            }),
             { numRuns: 100 },
         );
     });

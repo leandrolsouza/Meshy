@@ -65,7 +65,9 @@ describe('ThemeSwitcher — testes unitários', () => {
     // ── Req 4.1: select com aria-label="Tema" ────────────────────────────
 
     it('renderiza um select com aria-label="Tema" (Req 4.1)', () => {
-        renderWithIntl(<ThemeSwitcher currentThemeId={DEFAULT_THEME_ID} onThemeChange={jest.fn()} />);
+        renderWithIntl(
+            <ThemeSwitcher currentThemeId={DEFAULT_THEME_ID} onThemeChange={jest.fn()} />,
+        );
 
         const select = screen.getByLabelText('Tema');
         expect(select).toBeInTheDocument();
@@ -75,7 +77,9 @@ describe('ThemeSwitcher — testes unitários', () => {
     // ── Req 4.2: lista todos os 6 temas pelo displayName ────────────────
 
     it('lista todos os 6 temas pelo displayName (Req 4.2)', () => {
-        renderWithIntl(<ThemeSwitcher currentThemeId={DEFAULT_THEME_ID} onThemeChange={jest.fn()} />);
+        renderWithIntl(
+            <ThemeSwitcher currentThemeId={DEFAULT_THEME_ID} onThemeChange={jest.fn()} />,
+        );
 
         const options = screen.getAllByRole('option');
         expect(options).toHaveLength(10);
@@ -104,7 +108,9 @@ describe('ThemeSwitcher — testes unitários', () => {
 
     it('chama onThemeChange imediatamente ao trocar o select, sem botão "Salvar" (Req 4.5)', () => {
         const onThemeChange = jest.fn();
-        renderWithIntl(<ThemeSwitcher currentThemeId={DEFAULT_THEME_ID} onThemeChange={onThemeChange} />);
+        renderWithIntl(
+            <ThemeSwitcher currentThemeId={DEFAULT_THEME_ID} onThemeChange={onThemeChange} />,
+        );
 
         // Não deve existir botão "Salvar" no componente
         expect(screen.queryByRole('button', { name: /salvar/i })).not.toBeInTheDocument();
@@ -120,7 +126,9 @@ describe('ThemeSwitcher — testes unitários', () => {
     // ── Req 9.1: navegabilidade via teclado ─────────────────────────────
 
     it('é navegável via teclado — Tab para foco (Req 9.1)', () => {
-        renderWithIntl(<ThemeSwitcher currentThemeId={DEFAULT_THEME_ID} onThemeChange={jest.fn()} />);
+        renderWithIntl(
+            <ThemeSwitcher currentThemeId={DEFAULT_THEME_ID} onThemeChange={jest.fn()} />,
+        );
 
         const select = screen.getByLabelText('Tema');
 
@@ -135,7 +143,9 @@ describe('ThemeSwitcher — testes unitários', () => {
     // ── Req 9.2: atributos ARIA presentes ───────────────────────────────
 
     it('possui atributos ARIA corretos: aria-label, aria-live, role="status" (Req 9.2)', () => {
-        renderWithIntl(<ThemeSwitcher currentThemeId={DEFAULT_THEME_ID} onThemeChange={jest.fn()} />);
+        renderWithIntl(
+            <ThemeSwitcher currentThemeId={DEFAULT_THEME_ID} onThemeChange={jest.fn()} />,
+        );
 
         // Select tem aria-label
         const select = screen.getByLabelText('Tema');
@@ -151,7 +161,9 @@ describe('ThemeSwitcher — testes unitários', () => {
 
     it('chama onThemeChange ao trocar tema — persistência é responsabilidade do SettingsPanel (Req 10.1)', () => {
         const onThemeChange = jest.fn();
-        renderWithIntl(<ThemeSwitcher currentThemeId={DEFAULT_THEME_ID} onThemeChange={onThemeChange} />);
+        renderWithIntl(
+            <ThemeSwitcher currentThemeId={DEFAULT_THEME_ID} onThemeChange={onThemeChange} />,
+        );
 
         // Simula troca de tema
         const select = screen.getByLabelText('Tema');
@@ -165,7 +177,9 @@ describe('ThemeSwitcher — testes unitários', () => {
     // ── Req 10.3: renderiza corretamente com tema padrão ────────────────
 
     it('renderiza corretamente com DEFAULT_THEME_ID quando nenhum tema específico é fornecido (Req 10.3)', () => {
-        renderWithIntl(<ThemeSwitcher currentThemeId={DEFAULT_THEME_ID} onThemeChange={jest.fn()} />);
+        renderWithIntl(
+            <ThemeSwitcher currentThemeId={DEFAULT_THEME_ID} onThemeChange={jest.fn()} />,
+        );
 
         const select = screen.getByLabelText('Tema') as HTMLSelectElement;
         expect(select.value).toBe(DEFAULT_THEME_ID);

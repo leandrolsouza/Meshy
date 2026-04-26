@@ -16,12 +16,7 @@ import { logger, createScopedLogger } from './logger';
 import type { ScopedLogger } from './logger';
 import { metrics } from './metrics';
 import type { MetricsSnapshot } from './metrics';
-import {
-    validatePayload,
-    infoHashSchema,
-    infoHashUrlSchema,
-    urlSchema,
-} from './payloadValidator';
+import { validatePayload, infoHashSchema, infoHashUrlSchema, urlSchema } from './payloadValidator';
 import { validateSettingsPayload } from './settingsValidator';
 
 export type { IPCResponse } from '../shared/types';
@@ -55,7 +50,11 @@ const IPC_TIMEOUT_MS = 30_000;
  * Envolve uma Promise com um timeout. Se a operação não completar dentro do
  * prazo, rejeita com um erro descritivo incluindo o nome do canal IPC.
  */
-function withTimeout<T>(promise: Promise<T>, channel: string, timeoutMs = IPC_TIMEOUT_MS): Promise<T> {
+function withTimeout<T>(
+    promise: Promise<T>,
+    channel: string,
+    timeoutMs = IPC_TIMEOUT_MS,
+): Promise<T> {
     return new Promise<T>((resolve, reject) => {
         const timer = setTimeout(() => {
             reject(new Error(`Operação expirou após ${timeoutMs}ms`));
@@ -88,7 +87,11 @@ function withMetrics<T>(
     return handler().then((result) => {
         const durationMs = Date.now() - start;
         metrics.recordIpcCall(channel, durationMs, result.success);
-        logger.debug(`[IPC] ${channel} concluído`, `durationMs=${durationMs}`, `success=${result.success}`);
+        logger.debug(
+            `[IPC] ${channel} concluído`,
+            `durationMs=${durationMs}`,
+            `success=${result.success}`,
+        );
         return result;
     });
 }
@@ -214,27 +217,21 @@ export function registerIpcHandlers(
     );
 
     // ── torrent:pause ─────────────────────────────────────────────────────────
-    trackedHandle(
-        'torrent:pause',
-        async (_event, payload: unknown): Promise<IPCResponse<void>> => {
-            try {
-                if (torrentEngine?.isRestarting()) {
-                    return fail(ErrorCodes.ENGINE_RESTARTING);
-                }
-
-                const result = validatePayload<{ infoHash: string }>(payload, infoHashSchema);
-                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
-
-                await withTimeout(
-                    downloadManager.pause(result.data.infoHash),
-                    'torrent:pause',
-                );
-                return ok(undefined);
-            } catch (err) {
-                return failWithLog('torrent:pause', err);
+    trackedHandle('torrent:pause', async (_event, payload: unknown): Promise<IPCResponse<void>> => {
+        try {
+            if (torrentEngine?.isRestarting()) {
+                return fail(ErrorCodes.ENGINE_RESTARTING);
             }
-        },
-    );
+
+            const result = validatePayload<{ infoHash: string }>(payload, infoHashSchema);
+            if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
+
+            await withTimeout(downloadManager.pause(result.data.infoHash), 'torrent:pause');
+            return ok(undefined);
+        } catch (err) {
+            return failWithLog('torrent:pause', err);
+        }
+    });
 
     // ── torrent:resume ────────────────────────────────────────────────────────
     trackedHandle(
@@ -248,10 +245,7 @@ export function registerIpcHandlers(
                 const result = validatePayload<{ infoHash: string }>(payload, infoHashSchema);
                 if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
 
-                await withTimeout(
-                    downloadManager.resume(result.data.infoHash),
-                    'torrent:resume',
-                );
+                await withTimeout(downloadManager.resume(result.data.infoHash), 'torrent:resume');
                 return ok(undefined);
             } catch (err) {
                 return failWithLog('torrent:resume', err);
@@ -748,14 +742,11 @@ export function registerIpcHandlers(
                 const componentStackStr =
                     typeof componentStack === 'string' ? componentStack : undefined;
 
-                scopedLog.error(
-                    `${source}: ${message}`,
-                    {
-                        source,
-                        ...(stackStr ? { stack: stackStr } : {}),
-                        ...(componentStackStr ? { componentStack: componentStackStr } : {}),
-                    },
-                );
+                scopedLog.error(`${source}: ${message}`, {
+                    source,
+                    ...(stackStr ? { stack: stackStr } : {}),
+                    ...(componentStackStr ? { componentStack: componentStackStr } : {}),
+                });
 
                 // Registrar nas métricas
                 metrics.recordRendererError();
@@ -769,15 +760,12 @@ export function registerIpcHandlers(
 
     // ── app:get-metrics ───────────────────────────────────────────────────────
     // Retorna snapshot das métricas de operação para debugging no renderer.
-    trackedHandle(
-        'app:get-metrics',
-        async (_event): Promise<IPCResponse<MetricsSnapshot>> => {
-            try {
-                const snapshot = metrics.getSnapshot();
-                return ok(snapshot);
-            } catch (err) {
-                return failWithLog('app:get-metrics', err);
-            }
-        },
-    );
+    trackedHandle('app:get-metrics', async (_event): Promise<IPCResponse<MetricsSnapshot>> => {
+        try {
+            const snapshot = metrics.getSnapshot();
+            return ok(snapshot);
+        } catch (err) {
+            return failWithLog('app:get-metrics', err);
+        }
+    });
 }

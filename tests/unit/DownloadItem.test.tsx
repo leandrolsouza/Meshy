@@ -160,9 +160,7 @@ describe('DownloadItem — campos de limite de velocidade', () => {
             const dlInput = screen.getByLabelText('Limite de download (KB/s)');
             fireEvent.change(dlInput, { target: { value: '-5' } });
 
-            fireEvent.click(
-                screen.getByRole('button', { name: 'Aplicar limites de velocidade' }),
-            );
+            fireEvent.click(screen.getByRole('button', { name: 'Aplicar limites de velocidade' }));
 
             expect(
                 screen.getByText('Valor inválido: deve ser um inteiro não-negativo'),
@@ -178,9 +176,7 @@ describe('DownloadItem — campos de limite de velocidade', () => {
             const ulInput = screen.getByLabelText('Limite de upload (KB/s)');
             fireEvent.change(ulInput, { target: { value: '3.5' } });
 
-            fireEvent.click(
-                screen.getByRole('button', { name: 'Aplicar limites de velocidade' }),
-            );
+            fireEvent.click(screen.getByRole('button', { name: 'Aplicar limites de velocidade' }));
 
             expect(
                 screen.getByText('Valor inválido: deve ser um inteiro não-negativo'),

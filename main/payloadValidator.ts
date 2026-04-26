@@ -23,9 +23,7 @@ interface FieldRule {
 export type PayloadSchema = Record<string, FieldRule>;
 
 /** Resultado da validação */
-export type ValidationResult<T> =
-    | { valid: true; data: T }
-    | { valid: false };
+export type ValidationResult<T> = { valid: true; data: T } | { valid: false };
 
 // ─── Validador ────────────────────────────────────────────────────────────────
 
@@ -44,10 +42,7 @@ export type ValidationResult<T> =
  * if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
  * const { infoHash } = result.data;
  */
-export function validatePayload<T>(
-    payload: unknown,
-    schema: PayloadSchema,
-): ValidationResult<T> {
+export function validatePayload<T>(payload: unknown, schema: PayloadSchema): ValidationResult<T> {
     if (typeof payload !== 'object' || payload === null) {
         return { valid: false };
     }

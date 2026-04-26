@@ -45,7 +45,10 @@ export function DownloadListToolbar({
                         onClick={() => setIsConfirmOpen(true)}
                         aria-label={intl.formatMessage({ id: 'downloads.clearCompletedAriaLabel' })}
                     >
-                        {intl.formatMessage({ id: 'downloads.clearCompleted' }, { count: completedCount })}
+                        {intl.formatMessage(
+                            { id: 'downloads.clearCompleted' },
+                            { count: completedCount },
+                        )}
                     </button>
                 )}
             </div>
@@ -58,7 +61,10 @@ export function DownloadListToolbar({
             <ConfirmDialog
                 isOpen={isConfirmOpen}
                 title={intl.formatMessage({ id: 'downloads.confirmClearCompleted.title' })}
-                message={intl.formatMessage({ id: 'downloads.confirmClearCompleted.message' }, { count: completedCount })}
+                message={intl.formatMessage(
+                    { id: 'downloads.confirmClearCompleted.message' },
+                    { count: completedCount },
+                )}
                 onConfirmKeepFiles={() => {
                     setIsConfirmOpen(false);
                     onClearCompleted(false);

@@ -167,7 +167,10 @@ function attachRendererCrashHandler(window: BrowserWindow): void {
         try {
             downloadManager?.persistSession();
         } catch (persistError) {
-            logger.error('[CRASH] Falha ao persistir sessão após crash do renderer:', String(persistError));
+            logger.error(
+                '[CRASH] Falha ao persistir sessão após crash do renderer:',
+                String(persistError),
+            );
         }
 
         // Para crashes recuperáveis, recarregar a janela automaticamente

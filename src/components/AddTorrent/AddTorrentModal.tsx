@@ -128,7 +128,11 @@ export function AddTorrentModal({
                 const allIndices = files.map((f) => f.index);
                 setFileSelection({ infoHash, files, selectedIndices: allIndices });
             } catch (err: unknown) {
-                setSubmitError(err instanceof Error ? err.message : intl.formatMessage({ id: 'addTorrent.errorGeneric' }));
+                setSubmitError(
+                    err instanceof Error
+                        ? err.message
+                        : intl.formatMessage({ id: 'addTorrent.errorGeneric' }),
+                );
             } finally {
                 setIsSubmitting(false);
             }
@@ -163,7 +167,11 @@ export function AddTorrentModal({
                 setSubmitError(resolveErrorMessage(intl, response.error));
             }
         } catch (err: unknown) {
-            setSubmitError(err instanceof Error ? err.message : intl.formatMessage({ id: 'addTorrent.errorApplySelection' }));
+            setSubmitError(
+                err instanceof Error
+                    ? err.message
+                    : intl.formatMessage({ id: 'addTorrent.errorApplySelection' }),
+            );
         } finally {
             setFileSelectionLoading(false);
         }
@@ -182,9 +190,7 @@ export function AddTorrentModal({
             }
 
             if (!isValidMagnetUri(trimmed)) {
-                setValidationError(
-                    intl.formatMessage({ id: 'addTorrent.magnetLink.invalid' }),
-                );
+                setValidationError(intl.formatMessage({ id: 'addTorrent.magnetLink.invalid' }));
                 return;
             }
 
@@ -257,7 +263,9 @@ export function AddTorrentModal({
                     onClick={handleConfirmFileSelection}
                     disabled={isAddDisabled || fileSelectionLoading}
                 >
-                    {fileSelectionLoading ? intl.formatMessage({ id: 'addTorrent.applyingSelection' }) : intl.formatMessage({ id: 'common.confirm' })}
+                    {fileSelectionLoading
+                        ? intl.formatMessage({ id: 'addTorrent.applyingSelection' })
+                        : intl.formatMessage({ id: 'common.confirm' })}
                 </button>
             </div>
         </div>
@@ -312,7 +320,9 @@ export function AddTorrentModal({
                     {intl.formatMessage({ id: 'common.cancel' })}
                 </button>
                 <button type="submit" className="btn btn--primary" disabled={isAddDisabled}>
-                    {isSubmitting ? intl.formatMessage({ id: 'addTorrent.submitting' }) : intl.formatMessage({ id: 'addTorrent.submit' })}
+                    {isSubmitting
+                        ? intl.formatMessage({ id: 'addTorrent.submitting' })
+                        : intl.formatMessage({ id: 'addTorrent.submit' })}
                 </button>
             </div>
         </form>

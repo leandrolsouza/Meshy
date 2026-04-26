@@ -479,7 +479,11 @@ describe('isValidSpeedLimit', () => {
 
 // ─── Importações para testes de Tracker URL ───────────────────────────────────
 
-import { isValidTrackerUrl, normalizeTrackerUrl, calcularLimiteEfetivo } from '../../shared/validators';
+import {
+    isValidTrackerUrl,
+    normalizeTrackerUrl,
+    calcularLimiteEfetivo,
+} from '../../shared/validators';
 
 // ─── isValidTrackerUrl (testes unitários) ─────────────────────────────────────
 
@@ -659,10 +663,10 @@ describe('[PBT] Propriedade 2: normalização é idempotente', () => {
         .tuple(
             fc.constantFrom('http', 'https', 'udp', 'HTTP', 'HTTPS', 'UDP', 'Http', 'Udp'),
             fc
-                .stringOf(
-                    fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')),
-                    { minLength: 1, maxLength: 15 },
-                )
+                .stringOf(fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')), {
+                    minLength: 1,
+                    maxLength: 15,
+                })
                 .map((s) => s + '.com'),
             fc.oneof(
                 fc.constant(''),
@@ -700,10 +704,10 @@ describe('[PBT] Propriedade 3: round-trip — isValidTrackerUrl(normalizeTracker
         .tuple(
             fc.constantFrom('http', 'https', 'udp', 'HTTP', 'HTTPS', 'UDP', 'Http', 'Udp'),
             fc
-                .stringOf(
-                    fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')),
-                    { minLength: 1, maxLength: 15 },
-                )
+                .stringOf(fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')), {
+                    minLength: 1,
+                    maxLength: 15,
+                })
                 .map((s) => s + '.com'),
             fc.oneof(
                 fc.constant(''),
@@ -782,18 +786,24 @@ describe('[PBT] Propriedade 1: calcularLimiteEfetivo retorna o menor valor posit
 
     it('retorna global quando individual é 0 e global > 0', () => {
         fc.assert(
-            fc.property(fc.nat({ max: 1_000_000 }).filter((n) => n > 0), (global) => {
-                expect(calcularLimiteEfetivo(0, global)).toBe(global);
-            }),
+            fc.property(
+                fc.nat({ max: 1_000_000 }).filter((n) => n > 0),
+                (global) => {
+                    expect(calcularLimiteEfetivo(0, global)).toBe(global);
+                },
+            ),
             { numRuns: 100 },
         );
     });
 
     it('retorna individual quando global é 0 e individual > 0', () => {
         fc.assert(
-            fc.property(fc.nat({ max: 1_000_000 }).filter((n) => n > 0), (individual) => {
-                expect(calcularLimiteEfetivo(individual, 0)).toBe(individual);
-            }),
+            fc.property(
+                fc.nat({ max: 1_000_000 }).filter((n) => n > 0),
+                (individual) => {
+                    expect(calcularLimiteEfetivo(individual, 0)).toBe(individual);
+                },
+            ),
             { numRuns: 100 },
         );
     });

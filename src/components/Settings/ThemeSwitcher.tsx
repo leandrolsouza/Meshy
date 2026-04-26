@@ -35,7 +35,10 @@ export function ThemeSwitcher({
             const theme = getTheme(newId);
             onThemeChange(newId);
             setAnnouncement(
-                intl.formatMessage({ id: 'settings.general.themeChanged' }, { themeName: theme.displayName }),
+                intl.formatMessage(
+                    { id: 'settings.general.themeChanged' },
+                    { themeName: theme.displayName },
+                ),
             );
         },
         [onThemeChange, intl],
