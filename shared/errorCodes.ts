@@ -33,6 +33,10 @@ export const ErrorCodes = {
     FILE_INDEX_INVALID: 'error.files.indexInvalid',
     NO_FILE_SELECTED: 'error.files.noFileSelected',
 
+    // Fila de downloads
+    QUEUE_NOT_FOUND: 'error.queue.notFound',
+    QUEUE_INVALID_INDEX: 'error.queue.invalidIndex',
+
     // Destino (pasta/arquivo)
     DESTINATION_FOLDER_NOT_FOUND: 'error.destination.folderNotFound',
     DESTINATION_FILE_NOT_FOUND: 'error.destination.fileNotFound',

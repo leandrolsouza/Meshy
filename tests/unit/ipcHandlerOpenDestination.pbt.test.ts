@@ -150,6 +150,8 @@ function makeMockDownloadManager(items: DownloadItem[] = []): DownloadManager {
         restoreSession: jest.fn().mockResolvedValue(undefined),
         persistSession: jest.fn(),
         setMaxConcurrentDownloads: jest.fn(),
+        reorderQueue: jest.fn().mockReturnValue([]),
+        getQueueOrder: jest.fn().mockReturnValue([]),
         on: jest.fn(),
     } as unknown as DownloadManager;
 }

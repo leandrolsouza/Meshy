@@ -21,12 +21,16 @@ import styles from './DownloadList.module.css';
  */
 export function DownloadList(): React.JSX.Element {
     const intl = useIntl();
-    const { items, pause, resume, remove } = useDownloads();
+    const { items, pause, resume, remove, reorderQueue } = useDownloads();
     const { searchTerm, selectedStatuses, sortField, sortDirection, resetFilters } =
         useFilterStore();
 
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const [collapsedGroups, setCollapsedGroups] = useState<Set<StatusGroup>>(new Set());
+
+    // ── Estado de drag-and-drop (Task 8.2) ───────────────────────────────────
+    const [draggedInfoHash, setDraggedInfoHash] = useState<string | null>(null);
+    const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
 
     // Pipeline de filtragem e ordenação aplicado sobre os itens do store
     const filteredItems = useMemo(
@@ -41,6 +45,91 @@ export function DownloadList(): React.JSX.Element {
     const completedCount = useMemo(
         () => items.filter((i) => i.status === 'completed').length,
         [items],
+    );
+
+    // Contagem de itens enfileirados (para desabilitar botão "mover para baixo" no último)
+    const queueSize = useMemo(
+        () => items.filter((i) => i.status === 'queued').length,
+        [items],
+    );
+
+    // Callback para mover item para cima na fila
+    const handleMoveUp = useCallback(
+        (infoHash: string) => {
+            const item = items.find((i) => i.infoHash === infoHash);
+            if (item?.queuePosition !== undefined && item.queuePosition > 1) {
+                // queuePosition é 1-based; newIndex é 0-based, uma posição acima
+                const newIndex = item.queuePosition - 2;
+                reorderQueue(infoHash, newIndex);
+            }
+        },
+        [items, reorderQueue],
+    );
+
+    // Callback para mover item para baixo na fila
+    const handleMoveDown = useCallback(
+        (infoHash: string) => {
+            const item = items.find((i) => i.infoHash === infoHash);
+            if (item?.queuePosition !== undefined && item.queuePosition < queueSize) {
+                // queuePosition é 1-based; newIndex é 0-based, uma posição abaixo
+                const newIndex = item.queuePosition;
+                reorderQueue(infoHash, newIndex);
+            }
+        },
+        [items, queueSize, reorderQueue],
+    );
+
+    // ── Callbacks de drag-and-drop (Task 8.2) ───────────────────────────────
+    const handleDragStart = useCallback((infoHash: string) => {
+        setDraggedInfoHash(infoHash);
+    }, []);
+
+    const handleDragEnd = useCallback(() => {
+        setDraggedInfoHash(null);
+        setDropTargetIndex(null);
+    }, []);
+
+    const handleDragOver = useCallback(
+        (e: React.DragEvent<HTMLDivElement>, groupItems: { infoHash: string }[]) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+
+            // Calcular posição de drop baseado na posição do mouse entre os itens
+            const container = e.currentTarget;
+            const children = Array.from(container.children) as HTMLElement[];
+            let targetIndex = groupItems.length; // padrão: final da lista
+
+            for (let i = 0; i < children.length; i++) {
+                const rect = children[i].getBoundingClientRect();
+                const midY = rect.top + rect.height / 2;
+                if (e.clientY < midY) {
+                    targetIndex = i;
+                    break;
+                }
+            }
+
+            setDropTargetIndex(targetIndex);
+        },
+        [],
+    );
+
+    const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+        // Limpar apenas se saiu do container (não de um filho)
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+            setDropTargetIndex(null);
+        }
+    }, []);
+
+    const handleDrop = useCallback(
+        (e: React.DragEvent<HTMLDivElement>) => {
+            e.preventDefault();
+            if (draggedInfoHash !== null && dropTargetIndex !== null) {
+                reorderQueue(draggedInfoHash, dropTargetIndex);
+            }
+            setDraggedInfoHash(null);
+            setDropTargetIndex(null);
+        },
+        [draggedInfoHash, dropTargetIndex, reorderQueue],
     );
 
     // Toggle de colapso de um grupo
@@ -179,18 +268,49 @@ export function DownloadList(): React.JSX.Element {
                                     </span>
                                 </button>
                                 {!isCollapsed && (
-                                    <div className={styles.groupItems}>
-                                        {group.items.map((item) => (
-                                            <DownloadItem
-                                                key={item.infoHash}
-                                                item={item}
-                                                onPause={pause}
-                                                onResume={resume}
-                                                onRemove={(infoHash, deleteFiles) =>
-                                                    remove(infoHash, deleteFiles)
-                                                }
-                                            />
+                                    <div
+                                        className={styles.groupItems}
+                                        {...(group.id === 'waiting'
+                                            ? {
+                                                onDragOver: (e: React.DragEvent<HTMLDivElement>) =>
+                                                    handleDragOver(e, group.items),
+                                                onDrop: handleDrop,
+                                                onDragLeave: handleDragLeave,
+                                            }
+                                            : {})}
+                                    >
+                                        {group.items.map((item, index) => (
+                                            <React.Fragment key={item.infoHash}>
+                                                {/* Indicador de drop antes do item (Task 8.2) */}
+                                                {group.id === 'waiting' &&
+                                                    draggedInfoHash !== null &&
+                                                    dropTargetIndex === index && (
+                                                        <div className={styles.dropIndicator} />
+                                                    )}
+                                                <DownloadItem
+                                                    item={item}
+                                                    queueSize={queueSize}
+                                                    onPause={pause}
+                                                    onResume={resume}
+                                                    onRemove={(infoHash, deleteFiles) =>
+                                                        remove(infoHash, deleteFiles)
+                                                    }
+                                                    onMoveUp={handleMoveUp}
+                                                    onMoveDown={handleMoveDown}
+                                                    onDragStart={handleDragStart}
+                                                    onDragEnd={handleDragEnd}
+                                                    isDragging={
+                                                        draggedInfoHash === item.infoHash
+                                                    }
+                                                />
+                                            </React.Fragment>
                                         ))}
+                                        {/* Indicador de drop após o último item (Task 8.2) */}
+                                        {group.id === 'waiting' &&
+                                            draggedInfoHash !== null &&
+                                            dropTargetIndex === group.items.length && (
+                                                <div className={styles.dropIndicator} />
+                                            )}
                                     </div>
                                 )}
                             </div>

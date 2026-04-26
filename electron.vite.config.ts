@@ -33,6 +33,7 @@ export default defineConfig({
     },
     renderer: {
         root: resolve(__dirname, 'src'),
+        publicDir: resolve(__dirname, 'src/public'),
         build: {
             rollupOptions: {
                 input: {

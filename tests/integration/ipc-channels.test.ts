@@ -64,6 +64,8 @@ const EXPECTED_CHANNELS = [
     'app:get-metrics',
     'torrent:open-folder',
     'torrent:open-file',
+    'queue:reorder',
+    'queue:get-order',
 ] as const;
 
 function makeSampleDownloadItem(overrides: Partial<DownloadItem> = {}): DownloadItem {
@@ -99,6 +101,8 @@ function makeMockDownloadManager(): DownloadManager {
         persistSession: jest.fn(),
         setMaxConcurrentDownloads: jest.fn(),
         on: jest.fn(),
+        reorderQueue: jest.fn().mockReturnValue([]),
+        getQueueOrder: jest.fn().mockReturnValue([]),
     } as unknown as DownloadManager;
 }
 
@@ -170,9 +174,9 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
 
     // ── Smoke tests: all channels registered ─────────────────────────────────
 
-    describe('Smoke: all 25 IPC channels are registered and respond', () => {
-        it('registers exactly 25 IPC channels', () => {
-            expect(mockIpcMain.handle).toHaveBeenCalledTimes(25);
+    describe('Smoke: all 27 IPC channels are registered and respond', () => {
+        it('registers exactly 27 IPC channels', () => {
+            expect(mockIpcMain.handle).toHaveBeenCalledTimes(27);
         });
 
         it.each(EXPECTED_CHANNELS)('channel "%s" is registered', (channel) => {

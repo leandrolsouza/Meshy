@@ -118,6 +118,16 @@ const meshyAPI: MeshyAPI = {
         return ipcRenderer.invoke('torrent:open-file', { infoHash });
     },
 
+    // ── Fila de downloads — reordenação e consulta ─────────────────────────────
+
+    reorderQueue(infoHash: string, newIndex: number): Promise<IPCResponse<string[]>> {
+        return ipcRenderer.invoke('queue:reorder', { infoHash, newIndex });
+    },
+
+    getQueueOrder(): Promise<IPCResponse<string[]>> {
+        return ipcRenderer.invoke('queue:get-order');
+    },
+
     // ── Events ──────────────────────────────────────────────────────────────────
 
     /**

@@ -148,6 +148,10 @@ export function groupByStatus(items: DownloadItem[]): DownloadGroup[] {
     for (const id of GROUP_ORDER) {
         const groupItems = buckets.get(id);
         if (groupItems && groupItems.length > 0) {
+            // Itens enfileirados devem respeitar a ordem da fila (queuePosition ascendente)
+            if (id === 'waiting') {
+                groupItems.sort((a, b) => (a.queuePosition ?? 0) - (b.queuePosition ?? 0));
+            }
             groups.push({
                 id,
                 labelKey: GROUP_LABEL_KEYS[id],

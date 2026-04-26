@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useIntl } from 'react-intl';
 import {
     VscArrowDown,
@@ -64,18 +64,31 @@ const STATUS_LABEL_KEYS: Record<DownloadItemType['status'], string> = {
 
 interface DownloadItemProps {
     item: DownloadItemType;
+    queueSize: number; // Tamanho total da fila (para desabilitar "mover para baixo")
     onPause: (infoHash: string) => void;
     onResume: (infoHash: string) => void;
     onRemove: (infoHash: string, deleteFiles: boolean) => void;
+    onMoveUp: (infoHash: string) => void;
+    onMoveDown: (infoHash: string) => void;
+    // Drag-and-drop (Task 8.1)
+    onDragStart?: (infoHash: string) => void;
+    onDragEnd?: () => void;
+    isDragging?: boolean;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function DownloadItem({
     item,
+    queueSize,
     onPause,
     onResume,
     onRemove,
+    onMoveUp,
+    onMoveDown,
+    onDragStart,
+    onDragEnd,
+    isDragging,
 }: DownloadItemProps): React.JSX.Element {
     const intl = useIntl();
     const progressPercent = Math.round(item.progress * 100);
@@ -83,7 +96,12 @@ export function DownloadItem({
     const isPaused = item.status === 'paused';
     const isWaiting =
         item.status === 'queued' || item.status === 'resolving-metadata';
+    const isQueued = item.status === 'queued';
     const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+
+    // ── Ref para rastrear mudança de posição na fila (aria-live) ─────────────
+    const prevQueuePositionRef = useRef<number | undefined>(item.queuePosition);
+    const [positionAnnouncement, setPositionAnnouncement] = useState<string>('');
 
     // ── File selector expansion state (Task 6.1) ─────────────────────────────
     const [expanded, setExpanded] = useState(false);
@@ -105,6 +123,23 @@ export function DownloadItem({
 
     // Can expand when torrent is not in resolving-metadata state
     const canExpand = item.status !== 'resolving-metadata' && item.status !== 'queued';
+
+    // ── Anunciar mudança de posição na fila via aria-live (Task 6.4) ─────────
+    useEffect(() => {
+        if (
+            item.queuePosition !== undefined &&
+            prevQueuePositionRef.current !== undefined &&
+            item.queuePosition !== prevQueuePositionRef.current
+        ) {
+            setPositionAnnouncement(
+                intl.formatMessage(
+                    { id: 'downloads.queue.positionAnnounce' },
+                    { name: item.name, position: item.queuePosition },
+                ),
+            );
+        }
+        prevQueuePositionRef.current = item.queuePosition;
+    }, [item.queuePosition, item.name, intl]);
 
     // ── Fetch files when expanded (Task 6.2) ─────────────────────────────────
     // Busca inicial ao expandir. O setState no início do effect é intencional:
@@ -151,7 +186,7 @@ export function DownloadItem({
     // ── Atualizar progresso dos arquivos periodicamente enquanto baixando ─────
     const isActive = item.status === 'downloading' || item.status === 'resolving-metadata';
 
-    const cardClassName = `${styles.card}${item.status === 'downloading' ? ` ${styles.cardActive}` : ''}`;
+    const cardClassName = `${styles.card}${item.status === 'downloading' ? ` ${styles.cardActive}` : ''}${isDragging ? ` ${styles.isDragging}` : ''}`;
 
     useEffect(() => {
         if (!expanded || !isActive || files.length === 0) return;
@@ -274,8 +309,28 @@ export function DownloadItem({
         item.totalFileCount !== undefined &&
         item.totalFileCount > 0;
 
+    // ── Handlers de drag-and-drop (Task 8.1) ───────────────────────────────
+    const handleDragStart = useCallback(
+        (e: React.DragEvent) => {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', item.infoHash);
+            onDragStart?.(item.infoHash);
+        },
+        [item.infoHash, onDragStart],
+    );
+
+    const handleDragEnd = useCallback(() => {
+        onDragEnd?.();
+    }, [onDragEnd]);
+
     return (
-        <div className={cardClassName} onContextMenu={handleContextMenu}>
+        <div
+            className={cardClassName}
+            onContextMenu={handleContextMenu}
+            draggable={item.status === 'queued'}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+        >
             {/* Name and status */}
             <div className={styles.header}>
                 <span className={styles.name} title={item.name}>
@@ -287,6 +342,15 @@ export function DownloadItem({
                             {intl.formatMessage(
                                 { id: 'downloads.fileCount' },
                                 { selected: item.selectedFileCount, total: item.totalFileCount },
+                            )}
+                        </span>
+                    )}
+                    {/* Badge de posição na fila (Task 6.2) */}
+                    {isQueued && item.queuePosition !== undefined && (
+                        <span className={styles.queueBadge}>
+                            {intl.formatMessage(
+                                { id: 'downloads.queue.positionBadge' },
+                                { position: item.queuePosition },
                             )}
                         </span>
                     )}
@@ -356,6 +420,35 @@ export function DownloadItem({
 
             {/* Actions */}
             <div className={styles.actions}>
+                {/* Botões de reordenação na fila (Task 6.3) */}
+                {isQueued && (
+                    <button
+                        className={`btn ${item.queuePosition === 1 ? styles.queueButtonDisabled : ''}`}
+                        onClick={() => onMoveUp(item.infoHash)}
+                        aria-label={intl.formatMessage(
+                            { id: 'downloads.queue.moveUpAriaLabel' },
+                            { name: item.name },
+                        )}
+                        aria-disabled={item.queuePosition === 1 ? 'true' : undefined}
+                        disabled={item.queuePosition === 1}
+                    >
+                        <VscArrowUp /> {intl.formatMessage({ id: 'downloads.queue.moveUp' })}
+                    </button>
+                )}
+                {isQueued && (
+                    <button
+                        className={`btn ${item.queuePosition === queueSize ? styles.queueButtonDisabled : ''}`}
+                        onClick={() => onMoveDown(item.infoHash)}
+                        aria-label={intl.formatMessage(
+                            { id: 'downloads.queue.moveDownAriaLabel' },
+                            { name: item.name },
+                        )}
+                        aria-disabled={item.queuePosition === queueSize ? 'true' : undefined}
+                        disabled={item.queuePosition === queueSize}
+                    >
+                        <VscArrowDown /> {intl.formatMessage({ id: 'downloads.queue.moveDown' })}
+                    </button>
+                )}
                 {canExpand && (
                     <button
                         className="btn"
@@ -553,6 +646,11 @@ export function DownloadItem({
                     )}
                 </ul>
             )}
+
+            {/* Região aria-live para anúncio de mudança de posição (Task 6.4) */}
+            <div aria-live="polite" className={styles.srOnly}>
+                {positionAnnouncement}
+            </div>
         </div>
     );
 }

@@ -52,6 +52,8 @@ function makeMockDownloadManager(): DownloadManager {
         restoreSession: jest.fn().mockResolvedValue(undefined),
         persistSession: jest.fn(),
         setMaxConcurrentDownloads: jest.fn(),
+        reorderQueue: jest.fn().mockReturnValue([]),
+        getQueueOrder: jest.fn().mockReturnValue([]),
         on: jest.fn(),
     } as unknown as DownloadManager;
 }
@@ -127,13 +129,15 @@ describe('registerIpcHandlers — IPC channel registration (Requirement 8.1)', (
         'app:get-metrics',
         'torrent:open-folder',
         'torrent:open-file',
+        'queue:reorder',
+        'queue:get-order',
     ];
 
     beforeEach(() => {
         jest.clearAllMocks();
     });
 
-    it('registers all 25 expected IPC channels', () => {
+    it('registers all 27 expected IPC channels', () => {
         const downloadManager = makeMockDownloadManager();
         const settingsManager = makeMockSettingsManager();
         const torrentEngine = makeMockTorrentEngine();
@@ -149,7 +153,7 @@ describe('registerIpcHandlers — IPC channel registration (Requirement 8.1)', (
         }
     });
 
-    it('registers exactly 25 IPC channels (no extra channels)', () => {
+    it('registers exactly 27 IPC channels (no extra channels)', () => {
         const downloadManager = makeMockDownloadManager();
         const settingsManager = makeMockSettingsManager();
         const torrentEngine = makeMockTorrentEngine();

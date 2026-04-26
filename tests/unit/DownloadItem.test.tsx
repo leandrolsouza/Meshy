@@ -47,6 +47,9 @@ const defaultProps = {
     onPause: jest.fn(),
     onResume: jest.fn(),
     onRemove: jest.fn(),
+    queueSize: 0,
+    onMoveUp: jest.fn(),
+    onMoveDown: jest.fn(),
 };
 
 // ─── Tests ───────────────────────────────────────────────────────────────────

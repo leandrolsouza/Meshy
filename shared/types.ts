@@ -60,6 +60,7 @@ export interface DownloadItem {
     selectedFileCount?: number; // quantidade de arquivos selecionados
     totalFileCount?: number; // quantidade total de arquivos
     errorMessage?: string; // mensagem de erro (quando status === 'error')
+    queuePosition?: number; // posição na fila (1-based), undefined para não-enfileirados
 }
 
 // ─── PersistedDownloadItem ────────────────────────────────────────────────────
@@ -138,6 +139,9 @@ export interface MeshyAPI {
     // Destino — abrir pasta ou arquivo
     openFolder(infoHash: string): Promise<IPCResponse<void>>;
     openFile(infoHash: string): Promise<IPCResponse<void>>;
+    // Fila de downloads — reordenação e consulta
+    reorderQueue(infoHash: string, newIndex: number): Promise<IPCResponse<string[]>>;
+    getQueueOrder(): Promise<IPCResponse<string[]>>;
     // Events
     onProgress(callback: (items: DownloadItem[]) => void): () => void;
     onError(callback: (data: { infoHash: string; message: string }) => void): () => void;

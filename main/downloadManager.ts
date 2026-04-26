@@ -29,6 +29,10 @@ export interface DownloadManager {
     setMaxConcurrentDownloads(max: number): void;
     /** Retenta um download que está em status 'error' ou 'metadata-failed' */
     retryDownload(infoHash: string): Promise<DownloadItem>;
+    /** Reordena um item na fila de downloads */
+    reorderQueue(infoHash: string, newIndex: number): string[];
+    /** Retorna a ordem atual da fila */
+    getQueueOrder(): string[];
     on(event: 'update', listener: (item: DownloadItem) => void): void;
     on(event: 'remove', listener: (infoHash: string) => void): void;
     removeListener(event: 'update', listener: (item: DownloadItem) => void): void;
@@ -810,6 +814,10 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
     getAll(): DownloadItem[] {
         const items = Array.from(this.items.values());
         return items.map((item) => {
+            // Enriquecer com posição na fila
+            const queueIdx = this.queue.indexOf(item.infoHash);
+            const queuePosition = queueIdx !== -1 ? queueIdx + 1 : undefined;
+
             // Enrich with file count info if available
             try {
                 const files = this.engine.getFiles(item.infoHash);
@@ -817,14 +825,15 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                     const selectedFiles = files.filter((f) => f.selected);
                     return {
                         ...item,
+                        queuePosition,
                         selectedFileCount: selectedFiles.length,
                         totalFileCount: files.length,
                     };
                 }
             } catch {
-                // getFiles pode falhar — retornar item sem enriquecimento
+                // getFiles pode falhar — retornar item sem enriquecimento de arquivos
             }
-            return item;
+            return { ...item, queuePosition };
         });
     }
 
@@ -1065,7 +1074,21 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             };
         });
 
-        this.store.set('downloads', persisted);
+        // Ordenar itens queued de acordo com a ordem do array queue
+        const queuedItems = persisted.filter((p) => p.status === 'queued');
+        const nonQueuedItems = persisted.filter((p) => p.status !== 'queued');
+
+        // Ordenar os itens queued pela posição no array queue
+        queuedItems.sort((a, b) => {
+            const idxA = this.queue.indexOf(a.infoHash);
+            const idxB = this.queue.indexOf(b.infoHash);
+            return idxA - idxB;
+        });
+
+        // Reconstruir o array persistido: não-queued primeiro, depois queued na ordem da fila
+        const sorted = [...nonQueuedItems, ...queuedItems];
+
+        this.store.set('downloads', sorted);
         this.store.set('downloadsSchemaVersion', DOWNLOADS_SCHEMA_VERSION);
     }
 
@@ -1301,6 +1324,44 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                     this._processQueue();
                 });
         }
+    }
+
+    // ── reorderQueue ────────────────────────────────────────────────────────────
+
+    reorderQueue(infoHash: string, newIndex: number): string[] {
+        // Validar que o infoHash está na fila
+        const currentIndex = this.queue.indexOf(infoHash);
+        if (currentIndex === -1) {
+            throw new Error('Item não encontrado na fila');
+        }
+
+        // Validar que newIndex está dentro dos limites
+        if (newIndex < 0 || newIndex >= this.queue.length) {
+            throw new Error('Posição inválida na fila');
+        }
+
+        // Remover da posição atual e inserir na nova posição
+        this.queue.splice(currentIndex, 1);
+        this.queue.splice(newIndex, 0, infoHash);
+
+        // Emitir evento update para o item movido com queuePosition atualizado
+        const item = this.items.get(infoHash);
+        if (item) {
+            const updated: DownloadItem = {
+                ...item,
+                queuePosition: newIndex + 1,
+            };
+            this.items.set(infoHash, updated);
+            this.emit('update', updated);
+        }
+
+        return [...this.queue];
+    }
+
+    // ── getQueueOrder ───────────────────────────────────────────────────────────
+
+    getQueueOrder(): string[] {
+        return [...this.queue];
     }
 
     // ── EventEmitter overloads (type-safe) ──────────────────────────────────────

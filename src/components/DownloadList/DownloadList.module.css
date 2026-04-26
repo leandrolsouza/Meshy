@@ -168,3 +168,14 @@
     gap: var(--space-xs);
     padding: var(--space-xs) 0;
 }
+
+/* ─── Indicador de posição de drop — drag-and-drop (Task 8.3) ────────────── */
+
+.dropIndicator {
+    height: 2px;
+    background-color: var(--color-accent);
+    border-radius: 1px;
+    margin: calc(-1 * var(--space-xs) / 2) 0;
+    box-shadow: 0 0 4px var(--color-accent);
+    pointer-events: none;
+}

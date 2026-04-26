@@ -128,6 +128,23 @@ export function useDownloads() {
         return window.meshy.setFileSelection(infoHash, selectedIndices);
     }
 
+    /**
+     * Reordena um item na fila de downloads para a nova posição.
+     */
+    async function reorderQueue(
+        infoHash: string,
+        newIndex: number,
+    ): Promise<IPCResponse<string[]>> {
+        return window.meshy.reorderQueue(infoHash, newIndex);
+    }
+
+    /**
+     * Retorna a ordem atual da fila de downloads.
+     */
+    async function getQueueOrder(): Promise<IPCResponse<string[]>> {
+        return window.meshy.getQueueOrder();
+    }
+
     return {
         items: useDownloadStore((state) => state.items),
         addTorrentFile,
@@ -137,5 +154,7 @@ export function useDownloads() {
         remove,
         getFiles,
         setFileSelection,
+        reorderQueue,
+        getQueueOrder,
     };
 }

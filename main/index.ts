@@ -94,6 +94,7 @@ function createMainWindow(): BrowserWindow {
     const window = new BrowserWindow({
         width: 1200,
         height: 800,
+        icon: join(__dirname, '../../icon.png'),
         webPreferences: {
             preload: join(__dirname, '../preload/index.js'),
             nodeIntegration: false,
