@@ -143,6 +143,8 @@ export function DownloadItem({
     // ── Atualizar progresso dos arquivos periodicamente enquanto baixando ─────
     const isActive = item.status === 'downloading' || item.status === 'resolving-metadata';
 
+    const cardClassName = `${styles.card}${item.status === 'downloading' ? ` ${styles.cardActive}` : ''}`;
+
     useEffect(() => {
         if (!expanded || !isActive || files.length === 0) return;
 
@@ -213,7 +215,7 @@ export function DownloadItem({
         item.totalFileCount > 0;
 
     return (
-        <div className={styles.card}>
+        <div className={cardClassName}>
             {/* Name and status */}
             <div className={styles.header}>
                 <span className={styles.name} title={item.name}>

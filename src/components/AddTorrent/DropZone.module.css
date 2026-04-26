@@ -1,7 +1,11 @@
 .zone {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
     border: 2px dashed var(--color-border);
     border-radius: var(--radius-lg);
-    padding: var(--space-2xl) var(--space-lg);
+    padding: var(--space-sm) var(--space-lg);
     text-align: center;
     background-color: var(--color-surface);
     transition:
@@ -24,10 +28,11 @@
 }
 
 .icon {
-    font-size: 28px;
+    font-size: 20px;
     color: var(--color-text-placeholder);
-    margin-bottom: var(--space-sm);
     opacity: 0.6;
+    display: flex;
+    align-items: center;
 }
 
 .zone.active .icon {
@@ -36,7 +41,6 @@
 }
 
 .text {
-    margin: 0;
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
 }
@@ -46,20 +50,25 @@
 }
 
 .hint {
-    margin: var(--space-xs) 0 0;
+    margin: 0;
     color: var(--color-text-secondary);
     font-size: var(--font-size-xs);
     opacity: 0.5;
 }
 
+.hint::before {
+    content: '·';
+    margin-right: var(--space-xs);
+}
+
 .error {
     color: var(--color-danger);
-    margin-top: var(--space-sm);
+    margin-left: var(--space-sm);
     font-size: var(--font-size-sm);
 }
 
 .success {
     color: var(--color-success, #4ec9b0);
-    margin-top: var(--space-sm);
+    margin-left: var(--space-sm);
     font-size: var(--font-size-sm);
 }

@@ -1176,6 +1176,11 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                 const magnetUri = this.queuedMagnetUris.get(infoHash)!;
                 this.queuedMagnetUris.delete(infoHash);
 
+                // Atualizar status sincronamente para ocupar o slot antes da operação async
+                const starting: DownloadItem = { ...item, status: 'resolving-metadata' };
+                this.items.set(infoHash, starting);
+                this.emit('update', starting);
+
                 // Adicionar ao engine de forma assíncrona
                 this.engine
                     .addMagnetLink(magnetUri)
@@ -1217,15 +1222,19 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                 continue;
             }
 
+            // Atualizar status sincronamente para ocupar o slot antes da operação async
+            const resuming: DownloadItem = { ...item, status: 'downloading' };
+            this.items.set(infoHash, resuming);
+            this.emit('update', resuming);
+
             // Torrent já está no engine (foi pausado ao enfileirar) — retomar
             this.engine
                 .resume(infoHash)
                 .then(() => {
+                    // Status já foi atualizado sincronamente; emitir novamente para garantir consistência
                     const current = this.items.get(infoHash);
-                    if (current) {
-                        const updated: DownloadItem = { ...current, status: 'downloading' };
-                        this.items.set(infoHash, updated);
-                        this.emit('update', updated);
+                    if (current && current.status === 'downloading') {
+                        this.emit('update', current);
                     }
                 })
                 .catch((err) => {

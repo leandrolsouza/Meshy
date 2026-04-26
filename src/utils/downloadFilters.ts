@@ -8,6 +8,41 @@ export type SortField = 'addedAt' | 'progress' | 'downloadSpeed' | 'uploadSpeed'
 /** Direção de ordenação */
 export type SortDirection = 'asc' | 'desc';
 
+/** Identificadores dos grupos de status */
+export type StatusGroup = 'downloading' | 'waiting' | 'paused' | 'completed' | 'error';
+
+/** Um grupo com seus itens */
+export interface DownloadGroup {
+    id: StatusGroup;
+    labelKey: string;
+    items: DownloadItem[];
+}
+
+// ─── Mapeamento de status → grupo ─────────────────────────────────────────────
+
+const STATUS_TO_GROUP: Record<TorrentStatus, StatusGroup> = {
+    downloading: 'downloading',
+    queued: 'waiting',
+    'resolving-metadata': 'waiting',
+    paused: 'paused',
+    completed: 'completed',
+    error: 'error',
+    'metadata-failed': 'error',
+    'files-not-found': 'error',
+};
+
+/** Ordem de exibição dos grupos */
+const GROUP_ORDER: StatusGroup[] = ['downloading', 'waiting', 'paused', 'completed', 'error'];
+
+/** Chave i18n para cada grupo */
+const GROUP_LABEL_KEYS: Record<StatusGroup, string> = {
+    downloading: 'downloads.group.downloading',
+    waiting: 'downloads.group.waiting',
+    paused: 'downloads.group.paused',
+    completed: 'downloads.group.completed',
+    error: 'downloads.group.error',
+};
+
 // ─── Filtragem por nome ───────────────────────────────────────────────────────
 
 /**
@@ -88,4 +123,38 @@ export function applyFilters(
     const byName = filterByName(items, searchTerm);
     const byStatus = filterByStatus(byName, selectedStatuses);
     return sortItems(byStatus, sortField, sortDirection);
+}
+
+// ─── Agrupamento por status ───────────────────────────────────────────────────
+
+/**
+ * Agrupa os itens por categoria de status, mantendo a ordem interna de cada grupo.
+ * Grupos vazios são omitidos do resultado.
+ */
+export function groupByStatus(items: DownloadItem[]): DownloadGroup[] {
+    const buckets = new Map<StatusGroup, DownloadItem[]>();
+
+    for (const item of items) {
+        const group = STATUS_TO_GROUP[item.status];
+        const bucket = buckets.get(group);
+        if (bucket) {
+            bucket.push(item);
+        } else {
+            buckets.set(group, [item]);
+        }
+    }
+
+    const groups: DownloadGroup[] = [];
+    for (const id of GROUP_ORDER) {
+        const groupItems = buckets.get(id);
+        if (groupItems && groupItems.length > 0) {
+            groups.push({
+                id,
+                labelKey: GROUP_LABEL_KEYS[id],
+                items: groupItems,
+            });
+        }
+    }
+
+    return groups;
 }

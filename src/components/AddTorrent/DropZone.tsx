@@ -147,8 +147,8 @@ export function DropZone(): React.JSX.Element {
     const zoneClass = isDragOver
         ? `${styles.zone} ${styles.active}`
         : isLoading
-          ? `${styles.zone} ${styles.loading}`
-          : styles.zone;
+            ? `${styles.zone} ${styles.loading}`
+            : styles.zone;
 
     return (
         <div
@@ -161,25 +161,29 @@ export function DropZone(): React.JSX.Element {
             aria-label={intl.formatMessage({ id: 'dropZone.ariaLabel' })}
         >
             {isLoading ? (
-                <p className={styles.text}>{intl.formatMessage({ id: 'dropZone.loading' })}</p>
+                <span className={styles.text}>{intl.formatMessage({ id: 'dropZone.loading' })}</span>
             ) : (
                 <>
                     <div className={styles.icon}>
                         <VscCloudUpload />
                     </div>
-                    <p className={styles.text}>{intl.formatMessage({ id: 'dropZone.text' })}</p>
-                    <p className={styles.hint}>{intl.formatMessage({ id: 'dropZone.hint' })}</p>
+                    <span className={styles.text}>
+                        {intl.formatMessage({ id: 'dropZone.text' })}
+                    </span>
+                    <span className={styles.hint}>
+                        {intl.formatMessage({ id: 'dropZone.hint' })}
+                    </span>
                 </>
             )}
             {error && (
-                <p className={styles.error} role="alert">
+                <span className={styles.error} role="alert">
                     {error}
-                </p>
+                </span>
             )}
             {success && (
-                <p className={styles.success} role="status">
+                <span className={styles.success} role="status">
                     {success}
-                </p>
+                </span>
             )}
         </div>
     );

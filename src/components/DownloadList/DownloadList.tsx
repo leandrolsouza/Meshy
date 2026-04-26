@@ -1,8 +1,10 @@
 import React, { useMemo, useCallback, useState } from 'react';
 import { useIntl } from 'react-intl';
+import { VscChevronDown, VscChevronRight } from 'react-icons/vsc';
 import { useDownloads } from '../../hooks/useDownloads';
 import { useFilterStore } from '../../store/filterStore';
-import { applyFilters } from '../../utils/downloadFilters';
+import { applyFilters, groupByStatus } from '../../utils/downloadFilters';
+import type { StatusGroup } from '../../utils/downloadFilters';
 import { DownloadItem } from './DownloadItem';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import styles from './DownloadList.module.css';
@@ -24,6 +26,7 @@ export function DownloadList(): React.JSX.Element {
         useFilterStore();
 
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+    const [collapsedGroups, setCollapsedGroups] = useState<Set<StatusGroup>>(new Set());
 
     // Pipeline de filtragem e ordenação aplicado sobre os itens do store
     const filteredItems = useMemo(
@@ -31,11 +34,27 @@ export function DownloadList(): React.JSX.Element {
         [items, searchTerm, selectedStatuses, sortField, sortDirection],
     );
 
+    // Agrupamento por status sobre os itens filtrados
+    const groups = useMemo(() => groupByStatus(filteredItems), [filteredItems]);
+
     // Contagem de downloads concluídos (para o botão "Limpar concluídos")
     const completedCount = useMemo(
         () => items.filter((i) => i.status === 'completed').length,
         [items],
     );
+
+    // Toggle de colapso de um grupo
+    const toggleGroup = useCallback((groupId: StatusGroup) => {
+        setCollapsedGroups((prev) => {
+            const next = new Set(prev);
+            if (next.has(groupId)) {
+                next.delete(groupId);
+            } else {
+                next.add(groupId);
+            }
+            return next;
+        });
+    }, []);
 
     // Limpa todos os downloads concluídos da lista
     const handleClearCompleted = useCallback(
@@ -131,17 +150,52 @@ export function DownloadList(): React.JSX.Element {
                     </button>
                 </div>
             ) : (
-                // Lista normal com itens filtrados e ordenados
+                // Lista agrupada por status
                 <div className={styles.list}>
-                    {filteredItems.map((item) => (
-                        <DownloadItem
-                            key={item.infoHash}
-                            item={item}
-                            onPause={pause}
-                            onResume={resume}
-                            onRemove={(infoHash, deleteFiles) => remove(infoHash, deleteFiles)}
-                        />
-                    ))}
+                    {groups.map((group) => {
+                        const isCollapsed = collapsedGroups.has(group.id);
+                        const groupLabel = intl.formatMessage({ id: group.labelKey });
+                        return (
+                            <div key={group.id} className={styles.group}>
+                                <button
+                                    type="button"
+                                    className={styles.groupHeader}
+                                    onClick={() => toggleGroup(group.id)}
+                                    aria-expanded={!isCollapsed}
+                                    aria-label={intl.formatMessage(
+                                        { id: 'downloads.group.toggleAriaLabel' },
+                                        { group: groupLabel, count: group.items.length },
+                                    )}
+                                >
+                                    <span className={styles.groupChevron}>
+                                        {isCollapsed ? <VscChevronRight /> : <VscChevronDown />}
+                                    </span>
+                                    <span className={styles.groupLabel}>{groupLabel}</span>
+                                    <span className={styles.groupCount}>
+                                        {intl.formatMessage(
+                                            { id: 'downloads.group.count' },
+                                            { count: group.items.length },
+                                        )}
+                                    </span>
+                                </button>
+                                {!isCollapsed && (
+                                    <div className={styles.groupItems}>
+                                        {group.items.map((item) => (
+                                            <DownloadItem
+                                                key={item.infoHash}
+                                                item={item}
+                                                onPause={pause}
+                                                onResume={resume}
+                                                onRemove={(infoHash, deleteFiles) =>
+                                                    remove(infoHash, deleteFiles)
+                                                }
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
             )}
 

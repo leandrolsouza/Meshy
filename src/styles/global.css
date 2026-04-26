@@ -87,6 +87,9 @@
     /* Card */
     --card-radius: 6px;
     --card-hover-border: #555555;
+
+    /* Accent */
+    --color-accent: var(--color-primary);
 }
 
 /* ─── Reset & Base ────────────────────────────────────────────────────────── */
@@ -286,6 +289,7 @@ code {
 /* ─── Reduced Motion ──────────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
+
     *,
     *::before,
     *::after {
