@@ -109,3 +109,94 @@
     padding: var(--space-md) var(--space-lg) var(--space-sm);
     border-radius: 0 0 var(--card-radius) var(--card-radius);
 }
+
+/* ─── Speed Limits Section (per-torrent) ──────────────────────────────────── */
+
+.speedLimitsSection {
+    margin-top: var(--space-md);
+    border-top: 1px solid var(--color-border-light);
+    padding-top: var(--space-md);
+    background-color: rgba(0, 0, 0, 0.1);
+    margin-left: calc(-1 * var(--space-lg));
+    margin-right: calc(-1 * var(--space-lg));
+    margin-bottom: calc(-1 * var(--space-lg));
+    padding: var(--space-md) var(--space-lg) var(--space-sm);
+    border-radius: 0 0 var(--card-radius) var(--card-radius);
+}
+
+.speedLimitsTitle {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    margin-bottom: var(--space-sm);
+}
+
+.speedLimitsRow {
+    display: flex;
+    gap: var(--space-md);
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.speedLimitField {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 140px;
+}
+
+.speedLimitLabel {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    margin-bottom: 2px;
+}
+
+.speedLimitInput {
+    width: 120px;
+    padding: 4px 8px;
+    font-size: var(--font-size-sm);
+    border: 1px solid var(--color-border-light);
+    border-radius: 4px;
+    background-color: var(--color-surface);
+    color: var(--color-text-primary);
+    outline: none;
+    transition: border-color var(--transition-fast);
+}
+
+.speedLimitInput:focus {
+    border-color: var(--color-accent);
+}
+
+.speedLimitInput:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.speedLimitInput[aria-invalid='true'] {
+    border-color: var(--color-danger);
+}
+
+.speedLimitHint {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    font-style: italic;
+}
+
+.speedLimitValidationError {
+    font-size: var(--font-size-xs);
+    color: var(--color-danger);
+}
+
+.speedLimitApplyBtn {
+    align-self: flex-end;
+    margin-bottom: 2px;
+}
+
+.speedLimitError {
+    margin-top: var(--space-sm);
+    font-size: var(--font-size-xs);
+    color: var(--color-danger);
+}

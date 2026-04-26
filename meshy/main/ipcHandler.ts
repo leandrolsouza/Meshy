@@ -307,6 +307,14 @@ export function registerIpcHandlers(
                     downloadManager.setMaxConcurrentDownloads(partial.maxConcurrentDownloads);
                 }
 
+                // Recalcular limites efetivos ao alterar limites globais de velocidade
+                if (
+                    partial.downloadSpeedLimit !== undefined ||
+                    partial.uploadSpeedLimit !== undefined
+                ) {
+                    downloadManager.onGlobalSpeedLimitChanged();
+                }
+
                 const updated = settingsManager.get();
                 return ok(updated);
             } catch (err) {
@@ -432,6 +440,86 @@ export function registerIpcHandlers(
                 return ok(updatedFiles);
             } catch (err) {
                 return failWithLog('torrent:set-file-selection', err);
+            }
+        },
+    );
+
+    // ── torrent:set-speed-limits ──────────────────────────────────────────────
+    // payload: { infoHash: string, downloadLimit: number, uploadLimit: number }
+    ipcMain.handle(
+        'torrent:set-speed-limits',
+        async (_event, payload: unknown): Promise<IPCResponse<DownloadItem>> => {
+            try {
+                if (typeof payload !== 'object' || payload === null) {
+                    return fail('Parâmetros inválidos: payload deve ser um objeto');
+                }
+
+                const p = payload as Record<string, unknown>;
+
+                if (typeof p.infoHash !== 'string' || p.infoHash === '') {
+                    return fail(
+                        'Parâmetros inválidos: infoHash deve ser uma string não-vazia',
+                    );
+                }
+
+                if (!isValidSpeedLimit(p.downloadLimit)) {
+                    return fail(
+                        'Valor inválido: downloadLimit deve ser um inteiro não-negativo',
+                    );
+                }
+
+                if (!isValidSpeedLimit(p.uploadLimit)) {
+                    return fail(
+                        'Valor inválido: uploadLimit deve ser um inteiro não-negativo',
+                    );
+                }
+
+                const { infoHash, downloadLimit, uploadLimit } = payload as {
+                    infoHash: string;
+                    downloadLimit: number;
+                    uploadLimit: number;
+                };
+
+                const item = downloadManager.setTorrentSpeedLimits(
+                    infoHash,
+                    downloadLimit,
+                    uploadLimit,
+                );
+                return ok(item);
+            } catch (err) {
+                return failWithLog('torrent:set-speed-limits', err);
+            }
+        },
+    );
+
+    // ── torrent:get-speed-limits ──────────────────────────────────────────────
+    // payload: { infoHash: string }
+    ipcMain.handle(
+        'torrent:get-speed-limits',
+        async (
+            _event,
+            payload: unknown,
+        ): Promise<
+            IPCResponse<{ downloadSpeedLimitKBps: number; uploadSpeedLimitKBps: number }>
+        > => {
+            try {
+                if (typeof payload !== 'object' || payload === null) {
+                    return fail('Parâmetros inválidos: payload deve ser um objeto');
+                }
+
+                const p = payload as Record<string, unknown>;
+
+                if (typeof p.infoHash !== 'string' || p.infoHash === '') {
+                    return fail(
+                        'Parâmetros inválidos: infoHash deve ser uma string não-vazia',
+                    );
+                }
+
+                const { infoHash } = payload as { infoHash: string };
+                const limits = downloadManager.getTorrentSpeedLimits(infoHash);
+                return ok(limits);
+            } catch (err) {
+                return failWithLog('torrent:get-speed-limits', err);
             }
         },
     );

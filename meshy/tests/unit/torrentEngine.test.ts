@@ -23,6 +23,40 @@ jest.mock('webtorrent', () => {
     return { __esModule: true, default: MockWebTorrent };
 });
 
+// Mock do speed-limiter para testes de throttle por torrent
+const mockThrottleGroupInstances: Array<{
+    setRate: jest.Mock;
+    setEnabled: jest.Mock;
+    getEnabled: jest.Mock;
+    getRate: jest.Mock;
+    throttle: jest.Mock;
+    destroy: jest.Mock;
+}> = [];
+
+jest.mock('speed-limiter', () => {
+    const MockThrottleGroup = jest.fn().mockImplementation((opts: { rate?: number; enabled?: boolean } = {}) => {
+        const state = {
+            _rate: opts.rate ?? 0,
+            _enabled: opts.enabled ?? true,
+        };
+        const instance = {
+            setRate: jest.fn((rate: number) => {
+                state._rate = rate;
+            }),
+            setEnabled: jest.fn((val: boolean) => {
+                state._enabled = val;
+            }),
+            getEnabled: jest.fn(() => state._enabled),
+            getRate: jest.fn(() => state._rate),
+            throttle: jest.fn(() => ({ pipe: jest.fn() })),
+            destroy: jest.fn(),
+        };
+        mockThrottleGroupInstances.push(instance);
+        return instance;
+    });
+    return { ThrottleGroup: MockThrottleGroup };
+});
+
 import { createTorrentEngine } from '../../main/torrentEngine';
 import type WebTorrent from 'webtorrent';
 import type { Torrent } from 'webtorrent';
@@ -708,5 +742,186 @@ describe('Propriedade 5: adicionar tracker duplicado não altera o tamanho da li
             }),
             { numRuns: 100 },
         );
+    });
+});
+
+// ─── Per-Torrent Speed Limit — Unit Tests (Task 2.6) ─────────────────────────
+
+describe('TorrentEngine.setTorrentDownloadSpeedLimit() — testes unitários', () => {
+    beforeEach(() => {
+        mockThrottleGroupInstances.length = 0;
+    });
+
+    it('cria um ThrottleGroup com rate = kbps * 1024 quando kbps > 0', () => {
+        const infoHash = 'a'.repeat(40);
+        const fakeTorrent = makeFakeTorrent(infoHash);
+        const mockClient = makeMockClient();
+        mockClient.torrents.push(fakeTorrent);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+        engine.setTorrentDownloadSpeedLimit(infoHash, 512);
+
+        expect(mockThrottleGroupInstances).toHaveLength(1);
+        const group = mockThrottleGroupInstances[0];
+        // O ThrottleGroup é criado com rate = 512 * 1024 = 524288
+        expect(group).toBeDefined();
+    });
+
+    it('atualiza a taxa do ThrottleGroup existente ao chamar novamente com kbps > 0', () => {
+        const infoHash = 'b'.repeat(40);
+        const fakeTorrent = makeFakeTorrent(infoHash);
+        const mockClient = makeMockClient();
+        mockClient.torrents.push(fakeTorrent);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+        engine.setTorrentDownloadSpeedLimit(infoHash, 256);
+        engine.setTorrentDownloadSpeedLimit(infoHash, 512);
+
+        // Deve reutilizar o mesmo ThrottleGroup (apenas 1 criado)
+        expect(mockThrottleGroupInstances).toHaveLength(1);
+        const group = mockThrottleGroupInstances[0];
+        expect(group.setRate).toHaveBeenCalledWith(512 * 1024);
+        expect(group.setEnabled).toHaveBeenCalledWith(true);
+    });
+
+    it('desabilita o ThrottleGroup quando kbps === 0', () => {
+        const infoHash = 'c'.repeat(40);
+        const fakeTorrent = makeFakeTorrent(infoHash);
+        const mockClient = makeMockClient();
+        mockClient.torrents.push(fakeTorrent);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+        engine.setTorrentDownloadSpeedLimit(infoHash, 256);
+        engine.setTorrentDownloadSpeedLimit(infoHash, 0);
+
+        const group = mockThrottleGroupInstances[0];
+        expect(group.setEnabled).toHaveBeenCalledWith(false);
+    });
+
+    it('não cria ThrottleGroup quando kbps === 0 e não existe grupo anterior', () => {
+        const infoHash = 'd'.repeat(40);
+        const fakeTorrent = makeFakeTorrent(infoHash);
+        const mockClient = makeMockClient();
+        mockClient.torrents.push(fakeTorrent);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+        engine.setTorrentDownloadSpeedLimit(infoHash, 0);
+
+        expect(mockThrottleGroupInstances).toHaveLength(0);
+    });
+
+    it('cria ThrottleGroups independentes para torrents diferentes', () => {
+        const infoHashA = 'a'.repeat(40);
+        const infoHashB = 'b'.repeat(40);
+        const mockClient = makeMockClient();
+        mockClient.torrents.push(makeFakeTorrent(infoHashA));
+        mockClient.torrents.push(makeFakeTorrent(infoHashB));
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+        engine.setTorrentDownloadSpeedLimit(infoHashA, 100);
+        engine.setTorrentDownloadSpeedLimit(infoHashB, 200);
+
+        expect(mockThrottleGroupInstances).toHaveLength(2);
+    });
+});
+
+describe('TorrentEngine.setTorrentUploadSpeedLimit() — testes unitários', () => {
+    beforeEach(() => {
+        mockThrottleGroupInstances.length = 0;
+    });
+
+    it('cria um ThrottleGroup com rate = kbps * 1024 quando kbps > 0', () => {
+        const infoHash = 'a'.repeat(40);
+        const fakeTorrent = makeFakeTorrent(infoHash);
+        const mockClient = makeMockClient();
+        mockClient.torrents.push(fakeTorrent);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+        engine.setTorrentUploadSpeedLimit(infoHash, 128);
+
+        expect(mockThrottleGroupInstances).toHaveLength(1);
+    });
+
+    it('atualiza a taxa do ThrottleGroup existente ao chamar novamente com kbps > 0', () => {
+        const infoHash = 'b'.repeat(40);
+        const fakeTorrent = makeFakeTorrent(infoHash);
+        const mockClient = makeMockClient();
+        mockClient.torrents.push(fakeTorrent);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+        engine.setTorrentUploadSpeedLimit(infoHash, 64);
+        engine.setTorrentUploadSpeedLimit(infoHash, 128);
+
+        expect(mockThrottleGroupInstances).toHaveLength(1);
+        const group = mockThrottleGroupInstances[0];
+        expect(group.setRate).toHaveBeenCalledWith(128 * 1024);
+        expect(group.setEnabled).toHaveBeenCalledWith(true);
+    });
+
+    it('desabilita o ThrottleGroup quando kbps === 0', () => {
+        const infoHash = 'c'.repeat(40);
+        const fakeTorrent = makeFakeTorrent(infoHash);
+        const mockClient = makeMockClient();
+        mockClient.torrents.push(fakeTorrent);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+        engine.setTorrentUploadSpeedLimit(infoHash, 64);
+        engine.setTorrentUploadSpeedLimit(infoHash, 0);
+
+        const group = mockThrottleGroupInstances[0];
+        expect(group.setEnabled).toHaveBeenCalledWith(false);
+    });
+
+    it('não cria ThrottleGroup quando kbps === 0 e não existe grupo anterior', () => {
+        const infoHash = 'd'.repeat(40);
+        const fakeTorrent = makeFakeTorrent(infoHash);
+        const mockClient = makeMockClient();
+        mockClient.torrents.push(fakeTorrent);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+        engine.setTorrentUploadSpeedLimit(infoHash, 0);
+
+        expect(mockThrottleGroupInstances).toHaveLength(0);
+    });
+});
+
+describe('TorrentEngine.remove() — limpeza de throttle groups', () => {
+    beforeEach(() => {
+        mockThrottleGroupInstances.length = 0;
+    });
+
+    it('destrói ThrottleGroups de download e upload ao remover torrent', async () => {
+        const infoHash = 'a'.repeat(40);
+        const fakeTorrent = makeFakeTorrent(infoHash, {
+            destroy: jest.fn((_opts, cb) => cb(null)) as unknown as Torrent['destroy'],
+        });
+        const mockClient = makeMockClient();
+        mockClient.torrents.push(fakeTorrent);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+        engine.setTorrentDownloadSpeedLimit(infoHash, 256);
+        engine.setTorrentUploadSpeedLimit(infoHash, 128);
+
+        expect(mockThrottleGroupInstances).toHaveLength(2);
+
+        await engine.remove(infoHash, false);
+
+        // Ambos os ThrottleGroups devem ter sido destruídos
+        expect(mockThrottleGroupInstances[0].destroy).toHaveBeenCalled();
+        expect(mockThrottleGroupInstances[1].destroy).toHaveBeenCalled();
+    });
+
+    it('limpa throttle groups mesmo quando torrent já foi removido', async () => {
+        const infoHash = 'b'.repeat(40);
+        const mockClient = makeMockClient();
+        // Torrent não está no client (já removido)
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+        // Simular que havia throttle groups (cenário de limpeza)
+        engine.setTorrentDownloadSpeedLimit(infoHash, 100);
+
+        await engine.remove(infoHash, false);
+
+        expect(mockThrottleGroupInstances[0].destroy).toHaveBeenCalled();
     });
 });

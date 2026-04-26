@@ -59,6 +59,8 @@ export interface DownloadItem {
     elapsedMs?: number;
     selectedFileCount?: number; // quantidade de arquivos selecionados
     totalFileCount?: number; // quantidade total de arquivos
+    downloadSpeedLimitKBps: number; // limite individual de download em KB/s (0 = sem limite)
+    uploadSpeedLimitKBps: number; // limite individual de upload em KB/s (0 = sem limite)
 }
 
 // ─── PersistedDownloadItem ────────────────────────────────────────────────────
@@ -77,6 +79,8 @@ export interface PersistedDownloadItem {
     magnetUri?: string;
     torrentFilePath?: string;
     selectedFileIndices?: number[]; // índices dos arquivos selecionados
+    downloadSpeedLimitKBps?: number; // limite individual de download (persistido)
+    uploadSpeedLimitKBps?: number; // limite individual de upload (persistido)
 }
 
 // ─── AppSettings ──────────────────────────────────────────────────────────────
@@ -124,6 +128,15 @@ export interface MeshyAPI {
     getGlobalTrackers(): Promise<IPCResponse<string[]>>;
     addGlobalTracker(url: string): Promise<IPCResponse<string[]>>;
     removeGlobalTracker(url: string): Promise<IPCResponse<string[]>>;
+    // Limites de velocidade por torrent
+    setTorrentSpeedLimits(
+        infoHash: string,
+        downloadLimit: number,
+        uploadLimit: number,
+    ): Promise<IPCResponse<DownloadItem>>;
+    getTorrentSpeedLimits(
+        infoHash: string,
+    ): Promise<IPCResponse<{ downloadSpeedLimitKBps: number; uploadSpeedLimitKBps: number }>>;
     // Events
     onProgress(callback: (items: DownloadItem[]) => void): () => void;
     onError(callback: (data: { infoHash: string; message: string }) => void): () => void;

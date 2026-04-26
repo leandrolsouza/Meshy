@@ -9,6 +9,7 @@ import {
     VscChevronRight,
 } from 'react-icons/vsc';
 import type { DownloadItem as DownloadItemType, TorrentFileInfo } from '../../../shared/types';
+import { isValidSpeedLimit } from '../../../shared/validators';
 import { ProgressBar } from '../common/ProgressBar';
 import { SpeedDisplay } from '../common/SpeedDisplay';
 import { formatBytes } from '../../utils/formatters';
@@ -65,6 +66,11 @@ interface DownloadItemProps {
     onPause: (infoHash: string) => void;
     onResume: (infoHash: string) => void;
     onRemove: (infoHash: string, deleteFiles: boolean) => void;
+    onSetSpeedLimits: (
+        infoHash: string,
+        downloadLimit: number,
+        uploadLimit: number,
+    ) => Promise<{ success: boolean; error?: string }>;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -74,6 +80,7 @@ export function DownloadItem({
     onPause,
     onResume,
     onRemove,
+    onSetSpeedLimits,
 }: DownloadItemProps): React.JSX.Element {
     const progressPercent = Math.round(item.progress * 100);
     const isCompleted = item.status === 'completed';
@@ -89,6 +96,22 @@ export function DownloadItem({
     const [filesError, setFilesError] = useState<string | null>(null);
     const [selectionLoading, setSelectionLoading] = useState(false);
     const [selectionError, setSelectionError] = useState<string | null>(null);
+
+    // ── Speed limit state ────────────────────────────────────────────────────
+    const [dlLimitInput, setDlLimitInput] = useState(String(item.downloadSpeedLimitKBps ?? 0));
+    const [ulLimitInput, setUlLimitInput] = useState(String(item.uploadSpeedLimitKBps ?? 0));
+    const [limitsLoading, setLimitsLoading] = useState(false);
+    const [limitsError, setLimitsError] = useState<string | null>(null);
+    const [dlValidationError, setDlValidationError] = useState<string | null>(null);
+    const [ulValidationError, setUlValidationError] = useState<string | null>(null);
+
+    // Sincronizar inputs quando o item muda externamente (ex: via onProgress)
+    useEffect(() => {
+        if (!limitsLoading) {
+            setDlLimitInput(String(item.downloadSpeedLimitKBps ?? 0));
+            setUlLimitInput(String(item.uploadSpeedLimitKBps ?? 0));
+        }
+    }, [item.downloadSpeedLimitKBps, item.uploadSpeedLimitKBps, limitsLoading]);
 
     // Can expand when torrent is not in resolving-metadata state
     const canExpand = item.status !== 'resolving-metadata' && item.status !== 'queued';
@@ -177,6 +200,45 @@ export function DownloadItem({
         },
         [item.infoHash],
     );
+
+    // ── Handle speed limit apply ────────────────────────────────────────────
+    const handleApplySpeedLimits = useCallback(async () => {
+        // Validar download limit
+        const dlValue = dlLimitInput.trim() === '' ? 0 : Number(dlLimitInput);
+        const ulValue = ulLimitInput.trim() === '' ? 0 : Number(ulLimitInput);
+
+        let hasError = false;
+
+        if (!isValidSpeedLimit(dlValue)) {
+            setDlValidationError('Valor inválido: deve ser um inteiro não-negativo');
+            hasError = true;
+        } else {
+            setDlValidationError(null);
+        }
+
+        if (!isValidSpeedLimit(ulValue)) {
+            setUlValidationError('Valor inválido: deve ser um inteiro não-negativo');
+            hasError = true;
+        } else {
+            setUlValidationError(null);
+        }
+
+        if (hasError) return;
+
+        setLimitsLoading(true);
+        setLimitsError(null);
+
+        try {
+            const response = await onSetSpeedLimits(item.infoHash, dlValue, ulValue);
+            if (!response.success) {
+                setLimitsError(response.error ?? 'Erro ao aplicar limites');
+            }
+        } catch (err: unknown) {
+            setLimitsError(err instanceof Error ? err.message : 'Erro ao aplicar limites');
+        } finally {
+            setLimitsLoading(false);
+        }
+    }, [item.infoHash, dlLimitInput, ulLimitInput, onSetSpeedLimits]);
 
     // ── Toggle expand/collapse ───────────────────────────────────────────────
     const handleToggleExpand = useCallback(() => {
@@ -322,6 +384,98 @@ export function DownloadItem({
                             loading={selectionLoading}
                             error={selectionError}
                         />
+                    )}
+                </div>
+            )}
+
+            {/* Seção de limites de velocidade por torrent (Tasks 8.1–8.5) */}
+            {expanded && (
+                <div className={styles.speedLimitsSection} data-testid="speed-limits-section">
+                    <div className={styles.speedLimitsTitle}>Limites de velocidade (KB/s)</div>
+                    <div className={styles.speedLimitsRow}>
+                        <div className={styles.speedLimitField}>
+                            <label
+                                className={styles.speedLimitLabel}
+                                htmlFor={`dl-limit-${item.infoHash}`}
+                            >
+                                <VscArrowDown /> Download
+                            </label>
+                            <input
+                                id={`dl-limit-${item.infoHash}`}
+                                type="number"
+                                className={styles.speedLimitInput}
+                                value={dlLimitInput}
+                                onChange={(e) => {
+                                    setDlLimitInput(e.target.value);
+                                    setDlValidationError(null);
+                                }}
+                                min={0}
+                                step={1}
+                                disabled={limitsLoading}
+                                aria-label="Limite de download (KB/s)"
+                                aria-invalid={!!dlValidationError}
+                            />
+                            {dlValidationError && (
+                                <span className={styles.speedLimitValidationError} role="alert">
+                                    {dlValidationError}
+                                </span>
+                            )}
+                            {Number(dlLimitInput) === 0 && !dlValidationError && (
+                                <span className={styles.speedLimitHint}>
+                                    Usando limite global
+                                </span>
+                            )}
+                        </div>
+                        <div className={styles.speedLimitField}>
+                            <label
+                                className={styles.speedLimitLabel}
+                                htmlFor={`ul-limit-${item.infoHash}`}
+                            >
+                                <VscArrowUp /> Upload
+                            </label>
+                            <input
+                                id={`ul-limit-${item.infoHash}`}
+                                type="number"
+                                className={styles.speedLimitInput}
+                                value={ulLimitInput}
+                                onChange={(e) => {
+                                    setUlLimitInput(e.target.value);
+                                    setUlValidationError(null);
+                                }}
+                                min={0}
+                                step={1}
+                                disabled={limitsLoading}
+                                aria-label="Limite de upload (KB/s)"
+                                aria-invalid={!!ulValidationError}
+                            />
+                            {ulValidationError && (
+                                <span className={styles.speedLimitValidationError} role="alert">
+                                    {ulValidationError}
+                                </span>
+                            )}
+                            {Number(ulLimitInput) === 0 && !ulValidationError && (
+                                <span className={styles.speedLimitHint}>
+                                    Usando limite global
+                                </span>
+                            )}
+                        </div>
+                        <button
+                            className={`btn ${styles.speedLimitApplyBtn}`}
+                            onClick={handleApplySpeedLimits}
+                            disabled={limitsLoading}
+                            aria-label="Aplicar limites de velocidade"
+                        >
+                            {limitsLoading ? 'Aplicando...' : 'Aplicar'}
+                        </button>
+                    </div>
+                    {limitsError && (
+                        <div
+                            className={styles.speedLimitError}
+                            role="alert"
+                            data-testid="speed-limits-error"
+                        >
+                            {limitsError}
+                        </div>
                     )}
                 </div>
             )}

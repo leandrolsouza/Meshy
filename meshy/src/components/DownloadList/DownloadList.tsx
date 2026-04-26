@@ -17,7 +17,7 @@ import styles from './DownloadList.module.css';
  * concluídos, a mensagem de estado vazio filtrado e a região aria-live.
  */
 export function DownloadList(): React.JSX.Element {
-    const { items, pause, resume, remove } = useDownloads();
+    const { items, pause, resume, remove, setTorrentSpeedLimits } = useDownloads();
     const { searchTerm, selectedStatuses, sortField, sortDirection, resetFilters } =
         useFilterStore();
 
@@ -62,8 +62,8 @@ export function DownloadList(): React.JSX.Element {
         filteredItems.length === 0
             ? 'Nenhum download encontrado'
             : filteredItems.length === 1
-              ? '1 download encontrado'
-              : `${filteredItems.length} downloads encontrados`;
+                ? '1 download encontrado'
+                : `${filteredItems.length} downloads encontrados`;
 
     // Verifica se algum filtro está ativo
     const hasActiveFilters = searchTerm.trim() !== '' || selectedStatuses.length > 0;
@@ -128,6 +128,7 @@ export function DownloadList(): React.JSX.Element {
                             onPause={pause}
                             onResume={resume}
                             onRemove={(infoHash, deleteFiles) => remove(infoHash, deleteFiles)}
+                            onSetSpeedLimits={setTorrentSpeedLimits}
                         />
                     ))}
                 </div>

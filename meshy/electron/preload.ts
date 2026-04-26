@@ -80,6 +80,26 @@ const meshyAPI: MeshyAPI = {
         return ipcRenderer.invoke('tracker:apply-global', { infoHash });
     },
 
+    // ── Limites de velocidade por torrent ────────────────────────────────────────
+
+    setTorrentSpeedLimits(
+        infoHash: string,
+        downloadLimit: number,
+        uploadLimit: number,
+    ): Promise<IPCResponse<DownloadItem>> {
+        return ipcRenderer.invoke('torrent:set-speed-limits', {
+            infoHash,
+            downloadLimit,
+            uploadLimit,
+        });
+    },
+
+    getTorrentSpeedLimits(
+        infoHash: string,
+    ): Promise<IPCResponse<{ downloadSpeedLimitKBps: number; uploadSpeedLimitKBps: number }>> {
+        return ipcRenderer.invoke('torrent:get-speed-limits', { infoHash });
+    },
+
     // ── Trackers globais ────────────────────────────────────────────────────────
 
     getGlobalTrackers(): Promise<IPCResponse<string[]>> {

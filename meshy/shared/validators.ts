@@ -33,6 +33,23 @@ export function hasTorrentMagicBytes(buffer: Buffer): boolean {
     return buffer.length > 0 && buffer[0] === 0x64;
 }
 
+// ─── Limite efetivo (individual vs global) ────────────────────────────────────
+
+/**
+ * Calcula o limite efetivo de velocidade considerando o limite individual e o global.
+ * Retorna o menor valor positivo entre os dois, ou 0 se ambos forem 0 (sem limite).
+ *
+ * @param individual - Limite individual do torrent em KB/s (0 = sem limite individual)
+ * @param global - Limite global da aplicação em KB/s (0 = sem limite global)
+ * @returns Limite efetivo em KB/s (0 = sem limite)
+ */
+export function calcularLimiteEfetivo(individual: number, global: number): number {
+    if (individual === 0 && global === 0) return 0;
+    if (individual === 0) return global;
+    if (global === 0) return individual;
+    return Math.min(individual, global);
+}
+
 // ─── Speed limit ──────────────────────────────────────────────────────────────
 
 /**
