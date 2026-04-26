@@ -71,10 +71,8 @@ const mockMeshy = {
     addTracker: jest.fn(),
     removeTracker: jest.fn(),
     applyGlobalTrackers: jest.fn(),
-    setTorrentSpeedLimits: jest.fn(),
-    getTorrentSpeedLimits: jest.fn(),
-    onProgress: jest.fn().mockReturnValue(() => {}),
-    onError: jest.fn().mockReturnValue(() => {}),
+    onProgress: jest.fn().mockReturnValue(() => { }),
+    onError: jest.fn().mockReturnValue(() => { }),
 };
 
 beforeAll(() => {

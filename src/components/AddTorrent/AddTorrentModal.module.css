@@ -34,6 +34,65 @@
     max-width: 560px;
 }
 
+/* ─── Magnet Link Textarea ─────────────────────────────────────────────────── */
+
+.magnetTextarea {
+    width: 100%;
+    min-height: 80px;
+    max-height: 200px;
+    padding: 8px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 2px;
+    background: var(--color-input-bg);
+    color: var(--color-text);
+    font-family: var(--font-mono, monospace);
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+    resize: vertical;
+    box-sizing: border-box;
+    transition: border-color var(--transition-fast);
+}
+
+.magnetTextarea::placeholder {
+    color: var(--color-text-secondary);
+    opacity: 0.7;
+}
+
+.magnetTextarea:focus {
+    outline: none;
+    border-color: var(--color-accent);
+}
+
+.magnetTextareaError {
+    border-color: var(--color-error);
+}
+
+.linkCount {
+    margin-left: var(--space-xs);
+    color: var(--color-text-secondary);
+    font-weight: 400;
+    font-size: var(--font-size-sm);
+}
+
+.multiLineError {
+    color: var(--color-error);
+    font-size: var(--font-size-sm);
+    margin-top: var(--space-xs);
+    white-space: pre-line;
+}
+
+.submitResult {
+    color: var(--color-success, #4ec9b0);
+    font-size: var(--font-size-sm);
+    margin-top: var(--space-xs);
+}
+
+.submitProgress {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    margin-top: var(--space-xs);
+}
+
 /* ─── Actions ─────────────────────────────────────────────────────────────── */
 
 .actions {

@@ -19,7 +19,7 @@ import styles from './DownloadList.module.css';
  */
 export function DownloadList(): React.JSX.Element {
     const intl = useIntl();
-    const { items, pause, resume, remove, setTorrentSpeedLimits } = useDownloads();
+    const { items, pause, resume, remove } = useDownloads();
     const { searchTerm, selectedStatuses, sortField, sortDirection, resetFilters } =
         useFilterStore();
 
@@ -65,8 +65,8 @@ export function DownloadList(): React.JSX.Element {
         filteredItems.length === 0
             ? intl.formatMessage({ id: 'downloads.ariaLive.none' })
             : filteredItems.length === 1
-              ? intl.formatMessage({ id: 'downloads.ariaLive.one' })
-              : intl.formatMessage(
+                ? intl.formatMessage({ id: 'downloads.ariaLive.one' })
+                : intl.formatMessage(
                     { id: 'downloads.ariaLive.many' },
                     { count: filteredItems.length },
                 );
@@ -140,7 +140,6 @@ export function DownloadList(): React.JSX.Element {
                             onPause={pause}
                             onResume={resume}
                             onRemove={(infoHash, deleteFiles) => remove(infoHash, deleteFiles)}
-                            onSetSpeedLimits={setTorrentSpeedLimits}
                         />
                     ))}
                 </div>

@@ -52,12 +52,6 @@ function makeMockDownloadManager(): DownloadManager {
         restoreSession: jest.fn().mockResolvedValue(undefined),
         persistSession: jest.fn(),
         setMaxConcurrentDownloads: jest.fn(),
-        setTorrentSpeedLimits: jest.fn(),
-        getTorrentSpeedLimits: jest.fn().mockReturnValue({
-            downloadSpeedLimitKBps: 0,
-            uploadSpeedLimitKBps: 0,
-        }),
-        onGlobalSpeedLimitChanged: jest.fn(),
         on: jest.fn(),
     } as unknown as DownloadManager;
 }

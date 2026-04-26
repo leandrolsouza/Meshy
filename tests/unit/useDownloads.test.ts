@@ -29,8 +29,6 @@ function makeItem(overrides: Partial<DownloadItem> = {}): DownloadItem {
         status: 'downloading',
         destinationFolder: '/tmp',
         addedAt: Date.now(),
-        downloadSpeedLimitKBps: 0,
-        uploadSpeedLimitKBps: 0,
         ...overrides,
     };
 }
@@ -51,7 +49,6 @@ const mockMeshy = {
     remove: jest.fn(),
     getFiles: jest.fn(),
     setFileSelection: jest.fn(),
-    setTorrentSpeedLimits: jest.fn(),
     onProgress: jest.fn((cb: (items: DownloadItem[]) => void) => {
         progressCallback = cb;
         return removeProgressListener;
@@ -312,36 +309,6 @@ describe('useDownloads', () => {
             });
 
             expect(useDownloadStore.getState().items).toHaveLength(1);
-        });
-    });
-
-    // ── setTorrentSpeedLimits ─────────────────────────────────────────────
-
-    describe('setTorrentSpeedLimits', () => {
-        it('chama a API e atualiza o item no store em caso de sucesso', async () => {
-            const updatedItem = makeItem({
-                infoHash: 'a',
-                downloadSpeedLimitKBps: 500,
-                uploadSpeedLimitKBps: 100,
-            });
-            mockMeshy.setTorrentSpeedLimits.mockResolvedValue({
-                success: true,
-                data: updatedItem,
-            });
-
-            useDownloadStore.setState({
-                items: [makeItem({ infoHash: 'a' })],
-            });
-
-            const { result } = renderHook(() => useDownloads());
-
-            await act(async () => {
-                await result.current.setTorrentSpeedLimits('a', 500, 100);
-            });
-
-            expect(mockMeshy.setTorrentSpeedLimits).toHaveBeenCalledWith('a', 500, 100);
-            expect(useDownloadStore.getState().items[0].downloadSpeedLimitKBps).toBe(500);
-            expect(useDownloadStore.getState().items[0].uploadSpeedLimitKBps).toBe(100);
         });
     });
 

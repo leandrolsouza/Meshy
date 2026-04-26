@@ -1,8 +1,8 @@
 import { EventEmitter } from 'events';
-import { readFile } from 'fs/promises';
+import { readFile, rm, readdir } from 'fs/promises';
+import { join } from 'path';
 import WebTorrent from 'webtorrent';
 import type { Torrent } from 'webtorrent';
-import { ThrottleGroup } from 'speed-limiter';
 import { isValidMagnetUri, hasTorrentMagicBytes } from './validators';
 import { isValidTrackerUrl, normalizeTrackerUrl } from '../shared/validators';
 import type { TorrentStatus, TorrentFileInfo, TrackerInfo, TrackerStatus } from '../shared/types';
@@ -59,10 +59,6 @@ export interface TorrentEngine {
     remove(infoHash: string, deleteFiles: boolean): Promise<void>;
     setDownloadSpeedLimit(kbps: number): void;
     setUploadSpeedLimit(kbps: number): void;
-    /** Define limite individual de download para um torrent (kbps > 0 ativa, 0 desativa) */
-    setTorrentDownloadSpeedLimit(infoHash: string, kbps: number): void;
-    /** Define limite individual de upload para um torrent (kbps > 0 ativa, 0 desativa) */
-    setTorrentUploadSpeedLimit(infoHash: string, kbps: number): void;
     getAll(): TorrentInfo[];
     /** Retorna a lista de arquivos de um torrent */
     getFiles(infoHash: string): TorrentFileInfo[];
@@ -131,11 +127,6 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
     private readonly statusMap = new Map<string, TorrentStatus>();
     /** Tracks selected file indices per torrent */
     private readonly selectionMap = new Map<string, Set<number>>();
-    /** ThrottleGroup de download individual por torrent */
-    private readonly downloadThrottleMap = new Map<string, ThrottleGroup>();
-    /** ThrottleGroup de upload individual por torrent */
-    private readonly uploadThrottleMap = new Map<string, ThrottleGroup>();
-
     /** Armazena as opções para uso posterior (ex: restart) */
     private options: TorrentEngineOptions;
     /** Timestamp de criação do engine (para health check) */
@@ -355,9 +346,11 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
                 // Already removed — treat as success
                 this.statusMap.delete(infoHash);
                 this.selectionMap.delete(infoHash);
-                this._cleanupThrottleGroups(infoHash);
                 return resolve();
             }
+
+            // Capturar o nome do torrent antes de destruir para limpar a pasta depois
+            const torrentName = torrent.name;
 
             torrent.destroy({ destroyStore: deleteFiles }, (err) => {
                 if (err) {
@@ -365,7 +358,24 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
                 }
                 this.statusMap.delete(infoHash);
                 this.selectionMap.delete(infoHash);
-                this._cleanupThrottleGroups(infoHash);
+
+                // Remover a pasta do torrent se ficou vazia após deletar os arquivos.
+                // O WebTorrent só apaga os arquivos, não a pasta que os contém.
+                if (deleteFiles && torrentName) {
+                    const torrentFolder = join(this.downloadPath, torrentName);
+                    readdir(torrentFolder)
+                        .then((entries) => {
+                            if (entries.length === 0) {
+                                return rm(torrentFolder, { recursive: true });
+                            }
+                        })
+                        .catch(() => {
+                            // Pasta pode já não existir ou não ter permissão — ignorar
+                        })
+                        .finally(() => resolve());
+                    return;
+                }
+
                 resolve();
             });
         });
@@ -382,18 +392,6 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
 
     setUploadSpeedLimit(kbps: number): void {
         this.client.throttleUpload(kbps * 1024);
-    }
-
-    // ── setTorrentDownloadSpeedLimit ────────────────────────────────────────────
-
-    setTorrentDownloadSpeedLimit(infoHash: string, kbps: number): void {
-        this._setTorrentThrottle(infoHash, kbps, this.downloadThrottleMap);
-    }
-
-    // ── setTorrentUploadSpeedLimit ──────────────────────────────────────────────
-
-    setTorrentUploadSpeedLimit(infoHash: string, kbps: number): void {
-        this._setTorrentThrottle(infoHash, kbps, this.uploadThrottleMap);
     }
 
     // ── getAll ──────────────────────────────────────────────────────────────────
@@ -752,78 +750,8 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
             const error = err instanceof Error ? err : new Error(String(err));
             this.emit('error', torrent.infoHash, error);
         });
-
-        // Interceptar wires para aplicar throttle individual por torrent
-        torrent.on('wire', (wire) => {
-            this._applyWireThrottle(torrent.infoHash, wire);
-        });
     }
 
-    /**
-     * Aplica throttle individual a um wire conectado ao torrent.
-     * Se existir um ThrottleGroup para o infoHash, cria um Throttle (Transform stream)
-     * e o insere no pipeline de dados do wire.
-     */
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private _applyWireThrottle(infoHash: string, wire: any): void {
-        const dlGroup = this.downloadThrottleMap.get(infoHash);
-        if (dlGroup && dlGroup.getEnabled()) {
-            const dlThrottle = dlGroup.throttle();
-            wire._recvThrottle = dlThrottle;
-        }
-
-        const ulGroup = this.uploadThrottleMap.get(infoHash);
-        if (ulGroup && ulGroup.getEnabled()) {
-            const ulThrottle = ulGroup.throttle();
-            wire._sendThrottle = ulThrottle;
-        }
-    }
-
-    /**
-     * Cria, atualiza ou desabilita um ThrottleGroup para um torrent específico.
-     * - kbps > 0: cria ou atualiza o ThrottleGroup com rate = kbps * 1024 bytes/s
-     * - kbps === 0: desabilita o ThrottleGroup (enabled: false)
-     */
-    private _setTorrentThrottle(
-        infoHash: string,
-        kbps: number,
-        throttleMap: Map<string, ThrottleGroup>,
-    ): void {
-        const existing = throttleMap.get(infoHash);
-
-        if (kbps > 0) {
-            const rateBytes = kbps * 1024;
-            if (existing) {
-                // Atualizar taxa do ThrottleGroup existente
-                existing.setRate(rateBytes);
-                existing.setEnabled(true);
-            } else {
-                // Criar novo ThrottleGroup
-                const group = new ThrottleGroup({ rate: rateBytes, enabled: true });
-                throttleMap.set(infoHash, group);
-            }
-        } else {
-            // kbps === 0: desabilitar throttle
-            if (existing) {
-                existing.setEnabled(false);
-            }
-        }
-    }
-
-    /** Remove e destrói os ThrottleGroups associados a um torrent */
-    private _cleanupThrottleGroups(infoHash: string): void {
-        const dlGroup = this.downloadThrottleMap.get(infoHash);
-        if (dlGroup) {
-            dlGroup.destroy();
-            this.downloadThrottleMap.delete(infoHash);
-        }
-
-        const ulGroup = this.uploadThrottleMap.get(infoHash);
-        if (ulGroup) {
-            ulGroup.destroy();
-            this.uploadThrottleMap.delete(infoHash);
-        }
-    }
 }
 
 // ─── Factory ──────────────────────────────────────────────────────────────────

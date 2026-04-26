@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { useIntl } from 'react-intl';
 import { isValidMagnetUri } from '../../../shared/validators';
 import type { TorrentFileInfo } from '../../../shared/types';
@@ -51,7 +51,10 @@ export function AddTorrentModal({
     const [magnetUri, setMagnetUri] = useState('');
     const [validationError, setValidationError] = useState<string | null>(null);
     const [submitError, setSubmitError] = useState<string | null>(null);
+    const [submitResult, setSubmitResult] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitProgress, setSubmitProgress] = useState<string | null>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     // ── File selection state (Task 7.1) ───────────────────────────────────
     const [fileSelection, setFileSelection] = useState<FileSelectionState | null>(null);
@@ -61,6 +64,8 @@ export function AddTorrentModal({
         setMagnetUri('');
         setValidationError(null);
         setSubmitError(null);
+        setSubmitResult(null);
+        setSubmitProgress(null);
         setFileSelection(null);
         setFileSelectionLoading(false);
         setIsSubmitting(false);
@@ -71,10 +76,11 @@ export function AddTorrentModal({
         onClose();
     }, [onClose, resetState]);
 
-    const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
         setMagnetUri(e.target.value);
         setValidationError(null);
         setSubmitError(null);
+        setSubmitResult(null);
     }, []);
 
     // ── Handle .torrent file selection (Task 7.1) ─────────────────────────
@@ -177,35 +183,93 @@ export function AddTorrentModal({
         }
     }, [fileSelection, handleClose, intl]);
 
-    // ── Handle magnet link submit ─────────────────────────────────────────
+    // ── Handle magnet link submit (suporte a múltiplos links) ────────────
     const handleSubmit = useCallback(
         async (e: React.FormEvent) => {
             e.preventDefault();
 
-            const trimmed = magnetUri.trim();
+            // Extrai linhas não-vazias
+            const lines = magnetUri
+                .split('\n')
+                .map((l) => l.trim())
+                .filter((l) => l.length > 0);
 
-            if (!trimmed) {
+            if (lines.length === 0) {
                 setValidationError(intl.formatMessage({ id: 'addTorrent.magnetLink.empty' }));
                 return;
             }
 
-            if (!isValidMagnetUri(trimmed)) {
-                setValidationError(intl.formatMessage({ id: 'addTorrent.magnetLink.invalid' }));
+            // Valida todos os links antes de enviar
+            const invalidLines: string[] = [];
+            for (let i = 0; i < lines.length; i++) {
+                if (!isValidMagnetUri(lines[i])) {
+                    invalidLines.push(
+                        intl.formatMessage(
+                            { id: 'addTorrent.magnetLink.invalidLine' },
+                            { line: i + 1 },
+                        ),
+                    );
+                }
+            }
+
+            if (invalidLines.length > 0) {
+                setValidationError(invalidLines.join('\n'));
                 return;
             }
 
             setIsSubmitting(true);
             setSubmitError(null);
+            setSubmitResult(null);
+            setSubmitProgress(null);
 
-            try {
-                const response = await window.meshy.addMagnetLink(trimmed);
-                if (response.success) {
-                    handleClose();
-                } else {
-                    setSubmitError(resolveErrorMessage(intl, response.error));
+            const errors: string[] = [];
+            let successCount = 0;
+
+            for (let i = 0; i < lines.length; i++) {
+                setSubmitProgress(
+                    `${intl.formatMessage({ id: 'addTorrent.submitting' })} (${i + 1}/${lines.length})`,
+                );
+
+                try {
+                    const response = await window.meshy.addMagnetLink(lines[i]);
+                    if (response.success) {
+                        successCount++;
+                    } else {
+                        const errorMsg = resolveErrorMessage(intl, response.error);
+                        errors.push(`Linha ${i + 1}: ${errorMsg}`);
+                    }
+                } catch {
+                    errors.push(
+                        intl.formatMessage(
+                            { id: 'addTorrent.magnetLink.errorGeneric' },
+                            { line: i + 1 },
+                        ),
+                    );
                 }
-            } finally {
-                setIsSubmitting(false);
+            }
+
+            setIsSubmitting(false);
+            setSubmitProgress(null);
+
+            if (errors.length === 0) {
+                // Todos adicionados com sucesso — fecha o painel
+                handleClose();
+            } else if (successCount > 0) {
+                // Sucesso parcial — mostra resultado e erros
+                setSubmitResult(
+                    intl.formatMessage(
+                        { id: 'addTorrent.magnetLink.resultPartial' },
+                        { success: successCount, total: lines.length },
+                    ),
+                );
+                setSubmitError(errors.join('\n'));
+            } else {
+                // Todos falharam
+                setSubmitError(
+                    intl.formatMessage({ id: 'addTorrent.magnetLink.resultAllFailed' }) +
+                    '\n' +
+                    errors.join('\n'),
+                );
             }
         },
         [magnetUri, handleClose, intl],
@@ -217,7 +281,15 @@ export function AddTorrentModal({
     const isAddDisabled =
         isSubmitting || (fileSelection !== null && fileSelection.selectedIndices.length === 0);
 
-    const inputClass = validationError ? 'input input--error' : 'input';
+    // ── Conta quantos links válidos existem no textarea ──────────────────
+    const linkCount = magnetUri
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0).length;
+
+    const inputClass = validationError
+        ? `${styles.magnetTextarea} ${styles.magnetTextareaError}`
+        : styles.magnetTextarea;
 
     // ── File selection step content (Task 7.1) ────────────────────────────
 
@@ -274,10 +346,13 @@ export function AddTorrentModal({
         <form onSubmit={handleSubmit} noValidate>
             <label htmlFor="magnet-input" className="label">
                 {intl.formatMessage({ id: 'addTorrent.magnetLink.label' })}
+                {linkCount > 1 && (
+                    <span className={styles.linkCount}>({linkCount})</span>
+                )}
             </label>
-            <input
+            <textarea
                 id="magnet-input"
-                type="text"
+                ref={textareaRef}
                 className={inputClass}
                 value={magnetUri}
                 onChange={handleChange}
@@ -286,11 +361,24 @@ export function AddTorrentModal({
                 aria-invalid={validationError !== null}
                 disabled={isSubmitting}
                 autoFocus
+                rows={3}
             />
 
             {validationError && (
-                <p id="magnet-error" role="alert" className="modal__error">
+                <p id="magnet-error" role="alert" className={styles.multiLineError}>
                     {validationError}
+                </p>
+            )}
+
+            {submitResult && (
+                <p role="status" className={styles.submitResult}>
+                    {submitResult}
+                </p>
+            )}
+
+            {submitProgress && (
+                <p role="status" className={styles.submitProgress}>
+                    {submitProgress}
                 </p>
             )}
 
@@ -310,7 +398,7 @@ export function AddTorrentModal({
             </div>
 
             {submitError && (
-                <p role="alert" className="modal__error">
+                <p role="alert" className={styles.multiLineError}>
                     {submitError}
                 </p>
             )}
@@ -321,7 +409,7 @@ export function AddTorrentModal({
                 </button>
                 <button type="submit" className="btn btn--primary" disabled={isAddDisabled}>
                     {isSubmitting
-                        ? intl.formatMessage({ id: 'addTorrent.submitting' })
+                        ? submitProgress || intl.formatMessage({ id: 'addTorrent.submitting' })
                         : intl.formatMessage({ id: 'addTorrent.submit' })}
                 </button>
             </div>

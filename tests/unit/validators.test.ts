@@ -482,7 +482,6 @@ describe('isValidSpeedLimit', () => {
 import {
     isValidTrackerUrl,
     normalizeTrackerUrl,
-    calcularLimiteEfetivo,
 } from '../../shared/validators';
 
 // ─── isValidTrackerUrl (testes unitários) ─────────────────────────────────────
@@ -729,120 +728,6 @@ describe('[PBT] Propriedade 3: round-trip — isValidTrackerUrl(normalizeTracker
                 expect(isValidTrackerUrl(normalized)).toBe(true);
             }),
             { numRuns: 200 },
-        );
-    });
-});
-
-// ─── calcularLimiteEfetivo (testes unitários) ─────────────────────────────────
-
-// **Validates: Requirements 4.1, 4.2, 4.3, 4.4**
-describe('calcularLimiteEfetivo', () => {
-    it('retorna 0 quando ambos são 0 (sem limite)', () => {
-        expect(calcularLimiteEfetivo(0, 0)).toBe(0);
-    });
-
-    it('retorna global quando individual é 0', () => {
-        expect(calcularLimiteEfetivo(0, 500)).toBe(500);
-    });
-
-    it('retorna individual quando global é 0', () => {
-        expect(calcularLimiteEfetivo(300, 0)).toBe(300);
-    });
-
-    it('retorna o menor quando ambos são positivos (individual < global)', () => {
-        expect(calcularLimiteEfetivo(200, 500)).toBe(200);
-    });
-
-    it('retorna o menor quando ambos são positivos (global < individual)', () => {
-        expect(calcularLimiteEfetivo(500, 200)).toBe(200);
-    });
-
-    it('retorna o valor quando ambos são iguais e positivos', () => {
-        expect(calcularLimiteEfetivo(100, 100)).toBe(100);
-    });
-
-    it('retorna 1 quando individual é 1 e global é 0', () => {
-        expect(calcularLimiteEfetivo(1, 0)).toBe(1);
-    });
-
-    it('retorna 1 quando global é 1 e individual é 0', () => {
-        expect(calcularLimiteEfetivo(0, 1)).toBe(1);
-    });
-});
-
-// ─── PBT: Propriedade 1 — Cálculo do limite efetivo ──────────────────────────
-
-// Feature: per-torrent-speed-limit, Property 1: Cálculo do limite efetivo
-// **Validates: Requirements 4.1, 4.2, 4.3, 4.4**
-describe('[PBT] Propriedade 1: calcularLimiteEfetivo retorna o menor valor positivo (ou 0 se ambos são 0)', () => {
-    it('retorna 0 quando ambos são 0', () => {
-        fc.assert(
-            fc.property(fc.constant(0), fc.constant(0), (individual, global) => {
-                expect(calcularLimiteEfetivo(individual, global)).toBe(0);
-            }),
-            { numRuns: 100 },
-        );
-    });
-
-    it('retorna global quando individual é 0 e global > 0', () => {
-        fc.assert(
-            fc.property(
-                fc.nat({ max: 1_000_000 }).filter((n) => n > 0),
-                (global) => {
-                    expect(calcularLimiteEfetivo(0, global)).toBe(global);
-                },
-            ),
-            { numRuns: 100 },
-        );
-    });
-
-    it('retorna individual quando global é 0 e individual > 0', () => {
-        fc.assert(
-            fc.property(
-                fc.nat({ max: 1_000_000 }).filter((n) => n > 0),
-                (individual) => {
-                    expect(calcularLimiteEfetivo(individual, 0)).toBe(individual);
-                },
-            ),
-            { numRuns: 100 },
-        );
-    });
-
-    it('retorna Math.min(individual, global) quando ambos são > 0', () => {
-        fc.assert(
-            fc.property(
-                fc.nat({ max: 1_000_000 }).filter((n) => n > 0),
-                fc.nat({ max: 1_000_000 }).filter((n) => n > 0),
-                (individual, global) => {
-                    expect(calcularLimiteEfetivo(individual, global)).toBe(
-                        Math.min(individual, global),
-                    );
-                },
-            ),
-            { numRuns: 100 },
-        );
-    });
-
-    it('para quaisquer inteiros não-negativos, retorna o menor valor positivo ou 0', () => {
-        fc.assert(
-            fc.property(fc.nat(), fc.nat(), (individual, global) => {
-                const resultado = calcularLimiteEfetivo(individual, global);
-
-                // O resultado deve ser não-negativo
-                expect(resultado).toBeGreaterThanOrEqual(0);
-
-                // Verificação exaustiva da lógica
-                if (individual === 0 && global === 0) {
-                    expect(resultado).toBe(0);
-                } else if (individual === 0) {
-                    expect(resultado).toBe(global);
-                } else if (global === 0) {
-                    expect(resultado).toBe(individual);
-                } else {
-                    expect(resultado).toBe(Math.min(individual, global));
-                }
-            }),
-            { numRuns: 100 },
         );
     });
 });

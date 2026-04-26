@@ -117,8 +117,6 @@ function makeDownloadItem(overrides: Partial<DownloadItem> = {}): DownloadItem {
         status: 'downloading',
         destinationFolder: '/downloads',
         addedAt: Date.now(),
-        downloadSpeedLimitKBps: 0,
-        uploadSpeedLimitKBps: 0,
         ...overrides,
     };
 }

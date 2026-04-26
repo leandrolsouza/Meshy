@@ -47,8 +47,6 @@ const EXPECTED_CHANNELS = [
     'torrent:get-all',
     'torrent:get-files',
     'torrent:set-file-selection',
-    'torrent:set-speed-limits',
-    'torrent:get-speed-limits',
     'torrent:retry',
     'settings:get',
     'settings:set',
@@ -79,8 +77,6 @@ function makeSampleDownloadItem(overrides: Partial<DownloadItem> = {}): Download
         status: 'downloading',
         destinationFolder: '/downloads',
         addedAt: Date.now(),
-        downloadSpeedLimitKBps: 0,
-        uploadSpeedLimitKBps: 0,
         ...overrides,
     };
 }
@@ -97,11 +93,6 @@ function makeMockDownloadManager(): DownloadManager {
         restoreSession: jest.fn().mockResolvedValue(undefined),
         persistSession: jest.fn(),
         setMaxConcurrentDownloads: jest.fn(),
-        setTorrentSpeedLimits: jest.fn().mockReturnValue(item),
-        getTorrentSpeedLimits: jest
-            .fn()
-            .mockReturnValue({ downloadSpeedLimitKBps: 0, uploadSpeedLimitKBps: 0 }),
-        onGlobalSpeedLimitChanged: jest.fn(),
         on: jest.fn(),
     } as unknown as DownloadManager;
 }
@@ -137,8 +128,6 @@ function makeMockTorrentEngine() {
         getTrackers: jest.fn().mockReturnValue([]),
         addTracker: jest.fn(),
         removeTracker: jest.fn(),
-        setTorrentDownloadSpeedLimit: jest.fn(),
-        setTorrentUploadSpeedLimit: jest.fn(),
         getFiles: jest.fn().mockReturnValue([]),
         setFileSelection: jest.fn().mockReturnValue([]),
         restart: jest.fn().mockResolvedValue(undefined),
@@ -176,9 +165,9 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
 
     // ── Smoke tests: all channels registered ─────────────────────────────────
 
-    describe('Smoke: all 23 IPC channels are registered and respond', () => {
-        it('registers exactly 23 IPC channels', () => {
-            expect(mockIpcMain.handle).toHaveBeenCalledTimes(23);
+    describe('Smoke: all 21 IPC channels are registered and respond', () => {
+        it('registers exactly 21 IPC channels', () => {
+            expect(mockIpcMain.handle).toHaveBeenCalledTimes(21);
         });
 
         it.each(EXPECTED_CHANNELS)('channel "%s" is registered', (channel) => {

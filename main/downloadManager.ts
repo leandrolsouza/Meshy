@@ -8,7 +8,7 @@ import type {
     TorrentFileInfo,
     TorrentStatus,
 } from '../shared/types';
-import { DEFAULT_MAX_CONCURRENT_DOWNLOADS, calcularLimiteEfetivo } from '../shared/validators';
+import { DEFAULT_MAX_CONCURRENT_DOWNLOADS } from '../shared/validators';
 import { logger as defaultLogger } from './logger';
 import type { Logger } from './logger';
 
@@ -26,19 +26,6 @@ export interface DownloadManager {
     persistSession(): void;
     /** Atualiza o limite de downloads simultâneos e processa a fila */
     setMaxConcurrentDownloads(max: number): void;
-    /** Define limites individuais de velocidade para um torrent */
-    setTorrentSpeedLimits(
-        infoHash: string,
-        downloadLimitKBps: number,
-        uploadLimitKBps: number,
-    ): DownloadItem;
-    /** Retorna os limites individuais de velocidade de um torrent */
-    getTorrentSpeedLimits(infoHash: string): {
-        downloadSpeedLimitKBps: number;
-        uploadSpeedLimitKBps: number;
-    };
-    /** Recalcula o limite efetivo de todos os torrents com limite individual ao alterar o limite global */
-    onGlobalSpeedLimitChanged(): void;
     /** Retenta um download que está em status 'error' ou 'metadata-failed' */
     retryDownload(infoHash: string): Promise<DownloadItem>;
     on(event: 'update', listener: (item: DownloadItem) => void): void;
@@ -80,8 +67,6 @@ function torrentInfoToDownloadItem(
         status: info.status,
         destinationFolder,
         addedAt,
-        downloadSpeedLimitKBps: 0,
-        uploadSpeedLimitKBps: 0,
     };
 }
 
@@ -130,11 +115,6 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
     private maxConcurrent: number;
     /** Tracks magnet URIs for queued items that need to be added to the engine later */
     private readonly queuedMagnetUris = new Map<string, string>();
-    /** Limites individuais de velocidade por torrent */
-    private readonly speedLimitsMap = new Map<
-        string,
-        { downloadSpeedLimitKBps: number; uploadSpeedLimitKBps: number }
-    >();
     private readonly engine: TorrentEngine;
     private readonly settings: SettingsManager;
     private readonly store: PersistedStore | undefined;
@@ -384,9 +364,14 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
         if (!hasSlot && hashMatch) {
             const infoHash = hashMatch[1].toLowerCase();
             const addedAt = Date.now();
+
+            // Extrair display name (dn) do magnet URI, se disponível
+            const dnMatch = magnetUri.match(/[?&]dn=([^&]+)/);
+            const magnetName = dnMatch ? decodeURIComponent(dnMatch[1]) : infoHash;
+
             const item: DownloadItem = {
                 infoHash,
-                name: infoHash,
+                name: magnetName,
                 totalSize: 0,
                 downloadedSize: 0,
                 progress: 0,
@@ -398,8 +383,6 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                 status: 'queued',
                 destinationFolder,
                 addedAt,
-                downloadSpeedLimitKBps: 0,
-                uploadSpeedLimitKBps: 0,
             };
 
             this.items.set(item.infoHash, item);
@@ -769,7 +752,6 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
 
         this._clearMetadataTimer(infoHash);
         this.selectedFileIndicesMap.delete(infoHash);
-        this.speedLimitsMap.delete(infoHash);
         this.items.delete(infoHash);
         this.emit('remove', infoHash);
 
@@ -784,23 +766,13 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
     getAll(): DownloadItem[] {
         const items = Array.from(this.items.values());
         return items.map((item) => {
-            // Enriquecer com limites individuais do speedLimitsMap
-            const limits = this.speedLimitsMap.get(item.infoHash);
-            const enriched: DownloadItem = limits
-                ? {
-                    ...item,
-                    downloadSpeedLimitKBps: limits.downloadSpeedLimitKBps,
-                    uploadSpeedLimitKBps: limits.uploadSpeedLimitKBps,
-                }
-                : item;
-
             // Enrich with file count info if available
             try {
-                const files = this.engine.getFiles(enriched.infoHash);
+                const files = this.engine.getFiles(item.infoHash);
                 if (files.length > 0) {
                     const selectedFiles = files.filter((f) => f.selected);
                     return {
-                        ...enriched,
+                        ...item,
                         selectedFileCount: selectedFiles.length,
                         totalFileCount: files.length,
                     };
@@ -808,7 +780,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             } catch {
                 // getFiles pode falhar — retornar item sem enriquecimento
             }
-            return enriched;
+            return item;
         });
     }
 
@@ -903,10 +875,6 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             }
 
             // Restore the item into the in-memory map
-            // Restaurar limites individuais de velocidade do item persistido
-            const restoredDl = persistedItem.downloadSpeedLimitKBps ?? 0;
-            const restoredUl = persistedItem.uploadSpeedLimitKBps ?? 0;
-
             const item: DownloadItem = {
                 infoHash: persistedItem.infoHash,
                 name: persistedItem.name,
@@ -923,21 +891,11 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                 addedAt: persistedItem.addedAt,
                 completedAt: persistedItem.completedAt,
                 elapsedMs: persistedItem.elapsedMs,
-                downloadSpeedLimitKBps: restoredDl,
-                uploadSpeedLimitKBps: restoredUl,
                 errorMessage: persistedItem.errorMessage,
             };
 
             this.items.set(item.infoHash, item);
             this.emit('update', item);
-
-            // Popular o speedLimitsMap com os limites restaurados
-            if (restoredDl > 0 || restoredUl > 0) {
-                this.speedLimitsMap.set(item.infoHash, {
-                    downloadSpeedLimitKBps: restoredDl,
-                    uploadSpeedLimitKBps: restoredUl,
-                });
-            }
 
             // Restore selected file indices into the map for later persistence
             if (persistedItem.selectedFileIndices) {
@@ -1019,22 +977,6 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                     const updated: DownloadItem = { ...item, status: 'downloading' };
                     this.items.set(item.infoHash, updated);
                     this.emit('update', updated);
-
-                    // Reaplicar limites individuais de velocidade ao engine
-                    const restoredLimits = this.speedLimitsMap.get(item.infoHash);
-                    if (restoredLimits) {
-                        const globalSettings = this.settings.get();
-                        const effectiveDl = calcularLimiteEfetivo(
-                            restoredLimits.downloadSpeedLimitKBps,
-                            globalSettings.downloadSpeedLimit,
-                        );
-                        const effectiveUl = calcularLimiteEfetivo(
-                            restoredLimits.uploadSpeedLimitKBps,
-                            globalSettings.uploadSpeedLimit,
-                        );
-                        this.engine.setTorrentDownloadSpeedLimit(item.infoHash, effectiveDl);
-                        this.engine.setTorrentUploadSpeedLimit(item.infoHash, effectiveUl);
-                    }
                 } catch (restoreErr) {
                     // Falha ao re-adicionar — marcar como erro com mensagem
                     const errMsg = (restoreErr as Error).message;
@@ -1062,7 +1004,6 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
 
         const items = Array.from(this.items.values());
         const persisted: PersistedDownloadItem[] = items.map((item) => {
-            const limits = this.speedLimitsMap.get(item.infoHash);
             return {
                 infoHash: item.infoHash,
                 name: item.name,
@@ -1076,8 +1017,6 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                 elapsedMs: item.elapsedMs,
                 selectedFileIndices: this.selectedFileIndicesMap.get(item.infoHash),
                 magnetUri: this.queuedMagnetUris.get(item.infoHash),
-                downloadSpeedLimitKBps: limits?.downloadSpeedLimitKBps,
-                uploadSpeedLimitKBps: limits?.uploadSpeedLimitKBps,
                 errorMessage: item.errorMessage,
             };
         });
@@ -1094,85 +1033,10 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
         this._processQueue();
     }
 
-    // ── setTorrentSpeedLimits ───────────────────────────────────────────────────
-
-    setTorrentSpeedLimits(
-        infoHash: string,
-        downloadLimitKBps: number,
-        uploadLimitKBps: number,
-    ): DownloadItem {
-        const existing = this.items.get(infoHash);
-        if (!existing) {
-            throw new Error('Torrent não encontrado');
-        }
-
-        // Armazenar limites individuais no mapa
-        this.speedLimitsMap.set(infoHash, {
-            downloadSpeedLimitKBps: downloadLimitKBps,
-            uploadSpeedLimitKBps: uploadLimitKBps,
-        });
-
-        // Calcular limites efetivos considerando o limite global
-        const globalSettings = this.settings.get();
-        const effectiveDl = calcularLimiteEfetivo(
-            downloadLimitKBps,
-            globalSettings.downloadSpeedLimit,
-        );
-        const effectiveUl = calcularLimiteEfetivo(uploadLimitKBps, globalSettings.uploadSpeedLimit);
-
-        // Aplicar no engine
-        this.engine.setTorrentDownloadSpeedLimit(infoHash, effectiveDl);
-        this.engine.setTorrentUploadSpeedLimit(infoHash, effectiveUl);
-
-        // Atualizar o DownloadItem com os limites individuais
-        const updated: DownloadItem = {
-            ...existing,
-            downloadSpeedLimitKBps: downloadLimitKBps,
-            uploadSpeedLimitKBps: uploadLimitKBps,
-        };
-        this.items.set(infoHash, updated);
-        this.emit('update', updated);
-
-        return updated;
-    }
-
-    // ── getTorrentSpeedLimits ───────────────────────────────────────────────────
-
-    getTorrentSpeedLimits(infoHash: string): {
-        downloadSpeedLimitKBps: number;
-        uploadSpeedLimitKBps: number;
-    } {
-        const limits = this.speedLimitsMap.get(infoHash);
-        if (limits) {
-            return { ...limits };
-        }
-        return { downloadSpeedLimitKBps: 0, uploadSpeedLimitKBps: 0 };
-    }
-
-    // ── onGlobalSpeedLimitChanged ───────────────────────────────────────────────
-
-    onGlobalSpeedLimitChanged(): void {
-        const globalSettings = this.settings.get();
-
-        for (const [infoHash, limits] of this.speedLimitsMap.entries()) {
-            const effectiveDl = calcularLimiteEfetivo(
-                limits.downloadSpeedLimitKBps,
-                globalSettings.downloadSpeedLimit,
-            );
-            const effectiveUl = calcularLimiteEfetivo(
-                limits.uploadSpeedLimitKBps,
-                globalSettings.uploadSpeedLimit,
-            );
-
-            this.engine.setTorrentDownloadSpeedLimit(infoHash, effectiveDl);
-            this.engine.setTorrentUploadSpeedLimit(infoHash, effectiveUl);
-        }
-    }
-
     // ── Private helpers ─────────────────────────────────────────────────────────
 
     /**
-     * Limpa recursos órfãos: entries em metadataTimers, speedLimitsMap,
+     * Limpa recursos órfãos: entries em metadataTimers,
      * selectedFileIndicesMap e queuedMagnetUris que não possuem item
      * correspondente no mapa de downloads. Isso pode acontecer se uma
      * remoção falhar parcialmente ou se houver um bug de sincronização.
@@ -1183,13 +1047,6 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
         for (const infoHash of this.metadataTimers.keys()) {
             if (!this.items.has(infoHash)) {
                 this._clearMetadataTimer(infoHash);
-                cleaned++;
-            }
-        }
-
-        for (const infoHash of this.speedLimitsMap.keys()) {
-            if (!this.items.has(infoHash)) {
-                this.speedLimitsMap.delete(infoHash);
                 cleaned++;
             }
         }

@@ -10,7 +10,7 @@ import type {
     TorrentFileInfo,
     TrackerInfo,
 } from '../shared/types';
-import { isValidSpeedLimit, isValidTorrentFile } from './validators';
+import { isValidTorrentFile } from './validators';
 import { isValidTrackerUrl } from '../shared/validators';
 import { ErrorCodes } from '../shared/errorCodes';
 import { logger, createScopedLogger } from './logger';
@@ -429,14 +429,6 @@ export function registerIpcHandlers(
                     downloadManager.setMaxConcurrentDownloads(partial.maxConcurrentDownloads);
                 }
 
-                // Recalcular limites efetivos ao alterar limites globais de velocidade
-                if (
-                    partial.downloadSpeedLimit !== undefined ||
-                    partial.uploadSpeedLimit !== undefined
-                ) {
-                    downloadManager.onGlobalSpeedLimitChanged();
-                }
-
                 // Verificar se configurações de rede mudaram e acionar restart
                 const networkChanged =
                     (partial.dhtEnabled !== undefined &&
@@ -568,65 +560,6 @@ export function registerIpcHandlers(
                 return ok(updatedFiles);
             } catch (err) {
                 return failWithLog('torrent:set-file-selection', err);
-            }
-        },
-    );
-
-    // ── torrent:set-speed-limits ──────────────────────────────────────────────
-    trackedHandle(
-        'torrent:set-speed-limits',
-        async (_event, payload: unknown): Promise<IPCResponse<DownloadItem>> => {
-            try {
-                const result = validatePayload<{
-                    infoHash: string;
-                    downloadLimit: number;
-                    uploadLimit: number;
-                }>(payload, {
-                    infoHash: { type: 'string', nonEmpty: true },
-                    downloadLimit: { type: 'number' },
-                    uploadLimit: { type: 'number' },
-                });
-                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
-
-                const { infoHash, downloadLimit, uploadLimit } = result.data;
-
-                // Validação específica de speed limits com código de erro dedicado
-                if (!isValidSpeedLimit(downloadLimit)) {
-                    return fail(ErrorCodes.INVALID_SPEED_LIMIT);
-                }
-                if (!isValidSpeedLimit(uploadLimit)) {
-                    return fail(ErrorCodes.INVALID_SPEED_LIMIT);
-                }
-
-                const item = downloadManager.setTorrentSpeedLimits(
-                    infoHash,
-                    downloadLimit,
-                    uploadLimit,
-                );
-                return ok(item);
-            } catch (err) {
-                return failWithLog('torrent:set-speed-limits', err);
-            }
-        },
-    );
-
-    // ── torrent:get-speed-limits ──────────────────────────────────────────────
-    trackedHandle(
-        'torrent:get-speed-limits',
-        async (
-            _event,
-            payload: unknown,
-        ): Promise<
-            IPCResponse<{ downloadSpeedLimitKBps: number; uploadSpeedLimitKBps: number }>
-        > => {
-            try {
-                const result = validatePayload<{ infoHash: string }>(payload, infoHashSchema);
-                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
-
-                const limits = downloadManager.getTorrentSpeedLimits(result.data.infoHash);
-                return ok(limits);
-            } catch (err) {
-                return failWithLog('torrent:get-speed-limits', err);
             }
         },
     );

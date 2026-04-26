@@ -359,8 +359,6 @@ function makeDMMockEngine(): TorrentEngine & EventEmitter {
         getTrackers: jest.fn().mockReturnValue([]),
         addTracker: jest.fn(),
         removeTracker: jest.fn(),
-        setTorrentDownloadSpeedLimit: jest.fn(),
-        setTorrentUploadSpeedLimit: jest.fn(),
         restart: jest.fn().mockResolvedValue(undefined),
         isRestarting: jest.fn().mockReturnValue(false),
         healthCheck: jest.fn().mockReturnValue({ healthy: true, restarting: false, activeTorrents: 0, totalPeers: 0, uptimeMs: 0 }),

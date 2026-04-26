@@ -128,26 +128,6 @@ export function useDownloads() {
         return window.meshy.setFileSelection(infoHash, selectedIndices);
     }
 
-    /**
-     * Define limites de velocidade individuais (download e upload) para um torrent.
-     * Atualiza o item no store em caso de sucesso.
-     */
-    async function setTorrentSpeedLimits(
-        infoHash: string,
-        downloadLimit: number,
-        uploadLimit: number,
-    ): Promise<IPCResponse<DownloadItem>> {
-        const response = await window.meshy.setTorrentSpeedLimits(
-            infoHash,
-            downloadLimit,
-            uploadLimit,
-        );
-        if (response.success) {
-            updateItem(response.data);
-        }
-        return response;
-    }
-
     return {
         items: useDownloadStore((state) => state.items),
         addTorrentFile,
@@ -157,6 +137,5 @@ export function useDownloads() {
         remove,
         getFiles,
         setFileSelection,
-        setTorrentSpeedLimits,
     };
 }

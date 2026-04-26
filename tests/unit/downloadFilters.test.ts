@@ -45,8 +45,6 @@ export function arbitraryDownloadItem(): fc.Arbitrary<DownloadItem> {
         status: arbitraryTorrentStatus(),
         destinationFolder: fc.string(),
         addedAt: fc.nat(),
-        downloadSpeedLimitKBps: fc.nat(),
-        uploadSpeedLimitKBps: fc.nat(),
     });
 }
 
