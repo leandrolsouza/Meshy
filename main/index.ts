@@ -7,6 +7,7 @@ import { createNotificationManager } from './notificationManager';
 import { registerIpcHandlers, attachWindowEvents } from './ipcHandler';
 import type { DownloadManager } from './downloadManager';
 import { logger } from './logger';
+import { metrics } from './metrics';
 
 import ElectronStore from 'electron-store';
 
@@ -158,6 +159,9 @@ function attachRendererCrashHandler(window: BrowserWindow): void {
             `reason=${details.reason}`,
             `exitCode=${details.exitCode}`,
         );
+
+        // Registrar nas métricas
+        metrics.recordRendererCrash();
 
         // Persistir sessão ao detectar crash do renderer
         try {

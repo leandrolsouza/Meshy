@@ -31,6 +31,23 @@ export interface Logger {
     info(message: string, ...args: unknown[]): void;
     warn(message: string, ...args: unknown[]): void;
     error(message: string, ...args: unknown[]): void;
+    debug(message: string, ...args: unknown[]): void;
+}
+
+/**
+ * Flag global para habilitar/desabilitar logs de debug.
+ * Ativado via variável de ambiente MESHY_DEBUG=1 ou programaticamente.
+ */
+let debugEnabled = process.env['MESHY_DEBUG'] === '1';
+
+/** Habilita ou desabilita logs de debug em runtime */
+export function setDebugEnabled(enabled: boolean): void {
+    debugEnabled = enabled;
+}
+
+/** Retorna se o modo debug está ativo */
+export function isDebugEnabled(): boolean {
+    return debugEnabled;
 }
 
 /**
@@ -60,6 +77,11 @@ export const logger: Logger = {
     error(message: string, ...args: unknown[]): void {
         log.error(message, ...args);
     },
+    debug(message: string, ...args: unknown[]): void {
+        if (debugEnabled) {
+            log.info(`[DEBUG] ${message}`, ...args);
+        }
+    },
 };
 
 // ─── Scoped logger ────────────────────────────────────────────────────────────
@@ -81,6 +103,7 @@ export interface ScopedLogger {
     info(message: string, ctx?: LogContext): void;
     warn(message: string, ctx?: LogContext): void;
     error(message: string, ctx?: LogContext): void;
+    debug(message: string, ctx?: LogContext): void;
 }
 
 export function createScopedLogger(base: Logger, baseCtx: LogContext): ScopedLogger {
@@ -102,6 +125,11 @@ export function createScopedLogger(base: Logger, baseCtx: LogContext): ScopedLog
             const merged = { ...baseCtx, ...ctx };
             delete merged.channel;
             base.error(`${prefix} ${message}${formatContext(merged)}`);
+        },
+        debug(message: string, ctx?: LogContext): void {
+            const merged = { ...baseCtx, ...ctx };
+            delete merged.channel;
+            base.debug(`${prefix} ${message}${formatContext(merged)}`);
         },
     };
 }

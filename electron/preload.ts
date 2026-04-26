@@ -169,6 +169,14 @@ const meshyAPI: MeshyAPI = {
             // Silenciar falhas no report — não queremos erros ao reportar erros
         });
     },
+
+    /**
+     * Retorna snapshot das métricas de operação do main process.
+     * Útil para debugging e monitoramento.
+     */
+    getMetrics(): Promise<IPCResponse<Record<string, unknown>>> {
+        return ipcRenderer.invoke('app:get-metrics');
+    },
 };
 
 contextBridge.exposeInMainWorld('meshy', meshyAPI);

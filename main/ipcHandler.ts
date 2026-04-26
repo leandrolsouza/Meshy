@@ -14,6 +14,8 @@ import { isValidTrackerUrl } from '../shared/validators';
 import { ErrorCodes } from '../shared/errorCodes';
 import { logger, createScopedLogger } from './logger';
 import type { ScopedLogger } from './logger';
+import { metrics } from './metrics';
+import type { MetricsSnapshot } from './metrics';
 import {
     validatePayload,
     infoHashSchema,
@@ -71,6 +73,26 @@ function withTimeout<T>(promise: Promise<T>, channel: string, timeoutMs = IPC_TI
     });
 }
 
+// ─── Metrics wrapper ──────────────────────────────────────────────────────────
+
+/**
+ * Envolve um handler IPC com tracking de latência e contagem de erros.
+ * Mede o tempo de execução e registra no coletor de métricas.
+ * Em modo debug, loga a latência de cada chamada.
+ */
+function withMetrics<T>(
+    channel: string,
+    handler: () => Promise<IPCResponse<T>>,
+): Promise<IPCResponse<T>> {
+    const start = Date.now();
+    return handler().then((result) => {
+        const durationMs = Date.now() - start;
+        metrics.recordIpcCall(channel, durationMs, result.success);
+        logger.debug(`[IPC] ${channel} concluído`, `durationMs=${durationMs}`, `success=${result.success}`);
+        return result;
+    });
+}
+
 // ─── Handler registration ─────────────────────────────────────────────────────
 
 /**
@@ -98,6 +120,7 @@ export function attachWindowEvents(
 
     // ── TorrentEngine error forwarding ────────────────────────────────────────
     const errorListener = (infoHash: string, err: Error) => {
+        metrics.recordEngineError();
         if (!mainWindow.isDestroyed()) {
             mainWindow.webContents.send('torrent:error', { infoHash, message: err.message });
         }
@@ -129,8 +152,19 @@ export function registerIpcHandlers(
     settingsManager: SettingsManager,
     torrentEngine?: TorrentEngine,
 ): void {
+    // ── Wrapper para tracking automático de métricas ──────────────────────────
+    // Intercepta ipcMain.handle para medir latência e contar erros de cada canal.
+    const trackedHandle = <T>(
+        channel: string,
+        handler: (event: Electron.IpcMainInvokeEvent, payload: unknown) => Promise<IPCResponse<T>>,
+    ): void => {
+        ipcMain.handle(channel, async (event, payload) => {
+            return withMetrics(channel, () => handler(event, payload));
+        });
+    };
+
     // ── torrent:add-file ──────────────────────────────────────────────────────
-    ipcMain.handle(
+    trackedHandle(
         'torrent:add-file',
         async (_event, payload: unknown): Promise<IPCResponse<DownloadItem>> => {
             try {
@@ -155,7 +189,7 @@ export function registerIpcHandlers(
     );
 
     // ── torrent:add-magnet ────────────────────────────────────────────────────
-    ipcMain.handle(
+    trackedHandle(
         'torrent:add-magnet',
         async (_event, payload: unknown): Promise<IPCResponse<DownloadItem>> => {
             try {
@@ -180,7 +214,7 @@ export function registerIpcHandlers(
     );
 
     // ── torrent:pause ─────────────────────────────────────────────────────────
-    ipcMain.handle(
+    trackedHandle(
         'torrent:pause',
         async (_event, payload: unknown): Promise<IPCResponse<void>> => {
             try {
@@ -203,7 +237,7 @@ export function registerIpcHandlers(
     );
 
     // ── torrent:resume ────────────────────────────────────────────────────────
-    ipcMain.handle(
+    trackedHandle(
         'torrent:resume',
         async (_event, payload: unknown): Promise<IPCResponse<void>> => {
             try {
@@ -226,7 +260,7 @@ export function registerIpcHandlers(
     );
 
     // ── torrent:remove ────────────────────────────────────────────────────────
-    ipcMain.handle(
+    trackedHandle(
         'torrent:remove',
         async (_event, payload: unknown): Promise<IPCResponse<void>> => {
             try {
@@ -255,7 +289,7 @@ export function registerIpcHandlers(
     );
 
     // ── torrent:get-all ───────────────────────────────────────────────────────
-    ipcMain.handle('torrent:get-all', async (_event): Promise<IPCResponse<DownloadItem[]>> => {
+    trackedHandle('torrent:get-all', async (_event): Promise<IPCResponse<DownloadItem[]>> => {
         try {
             const items = downloadManager.getAll();
             return ok(items);
@@ -265,7 +299,7 @@ export function registerIpcHandlers(
     });
 
     // ── settings:get ──────────────────────────────────────────────────────────
-    ipcMain.handle('settings:get', async (_event): Promise<IPCResponse<AppSettings>> => {
+    trackedHandle('settings:get', async (_event): Promise<IPCResponse<AppSettings>> => {
         try {
             const settings = settingsManager.get();
             return ok(settings);
@@ -275,7 +309,7 @@ export function registerIpcHandlers(
     });
 
     // ── settings:set ──────────────────────────────────────────────────────────
-    ipcMain.handle(
+    trackedHandle(
         'settings:set',
         async (_event, payload: unknown): Promise<IPCResponse<AppSettings>> => {
             try {
@@ -339,7 +373,7 @@ export function registerIpcHandlers(
     );
 
     // ── settings:select-folder ────────────────────────────────────────────────
-    ipcMain.handle('settings:select-folder', async (_event): Promise<IPCResponse<string>> => {
+    trackedHandle('settings:select-folder', async (_event): Promise<IPCResponse<string>> => {
         try {
             const result = await dialog.showOpenDialog({
                 properties: ['openDirectory'],
@@ -356,7 +390,7 @@ export function registerIpcHandlers(
     });
 
     // ── torrent:get-files ─────────────────────────────────────────────────────
-    ipcMain.handle(
+    trackedHandle(
         'torrent:get-files',
         async (_event, payload: unknown): Promise<IPCResponse<TorrentFileInfo[]>> => {
             try {
@@ -391,7 +425,7 @@ export function registerIpcHandlers(
     );
 
     // ── torrent:set-file-selection ────────────────────────────────────────────
-    ipcMain.handle(
+    trackedHandle(
         'torrent:set-file-selection',
         async (_event, payload: unknown): Promise<IPCResponse<TorrentFileInfo[]>> => {
             try {
@@ -445,7 +479,7 @@ export function registerIpcHandlers(
     );
 
     // ── torrent:set-speed-limits ──────────────────────────────────────────────
-    ipcMain.handle(
+    trackedHandle(
         'torrent:set-speed-limits',
         async (_event, payload: unknown): Promise<IPCResponse<DownloadItem>> => {
             try {
@@ -483,7 +517,7 @@ export function registerIpcHandlers(
     );
 
     // ── torrent:get-speed-limits ──────────────────────────────────────────────
-    ipcMain.handle(
+    trackedHandle(
         'torrent:get-speed-limits',
         async (
             _event,
@@ -504,7 +538,7 @@ export function registerIpcHandlers(
     );
 
     // ── torrent:retry ─────────────────────────────────────────────────────────
-    ipcMain.handle(
+    trackedHandle(
         'torrent:retry',
         async (_event, payload: unknown): Promise<IPCResponse<DownloadItem>> => {
             try {
@@ -527,7 +561,7 @@ export function registerIpcHandlers(
     );
 
     // ── tracker:get ───────────────────────────────────────────────────────────
-    ipcMain.handle(
+    trackedHandle(
         'tracker:get',
         async (_event, payload: unknown): Promise<IPCResponse<TrackerInfo[]>> => {
             try {
@@ -547,7 +581,7 @@ export function registerIpcHandlers(
     );
 
     // ── tracker:add ───────────────────────────────────────────────────────────
-    ipcMain.handle(
+    trackedHandle(
         'tracker:add',
         async (_event, payload: unknown): Promise<IPCResponse<TrackerInfo[]>> => {
             try {
@@ -577,7 +611,7 @@ export function registerIpcHandlers(
     );
 
     // ── tracker:remove ────────────────────────────────────────────────────────
-    ipcMain.handle(
+    trackedHandle(
         'tracker:remove',
         async (_event, payload: unknown): Promise<IPCResponse<TrackerInfo[]>> => {
             try {
@@ -602,7 +636,7 @@ export function registerIpcHandlers(
     );
 
     // ── tracker:apply-global ──────────────────────────────────────────────────
-    ipcMain.handle(
+    trackedHandle(
         'tracker:apply-global',
         async (_event, payload: unknown): Promise<IPCResponse<TrackerInfo[]>> => {
             try {
@@ -633,7 +667,7 @@ export function registerIpcHandlers(
     );
 
     // ── tracker:get-global ────────────────────────────────────────────────────
-    ipcMain.handle('tracker:get-global', async (_event): Promise<IPCResponse<string[]>> => {
+    trackedHandle('tracker:get-global', async (_event): Promise<IPCResponse<string[]>> => {
         try {
             const trackers = settingsManager.getGlobalTrackers();
             return ok(trackers);
@@ -643,7 +677,7 @@ export function registerIpcHandlers(
     });
 
     // ── tracker:add-global ────────────────────────────────────────────────────
-    ipcMain.handle(
+    trackedHandle(
         'tracker:add-global',
         async (_event, payload: unknown): Promise<IPCResponse<string[]>> => {
             try {
@@ -666,7 +700,7 @@ export function registerIpcHandlers(
     );
 
     // ── tracker:remove-global ─────────────────────────────────────────────────
-    ipcMain.handle(
+    trackedHandle(
         'tracker:remove-global',
         async (_event, payload: unknown): Promise<IPCResponse<string[]>> => {
             try {
@@ -686,7 +720,7 @@ export function registerIpcHandlers(
     // ── renderer:report-error ─────────────────────────────────────────────────
     // Canal para o renderer reportar erros (ErrorBoundary, exceções não capturadas)
     // ao main process, onde são persistidos via electron-log.
-    ipcMain.handle(
+    trackedHandle(
         'renderer:report-error',
         async (_event, payload: unknown): Promise<IPCResponse<void>> => {
             const scopedLog = createScopedLogger(logger, { channel: 'renderer:report-error' });
@@ -723,9 +757,26 @@ export function registerIpcHandlers(
                     },
                 );
 
+                // Registrar nas métricas
+                metrics.recordRendererError();
+
                 return ok(undefined);
             } catch (err) {
                 return failWithLog('renderer:report-error', err, scopedLog);
+            }
+        },
+    );
+
+    // ── app:get-metrics ───────────────────────────────────────────────────────
+    // Retorna snapshot das métricas de operação para debugging no renderer.
+    trackedHandle(
+        'app:get-metrics',
+        async (_event): Promise<IPCResponse<MetricsSnapshot>> => {
+            try {
+                const snapshot = metrics.getSnapshot();
+                return ok(snapshot);
+            } catch (err) {
+                return failWithLog('app:get-metrics', err);
             }
         },
     );

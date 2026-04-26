@@ -556,6 +556,7 @@ describe('Property 11: Novos downloads usam a pasta de destino atual', () => {
                         info: () => { },
                         warn: () => { },
                         error: () => { },
+                        debug: () => { },
                     };
 
                     const downloadManager = createDownloadManager(
@@ -622,6 +623,7 @@ describe('Property 12: Pasta inválida resulta em erro antes de iniciar download
                         info: () => { },
                         warn: () => { },
                         error: () => { },
+                        debug: () => { },
                     };
 
                     const downloadManager = createDownloadManager(

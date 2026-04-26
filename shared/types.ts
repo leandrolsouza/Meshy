@@ -156,6 +156,8 @@ export interface MeshyAPI {
         stack?: string;
         componentStack?: string;
     }): void;
+    // Observabilidade — obter métricas de operação do main process
+    getMetrics(): Promise<IPCResponse<Record<string, unknown>>>;
 }
 
 // ─── Global window augmentation ───────────────────────────────────────────────

@@ -54,6 +54,7 @@ const EXPECTED_CHANNELS = [
     'tracker:add-global',
     'tracker:remove-global',
     'renderer:report-error',
+    'app:get-metrics',
 ] as const;
 
 function makeSampleDownloadItem(overrides: Partial<DownloadItem> = {}): DownloadItem {
@@ -167,9 +168,9 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
 
     // ── Smoke tests: all channels registered ─────────────────────────────────
 
-    describe('Smoke: all 22 IPC channels are registered and respond', () => {
-        it('registers exactly 22 IPC channels', () => {
-            expect(mockIpcMain.handle).toHaveBeenCalledTimes(22);
+    describe('Smoke: all 23 IPC channels are registered and respond', () => {
+        it('registers exactly 23 IPC channels', () => {
+            expect(mockIpcMain.handle).toHaveBeenCalledTimes(23);
         });
 
         it.each(EXPECTED_CHANNELS)('channel "%s" is registered', (channel) => {
