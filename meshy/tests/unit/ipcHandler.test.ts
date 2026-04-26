@@ -71,6 +71,9 @@ function makeMockSettingsManager(): SettingsManager {
             theme: 'vs-code-dark',
             globalTrackers: [],
             autoApplyGlobalTrackers: false,
+            dhtEnabled: true,
+            pexEnabled: true,
+            utpEnabled: true,
         } as AppSettings),
         set: jest.fn(),
         getDefaultDownloadFolder: jest.fn().mockReturnValue('/downloads'),
@@ -1511,6 +1514,533 @@ describe('Property 8: payloads inválidos retornam { success: false } sem lança
                 },
             ),
             { numRuns: 50 },
+        );
+    });
+});
+
+// ─── Tests: Validação de booleanos de rede no handler settings:set (Task 5.5) ─
+
+describe('registerIpcHandlers — validação de dhtEnabled/pexEnabled/utpEnabled no settings:set', () => {
+    function getHandler(
+        channel: string,
+    ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
+        const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
+        return call
+            ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
+            : undefined;
+    }
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('rejeita dhtEnabled não-booleano (número)', async () => {
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        registerIpcHandlers(dm, sm);
+
+        const handler = getHandler('settings:set')!;
+        const response = (await handler(null, { dhtEnabled: 1 })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toContain('dhtEnabled');
+    });
+
+    it('rejeita pexEnabled não-booleano (string)', async () => {
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        registerIpcHandlers(dm, sm);
+
+        const handler = getHandler('settings:set')!;
+        const response = (await handler(null, { pexEnabled: 'true' })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toContain('pexEnabled');
+    });
+
+    it('rejeita utpEnabled não-booleano (null)', async () => {
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        registerIpcHandlers(dm, sm);
+
+        const handler = getHandler('settings:set')!;
+        const response = (await handler(null, { utpEnabled: null })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toContain('utpEnabled');
+    });
+
+    it('aceita dhtEnabled booleano true', async () => {
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        registerIpcHandlers(dm, sm);
+
+        const handler = getHandler('settings:set')!;
+        const response = (await handler(null, { dhtEnabled: true })) as any;
+
+        expect(response.success).toBe(true);
+    });
+
+    it('aceita pexEnabled booleano false', async () => {
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        registerIpcHandlers(dm, sm);
+
+        const handler = getHandler('settings:set')!;
+        const response = (await handler(null, { pexEnabled: false })) as any;
+
+        expect(response.success).toBe(true);
+    });
+
+    it('aceita utpEnabled booleano false', async () => {
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        registerIpcHandlers(dm, sm);
+
+        const handler = getHandler('settings:set')!;
+        const response = (await handler(null, { utpEnabled: false })) as any;
+
+        expect(response.success).toBe(true);
+    });
+
+    it('não persiste configurações quando validação falha', async () => {
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        registerIpcHandlers(dm, sm);
+
+        const handler = getHandler('settings:set')!;
+        await handler(null, { dhtEnabled: 'invalid' });
+
+        expect(sm.set).not.toHaveBeenCalled();
+    });
+});
+
+// ─── Tests: Detecção de mudança e acionamento de restart (Task 5.6) ───────────
+
+describe('registerIpcHandlers — detecção de mudança de rede e restart', () => {
+    function getHandler(
+        channel: string,
+    ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
+        const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
+        return call
+            ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
+            : undefined;
+    }
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('aciona restart quando dhtEnabled muda de true para false', async () => {
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        const te = makeMockTorrentEngine();
+        (te as any).restart = jest.fn().mockResolvedValue(undefined);
+        (te as any).isRestarting = jest.fn().mockReturnValue(false);
+
+        // Configurações atuais: dhtEnabled = true
+        (sm.get as jest.Mock).mockReturnValue({
+            destinationFolder: '/downloads',
+            downloadSpeedLimit: 0,
+            uploadSpeedLimit: 0,
+            maxConcurrentDownloads: 3,
+            notificationsEnabled: true,
+            theme: 'vs-code-dark',
+            globalTrackers: [],
+            autoApplyGlobalTrackers: false,
+            dhtEnabled: true,
+            pexEnabled: true,
+            utpEnabled: true,
+        });
+
+        registerIpcHandlers(dm, sm, te as any);
+
+        const handler = getHandler('settings:set')!;
+        await handler(null, { dhtEnabled: false });
+
+        expect((te as any).restart).toHaveBeenCalledTimes(1);
+    });
+
+    it('aciona restart quando pexEnabled muda', async () => {
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        const te = makeMockTorrentEngine();
+        (te as any).restart = jest.fn().mockResolvedValue(undefined);
+        (te as any).isRestarting = jest.fn().mockReturnValue(false);
+
+        (sm.get as jest.Mock).mockReturnValue({
+            destinationFolder: '/downloads',
+            downloadSpeedLimit: 0,
+            uploadSpeedLimit: 0,
+            maxConcurrentDownloads: 3,
+            notificationsEnabled: true,
+            theme: 'vs-code-dark',
+            globalTrackers: [],
+            autoApplyGlobalTrackers: false,
+            dhtEnabled: true,
+            pexEnabled: true,
+            utpEnabled: true,
+        });
+
+        registerIpcHandlers(dm, sm, te as any);
+
+        const handler = getHandler('settings:set')!;
+        await handler(null, { pexEnabled: false });
+
+        expect((te as any).restart).toHaveBeenCalledTimes(1);
+    });
+
+    it('aciona restart quando utpEnabled muda', async () => {
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        const te = makeMockTorrentEngine();
+        (te as any).restart = jest.fn().mockResolvedValue(undefined);
+        (te as any).isRestarting = jest.fn().mockReturnValue(false);
+
+        (sm.get as jest.Mock).mockReturnValue({
+            destinationFolder: '/downloads',
+            downloadSpeedLimit: 0,
+            uploadSpeedLimit: 0,
+            maxConcurrentDownloads: 3,
+            notificationsEnabled: true,
+            theme: 'vs-code-dark',
+            globalTrackers: [],
+            autoApplyGlobalTrackers: false,
+            dhtEnabled: true,
+            pexEnabled: true,
+            utpEnabled: true,
+        });
+
+        registerIpcHandlers(dm, sm, te as any);
+
+        const handler = getHandler('settings:set')!;
+        await handler(null, { utpEnabled: false });
+
+        expect((te as any).restart).toHaveBeenCalledTimes(1);
+    });
+
+    it('NÃO aciona restart quando valores de rede não mudam', async () => {
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        const te = makeMockTorrentEngine();
+        (te as any).restart = jest.fn().mockResolvedValue(undefined);
+        (te as any).isRestarting = jest.fn().mockReturnValue(false);
+
+        // Configurações atuais: todos true
+        (sm.get as jest.Mock).mockReturnValue({
+            destinationFolder: '/downloads',
+            downloadSpeedLimit: 0,
+            uploadSpeedLimit: 0,
+            maxConcurrentDownloads: 3,
+            notificationsEnabled: true,
+            theme: 'vs-code-dark',
+            globalTrackers: [],
+            autoApplyGlobalTrackers: false,
+            dhtEnabled: true,
+            pexEnabled: true,
+            utpEnabled: true,
+        });
+
+        registerIpcHandlers(dm, sm, te as any);
+
+        const handler = getHandler('settings:set')!;
+        // Enviar os mesmos valores — não deve acionar restart
+        await handler(null, { dhtEnabled: true, pexEnabled: true, utpEnabled: true });
+
+        expect((te as any).restart).not.toHaveBeenCalled();
+    });
+
+    it('NÃO aciona restart quando apenas configurações não-rede mudam', async () => {
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        const te = makeMockTorrentEngine();
+        (te as any).restart = jest.fn().mockResolvedValue(undefined);
+        (te as any).isRestarting = jest.fn().mockReturnValue(false);
+
+        (sm.get as jest.Mock).mockReturnValue({
+            destinationFolder: '/downloads',
+            downloadSpeedLimit: 0,
+            uploadSpeedLimit: 0,
+            maxConcurrentDownloads: 3,
+            notificationsEnabled: true,
+            theme: 'vs-code-dark',
+            globalTrackers: [],
+            autoApplyGlobalTrackers: false,
+            dhtEnabled: true,
+            pexEnabled: true,
+            utpEnabled: true,
+        });
+
+        registerIpcHandlers(dm, sm, te as any);
+
+        const handler = getHandler('settings:set')!;
+        await handler(null, { downloadSpeedLimit: 500 });
+
+        expect((te as any).restart).not.toHaveBeenCalled();
+    });
+
+    it('passa configurações atualizadas ao restart', async () => {
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        const te = makeMockTorrentEngine();
+        (te as any).restart = jest.fn().mockResolvedValue(undefined);
+        (te as any).isRestarting = jest.fn().mockReturnValue(false);
+
+        // Primeira chamada a get() retorna valores anteriores (antes de set)
+        // Segunda chamada retorna valores atualizados (após set)
+        let callCount = 0;
+        (sm.get as jest.Mock).mockImplementation(() => {
+            callCount++;
+            if (callCount === 1) {
+                return {
+                    destinationFolder: '/downloads',
+                    downloadSpeedLimit: 0,
+                    uploadSpeedLimit: 0,
+                    maxConcurrentDownloads: 3,
+                    notificationsEnabled: true,
+                    theme: 'vs-code-dark',
+                    globalTrackers: [],
+                    autoApplyGlobalTrackers: false,
+                    dhtEnabled: true,
+                    pexEnabled: true,
+                    utpEnabled: true,
+                };
+            }
+            return {
+                destinationFolder: '/downloads',
+                downloadSpeedLimit: 0,
+                uploadSpeedLimit: 0,
+                maxConcurrentDownloads: 3,
+                notificationsEnabled: true,
+                theme: 'vs-code-dark',
+                globalTrackers: [],
+                autoApplyGlobalTrackers: false,
+                dhtEnabled: false,
+                pexEnabled: true,
+                utpEnabled: true,
+            };
+        });
+
+        registerIpcHandlers(dm, sm, te as any);
+
+        const handler = getHandler('settings:set')!;
+        await handler(null, { dhtEnabled: false });
+
+        expect((te as any).restart).toHaveBeenCalledWith({
+            downloadPath: '/downloads',
+            downloadSpeedLimit: 0,
+            uploadSpeedLimit: 0,
+            dhtEnabled: false,
+            pexEnabled: true,
+            utpEnabled: true,
+        });
+    });
+
+    it('NÃO aciona restart quando torrentEngine não está disponível', async () => {
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+
+        (sm.get as jest.Mock).mockReturnValue({
+            destinationFolder: '/downloads',
+            downloadSpeedLimit: 0,
+            uploadSpeedLimit: 0,
+            maxConcurrentDownloads: 3,
+            notificationsEnabled: true,
+            theme: 'vs-code-dark',
+            globalTrackers: [],
+            autoApplyGlobalTrackers: false,
+            dhtEnabled: true,
+            pexEnabled: true,
+            utpEnabled: true,
+        });
+
+        // Registrar sem torrentEngine
+        registerIpcHandlers(dm, sm);
+
+        const handler = getHandler('settings:set')!;
+        // Não deve lançar exceção mesmo sem torrentEngine
+        const response = (await handler(null, { dhtEnabled: false })) as any;
+
+        expect(response.success).toBe(true);
+    });
+});
+
+// ─── Tests: Rejeição de operações durante restart (Task 5.7) ──────────────────
+
+describe('registerIpcHandlers — rejeição de operações durante restart do motor', () => {
+    function getHandler(
+        channel: string,
+    ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
+        const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
+        return call
+            ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
+            : undefined;
+    }
+
+    const GUARDED_CHANNELS = [
+        'torrent:add-file',
+        'torrent:add-magnet',
+        'torrent:pause',
+        'torrent:resume',
+        'torrent:remove',
+    ];
+
+    // Payloads válidos para cada canal (para garantir que a rejeição vem da guarda, não da validação)
+    const VALID_PAYLOADS: Record<string, unknown> = {
+        'torrent:add-file': { filePath: '/path/to/file.torrent' },
+        'torrent:add-magnet': { magnetUri: 'magnet:?xt=urn:btih:' + 'a'.repeat(40) },
+        'torrent:pause': { infoHash: 'a'.repeat(40) },
+        'torrent:resume': { infoHash: 'a'.repeat(40) },
+        'torrent:remove': { infoHash: 'a'.repeat(40), deleteFiles: false },
+    };
+
+    it.each(GUARDED_CHANNELS)(
+        '%s retorna erro quando motor está reiniciando',
+        async (channel) => {
+            jest.clearAllMocks();
+
+            const dm = makeMockDownloadManager();
+            const sm = makeMockSettingsManager();
+            const te = makeMockTorrentEngine();
+            (te as any).restart = jest.fn().mockResolvedValue(undefined);
+            (te as any).isRestarting = jest.fn().mockReturnValue(true);
+
+            registerIpcHandlers(dm, sm, te as any);
+
+            const handler = getHandler(channel)!;
+            const response = (await handler(null, VALID_PAYLOADS[channel])) as any;
+
+            expect(response.success).toBe(false);
+            expect(response.error).toContain('reiniciando');
+        },
+    );
+
+    it.each(GUARDED_CHANNELS)(
+        '%s permite operação quando motor NÃO está reiniciando',
+        async (channel) => {
+            jest.clearAllMocks();
+
+            const dm = makeMockDownloadManager();
+            const sm = makeMockSettingsManager();
+            const te = makeMockTorrentEngine();
+            (te as any).restart = jest.fn().mockResolvedValue(undefined);
+            (te as any).isRestarting = jest.fn().mockReturnValue(false);
+
+            // Configurar mocks para que as operações não falhem por outros motivos
+            (dm.addTorrentFile as jest.Mock).mockResolvedValue({
+                infoHash: 'a'.repeat(40),
+                name: 'test',
+                status: 'downloading',
+            });
+            (dm.addMagnetLink as jest.Mock).mockResolvedValue({
+                infoHash: 'a'.repeat(40),
+                name: 'test',
+                status: 'resolving-metadata',
+            });
+
+            registerIpcHandlers(dm, sm, te as any);
+
+            const handler = getHandler(channel)!;
+            const response = (await handler(null, VALID_PAYLOADS[channel])) as any;
+
+            // Não deve conter a mensagem de reinício
+            if (!response.success) {
+                expect(response.error).not.toContain('reiniciando');
+            }
+        },
+    );
+
+    it('torrent:get-all NÃO é bloqueado durante restart', async () => {
+        jest.clearAllMocks();
+
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        const te = makeMockTorrentEngine();
+        (te as any).restart = jest.fn().mockResolvedValue(undefined);
+        (te as any).isRestarting = jest.fn().mockReturnValue(true);
+
+        registerIpcHandlers(dm, sm, te as any);
+
+        const handler = getHandler('torrent:get-all')!;
+        const response = (await handler(null, undefined)) as any;
+
+        // get-all deve funcionar mesmo durante restart
+        expect(response.success).toBe(true);
+    });
+});
+
+// ─── PBT: Propriedade 2 — Reinício acionado somente quando valores de rede mudam (Task 5.8) ──
+// Feature: dht-pex-settings, Property 2: Reinício acionado somente quando valores de rede mudam
+// **Validates: Requirements 6.3**
+
+describe('Property 2: Reinício acionado somente quando valores de rede mudam', () => {
+    function getHandler(
+        channel: string,
+    ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
+        const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
+        return call
+            ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
+            : undefined;
+    }
+
+    it('restart é acionado se e somente se pelo menos um campo de rede difere', async () => {
+        const networkSettingsArb = fc.record({
+            dhtEnabled: fc.boolean(),
+            pexEnabled: fc.boolean(),
+            utpEnabled: fc.boolean(),
+        });
+
+        await fc.assert(
+            fc.asyncProperty(
+                networkSettingsArb,
+                networkSettingsArb,
+                async (previous, next) => {
+                    jest.clearAllMocks();
+
+                    const dm = makeMockDownloadManager();
+                    const sm = makeMockSettingsManager();
+                    const te = makeMockTorrentEngine();
+                    (te as any).restart = jest.fn().mockResolvedValue(undefined);
+                    (te as any).isRestarting = jest.fn().mockReturnValue(false);
+
+                    // Configurar settingsManager.get() para retornar os valores "anteriores"
+                    (sm.get as jest.Mock).mockReturnValue({
+                        destinationFolder: '/downloads',
+                        downloadSpeedLimit: 0,
+                        uploadSpeedLimit: 0,
+                        maxConcurrentDownloads: 3,
+                        notificationsEnabled: true,
+                        theme: 'vs-code-dark',
+                        globalTrackers: [],
+                        autoApplyGlobalTrackers: false,
+                        dhtEnabled: previous.dhtEnabled,
+                        pexEnabled: previous.pexEnabled,
+                        utpEnabled: previous.utpEnabled,
+                    });
+
+                    registerIpcHandlers(dm, sm, te as any);
+
+                    const handler = getHandler('settings:set')!;
+                    await handler(null, {
+                        dhtEnabled: next.dhtEnabled,
+                        pexEnabled: next.pexEnabled,
+                        utpEnabled: next.utpEnabled,
+                    });
+
+                    // Calcular se pelo menos um campo de rede difere
+                    const shouldRestart =
+                        previous.dhtEnabled !== next.dhtEnabled ||
+                        previous.pexEnabled !== next.pexEnabled ||
+                        previous.utpEnabled !== next.utpEnabled;
+
+                    if (shouldRestart) {
+                        expect((te as any).restart).toHaveBeenCalledTimes(1);
+                    } else {
+                        expect((te as any).restart).not.toHaveBeenCalled();
+                    }
+                },
+            ),
+            { numRuns: 200 },
         );
     });
 });

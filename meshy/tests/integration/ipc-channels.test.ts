@@ -106,6 +106,9 @@ function makeMockSettingsManager(): SettingsManager {
         theme: 'vs-code-dark',
         globalTrackers: [],
         autoApplyGlobalTrackers: false,
+        dhtEnabled: true,
+        pexEnabled: true,
+        utpEnabled: true,
     };
     return {
         get: jest.fn().mockReturnValue(settings),
@@ -127,6 +130,8 @@ function makeMockTorrentEngine() {
         setTorrentUploadSpeedLimit: jest.fn(),
         getFiles: jest.fn().mockReturnValue([]),
         setFileSelection: jest.fn().mockReturnValue([]),
+        restart: jest.fn().mockResolvedValue(undefined),
+        isRestarting: jest.fn().mockReturnValue(false),
         on: jest.fn(),
         removeListener: jest.fn(),
     };
@@ -486,6 +491,9 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                     theme: 'vs-code-dark',
                     globalTrackers: [],
                     autoApplyGlobalTrackers: false,
+                    dhtEnabled: true,
+                    pexEnabled: true,
+                    utpEnabled: true,
                 });
             }
         });
@@ -500,6 +508,9 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                 theme: 'vs-code-dark',
                 globalTrackers: [],
                 autoApplyGlobalTrackers: false,
+                dhtEnabled: true,
+                pexEnabled: true,
+                utpEnabled: true,
             };
             (settingsManager.get as jest.Mock).mockReturnValue(updatedSettings);
 
@@ -525,6 +536,9 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                 theme: 'vs-code-dark',
                 globalTrackers: [],
                 autoApplyGlobalTrackers: false,
+                dhtEnabled: true,
+                pexEnabled: true,
+                utpEnabled: true,
             };
             (settingsManager.get as jest.Mock).mockReturnValue(updatedSettings);
 
@@ -550,6 +564,9 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                 theme: 'vs-code-dark',
                 globalTrackers: [],
                 autoApplyGlobalTrackers: false,
+                dhtEnabled: true,
+                pexEnabled: true,
+                utpEnabled: true,
             };
             (settingsManager.get as jest.Mock).mockReturnValue(updatedSettings);
 

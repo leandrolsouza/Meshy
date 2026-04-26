@@ -141,6 +141,15 @@ export function normalizeTrackerUrl(url: string): string {
     return normalized.replace(/\/+$/, '');
 }
 
+// ─── Network toggle ───────────────────────────────────────────────────────────
+
+/**
+ * Valida se um valor é um booleano válido para configurações de rede (DHT/PEX/uTP).
+ */
+export function isValidNetworkToggle(value: unknown): boolean {
+    return typeof value === 'boolean';
+}
+
 // ─── Theme ID ─────────────────────────────────────────────────────────────────
 
 /**

@@ -34,6 +34,9 @@ const DEFAULT_OPTIONS = {
     downloadPath: '/tmp/downloads',
     downloadSpeedLimit: 0,
     uploadSpeedLimit: 0,
+    dhtEnabled: true,
+    pexEnabled: true,
+    utpEnabled: true,
 };
 
 /** Creates a fake WebTorrent File object */
@@ -358,6 +361,8 @@ function makeDMMockEngine(): TorrentEngine & EventEmitter {
         removeTracker: jest.fn(),
         setTorrentDownloadSpeedLimit: jest.fn(),
         setTorrentUploadSpeedLimit: jest.fn(),
+        restart: jest.fn().mockResolvedValue(undefined),
+        isRestarting: jest.fn().mockReturnValue(false),
     });
 
     return engine;

@@ -21,6 +21,9 @@ app.whenReady().then(async () => {
         downloadPath: settings.destinationFolder,
         downloadSpeedLimit: settings.downloadSpeedLimit,
         uploadSpeedLimit: settings.uploadSpeedLimit,
+        dhtEnabled: settings.dhtEnabled,
+        pexEnabled: settings.pexEnabled,
+        utpEnabled: settings.utpEnabled,
     });
 
     // Shared electron-store instance for download session persistence

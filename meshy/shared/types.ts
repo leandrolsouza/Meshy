@@ -94,6 +94,10 @@ export interface AppSettings {
     theme: string; // identificador do tema ativo (ex: "vs-code-dark")
     globalTrackers: string[]; // lista de Tracker URLs favoritas (padrão: [])
     autoApplyGlobalTrackers: boolean; // aplicar automaticamente a novos torrents (padrão: false)
+    // Configurações avançadas de rede
+    dhtEnabled: boolean; // DHT — Distributed Hash Table (padrão: true)
+    pexEnabled: boolean; // PEX — Peer Exchange (padrão: true)
+    utpEnabled: boolean; // uTP — Micro Transport Protocol (padrão: true)
 }
 
 // ─── IPCResponse ──────────────────────────────────────────────────────────────

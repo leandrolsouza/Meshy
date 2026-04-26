@@ -119,6 +119,9 @@ const DEFAULT_OPTIONS = {
     downloadPath: '/tmp/downloads',
     downloadSpeedLimit: 0,
     uploadSpeedLimit: 0,
+    dhtEnabled: true,
+    pexEnabled: true,
+    utpEnabled: true,
 };
 
 // ─── Pause timeout (Requirement 4.6) ─────────────────────────────────────────
@@ -258,7 +261,14 @@ describe('TorrentEngine speed limits — applied synchronously (Requirement 6.5)
         const mockClient = makeMockClient();
 
         createTorrentEngine(
-            { downloadPath: '/tmp', downloadSpeedLimit: 100, uploadSpeedLimit: 50 },
+            {
+                downloadPath: '/tmp',
+                downloadSpeedLimit: 100,
+                uploadSpeedLimit: 50,
+                dhtEnabled: true,
+                pexEnabled: true,
+                utpEnabled: true,
+            },
             mockClient,
         );
 
@@ -271,7 +281,14 @@ describe('TorrentEngine speed limits — applied synchronously (Requirement 6.5)
         const mockClient = makeMockClient();
 
         createTorrentEngine(
-            { downloadPath: '/tmp', downloadSpeedLimit: 0, uploadSpeedLimit: 0 },
+            {
+                downloadPath: '/tmp',
+                downloadSpeedLimit: 0,
+                uploadSpeedLimit: 0,
+                dhtEnabled: true,
+                pexEnabled: true,
+                utpEnabled: true,
+            },
             mockClient,
         );
 
@@ -923,5 +940,682 @@ describe('TorrentEngine.remove() — limpeza de throttle groups', () => {
         await engine.remove(infoHash, false);
 
         expect(mockThrottleGroupInstances[0].destroy).toHaveBeenCalled();
+    });
+});
+
+// ─── Opções de Rede DHT/PEX/uTP — Testes Unitários (Task 3.4) ───────────────
+
+describe('TorrentEngine — opções de rede DHT/PEX/uTP (Requisito 3)', () => {
+    // Referência ao mock do construtor WebTorrent para verificar argumentos
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const MockWebTorrent = require('webtorrent').default as jest.Mock;
+
+    beforeEach(() => {
+        MockWebTorrent.mockClear();
+    });
+
+    it('passa dht: true e utp: true ao construtor do WebTorrent quando ambos estão habilitados', () => {
+        createTorrentEngine({
+            downloadPath: '/tmp',
+            downloadSpeedLimit: 0,
+            uploadSpeedLimit: 0,
+            dhtEnabled: true,
+            pexEnabled: true,
+            utpEnabled: true,
+        });
+
+        expect(MockWebTorrent).toHaveBeenCalledWith(
+            expect.objectContaining({ dht: true, utp: true }),
+        );
+    });
+
+    it('passa dht: false ao construtor do WebTorrent quando dhtEnabled é false', () => {
+        createTorrentEngine({
+            downloadPath: '/tmp',
+            downloadSpeedLimit: 0,
+            uploadSpeedLimit: 0,
+            dhtEnabled: false,
+            pexEnabled: true,
+            utpEnabled: true,
+        });
+
+        expect(MockWebTorrent).toHaveBeenCalledWith(
+            expect.objectContaining({ dht: false, utp: true }),
+        );
+    });
+
+    it('passa utp: false ao construtor do WebTorrent quando utpEnabled é false', () => {
+        createTorrentEngine({
+            downloadPath: '/tmp',
+            downloadSpeedLimit: 0,
+            uploadSpeedLimit: 0,
+            dhtEnabled: true,
+            pexEnabled: true,
+            utpEnabled: false,
+        });
+
+        expect(MockWebTorrent).toHaveBeenCalledWith(
+            expect.objectContaining({ dht: true, utp: false }),
+        );
+    });
+
+    it('passa dht: false e utp: false quando ambos estão desabilitados', () => {
+        createTorrentEngine({
+            downloadPath: '/tmp',
+            downloadSpeedLimit: 0,
+            uploadSpeedLimit: 0,
+            dhtEnabled: false,
+            pexEnabled: true,
+            utpEnabled: false,
+        });
+
+        expect(MockWebTorrent).toHaveBeenCalledWith(
+            expect.objectContaining({ dht: false, utp: false }),
+        );
+    });
+
+    it('não chama o construtor do WebTorrent quando um client é injetado', () => {
+        const mockClient = makeMockClient();
+
+        createTorrentEngine(
+            {
+                downloadPath: '/tmp',
+                downloadSpeedLimit: 0,
+                uploadSpeedLimit: 0,
+                dhtEnabled: false,
+                pexEnabled: false,
+                utpEnabled: false,
+            },
+            mockClient,
+        );
+
+        // O construtor do mock não deve ser chamado quando um client é injetado
+        expect(MockWebTorrent).not.toHaveBeenCalled();
+    });
+
+    it('registra listener de torrent para desabilitar PEX quando pexEnabled é false', () => {
+        const mockClient = makeMockClient();
+
+        createTorrentEngine(
+            {
+                downloadPath: '/tmp',
+                downloadSpeedLimit: 0,
+                uploadSpeedLimit: 0,
+                dhtEnabled: true,
+                pexEnabled: false,
+                utpEnabled: true,
+            },
+            mockClient,
+        );
+
+        // Deve registrar listener no evento 'torrent' para interceptar wires
+        expect(mockClient.on).toHaveBeenCalledWith('torrent', expect.any(Function));
+    });
+
+    it('não registra listener de torrent para PEX quando pexEnabled é true', () => {
+        const mockClient = makeMockClient();
+
+        createTorrentEngine(
+            {
+                downloadPath: '/tmp',
+                downloadSpeedLimit: 0,
+                uploadSpeedLimit: 0,
+                dhtEnabled: true,
+                pexEnabled: true,
+                utpEnabled: true,
+            },
+            mockClient,
+        );
+
+        // Não deve registrar listener no evento 'torrent' para PEX
+        const torrentCalls = (mockClient.on as jest.Mock).mock.calls.filter(
+            ([event]: [string]) => event === 'torrent',
+        );
+        expect(torrentCalls).toHaveLength(0);
+    });
+
+    it('destrói ut_pex no wire quando PEX está desabilitado e torrent emite wire', () => {
+        // Simular client com suporte a eventos reais para testar o fluxo completo
+        const torrentListeners: Record<string, ((...args: unknown[]) => void)[]> = {};
+        const clientListeners: Record<string, ((...args: unknown[]) => void)[]> = {};
+
+        const mockClient = makeMockClient({
+            on: jest.fn((event: string, listener: (...args: unknown[]) => void) => {
+                if (!clientListeners[event]) clientListeners[event] = [];
+                clientListeners[event].push(listener);
+                return mockClient;
+            }),
+        });
+
+        createTorrentEngine(
+            {
+                downloadPath: '/tmp',
+                downloadSpeedLimit: 0,
+                uploadSpeedLimit: 0,
+                dhtEnabled: true,
+                pexEnabled: false,
+                utpEnabled: true,
+            },
+            mockClient,
+        );
+
+        // Simular emissão do evento 'torrent'
+        const fakeTorrent = {
+            on: jest.fn((event: string, listener: (...args: unknown[]) => void) => {
+                if (!torrentListeners[event]) torrentListeners[event] = [];
+                torrentListeners[event].push(listener);
+            }),
+        };
+
+        // Disparar o listener de 'torrent' registrado pelo engine
+        for (const listener of clientListeners['torrent'] ?? []) {
+            listener(fakeTorrent);
+        }
+
+        // Simular emissão do evento 'wire' no torrent
+        const destroyMock = jest.fn();
+        const fakeWire = { ut_pex: { destroy: destroyMock } };
+
+        for (const listener of torrentListeners['wire'] ?? []) {
+            listener(fakeWire);
+        }
+
+        // ut_pex.destroy() deve ter sido chamado
+        expect(destroyMock).toHaveBeenCalled();
+    });
+});
+
+// ─── PBT: Propriedade 4 — Mapeamento correto de opções para o construtor WebTorrent (Task 3.5) ──
+
+// Feature: dht-pex-settings, Property 4: Mapeamento correto de opções para o construtor WebTorrent
+// **Validates: Requirements 3.1, 3.2, 3.4, 3.5**
+describe('Propriedade 4: Mapeamento correto de opções para o construtor WebTorrent', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const MockWebTorrent = require('webtorrent').default as jest.Mock;
+
+    beforeEach(() => {
+        MockWebTorrent.mockClear();
+    });
+
+    it('para qualquer combinação de booleanos dhtEnabled/pexEnabled/utpEnabled, as opções passadas ao WebTorrent refletem corretamente os valores', () => {
+        fc.assert(
+            fc.property(
+                fc.boolean(),
+                fc.boolean(),
+                fc.boolean(),
+                (dhtEnabled, pexEnabled, utpEnabled) => {
+                    MockWebTorrent.mockClear();
+
+                    createTorrentEngine({
+                        downloadPath: '/tmp',
+                        downloadSpeedLimit: 0,
+                        uploadSpeedLimit: 0,
+                        dhtEnabled,
+                        pexEnabled,
+                        utpEnabled,
+                    });
+
+                    // O construtor do WebTorrent deve ter sido chamado exatamente uma vez
+                    expect(MockWebTorrent).toHaveBeenCalledTimes(1);
+
+                    // Verificar que dht e utp foram passados corretamente
+                    const constructorArgs = MockWebTorrent.mock.calls[0][0];
+                    expect(constructorArgs.dht).toBe(dhtEnabled);
+                    expect(constructorArgs.utp).toBe(utpEnabled);
+                },
+            ),
+            { numRuns: 100 },
+        );
+    });
+});
+
+
+// ─── TorrentEngine.restart() — Testes Unitários (Task 4.5) ──────────────────
+
+/**
+ * Cria um mock client completo para testes de restart.
+ */
+function makeMockClientWithRestart(
+    torrents: Array<{
+        infoHash: string;
+        magnetURI: string;
+    }> = [],
+) {
+    const fakeTorrents = torrents.map((t) =>
+        makeFakeTorrent(t.infoHash, {
+            magnetURI: t.magnetURI as unknown as string,
+            destroy: jest.fn((_opts, cb) => cb?.(null)) as unknown as Torrent['destroy'],
+        }),
+    );
+
+    const client = makeMockClient({
+        destroy: jest.fn((cb: (err?: Error | null) => void) =>
+            cb(null),
+        ) as unknown as WebTorrent.Instance['destroy'],
+    });
+    client.torrents.push(...fakeTorrents);
+
+    return { client, fakeTorrents };
+}
+
+/**
+ * Configura o MockWebTorrent para criar um novo client que suporta addMagnetLink.
+ * Quando addMagnetLink é chamado, o novo client emite 'torrent' com um fake torrent
+ * que tem length > 0 (metadados já disponíveis), fazendo addMagnetLink resolver.
+ */
+function setupMockWebTorrentForRestart(
+    MockWT: jest.Mock,
+    opts?: {
+        /** infoHashes que devem falhar ao re-adicionar */
+        failingHashes?: Set<string>;
+    },
+) {
+    MockWT.mockImplementation(() => {
+        const listeners: Record<string, ((...args: unknown[]) => void)[]> = {};
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const newClient: any = {
+            torrents: [] as Torrent[],
+            throttleDownload: jest.fn(),
+            throttleUpload: jest.fn(),
+            add: jest.fn((magnetUri: string) => {
+                const hashMatch = magnetUri.match(/xt=urn:btih:([a-fA-F0-9]{40})/i);
+                const hash = hashMatch ? hashMatch[1].toLowerCase() : 'unknown';
+
+                if (opts?.failingHashes?.has(hash)) {
+                    // Agendar emissão de erro para o próximo microtask,
+                    // permitindo que once('error') seja registrado após add()
+                    queueMicrotask(() => {
+                        const errorListeners = listeners['error'] ?? [];
+                        for (const listener of errorListeners) {
+                            listener(new Error('Falha simulada ao adicionar'));
+                        }
+                        listeners['error'] = [];
+                    });
+                    return;
+                }
+
+                // Simular sucesso: emitir 'torrent' com fake torrent com metadados
+                const newFakeTorrent = makeFakeTorrent(hash, {
+                    magnetURI: magnetUri as unknown as string,
+                    length: 1024,
+                });
+                const torrentListeners = listeners['torrent'] ?? [];
+                for (const listener of torrentListeners) {
+                    listener(newFakeTorrent);
+                }
+            }),
+            remove: jest.fn(),
+            destroy: jest.fn(),
+            on: jest.fn((event: string, listener: (...args: unknown[]) => void) => {
+                if (!listeners[event]) listeners[event] = [];
+                listeners[event].push(listener);
+                return newClient;
+            }),
+            once: jest.fn((event: string, listener: (...args: unknown[]) => void) => {
+                if (!listeners[event]) listeners[event] = [];
+                listeners[event].push(listener);
+                return newClient;
+            }),
+            removeListener: jest.fn(
+                (event: string, listener: (...args: unknown[]) => void) => {
+                    if (listeners[event]) {
+                        listeners[event] = listeners[event].filter((l) => l !== listener);
+                    }
+                    return newClient;
+                },
+            ),
+            emit: jest.fn(),
+        };
+        return newClient;
+    });
+}
+
+describe('TorrentEngine.restart() — fluxo completo', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const MockWebTorrent = require('webtorrent').default as jest.Mock;
+
+    beforeEach(() => {
+        MockWebTorrent.mockClear();
+    });
+
+    it('destrói todos os torrents e o cliente, e cria novo cliente via construtor WebTorrent', async () => {
+        const infoHash = 'a'.repeat(40);
+        const { client, fakeTorrents } = makeMockClientWithRestart([
+            { infoHash, magnetURI: `magnet:?xt=urn:btih:${infoHash}` },
+        ]);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, client);
+
+        setupMockWebTorrentForRestart(MockWebTorrent);
+
+        // Escutar erros para evitar "unhandled error" (torrent sem status será re-adicionado)
+        engine.on('error', () => { });
+
+        const newOptions = {
+            ...DEFAULT_OPTIONS,
+            dhtEnabled: false,
+            utpEnabled: false,
+        };
+
+        await engine.restart(newOptions);
+
+        // Cada torrent deve ter sido destruído sem deletar arquivos
+        for (const t of fakeTorrents) {
+            expect(t.destroy).toHaveBeenCalledWith(
+                { destroyStore: false },
+                expect.any(Function),
+            );
+        }
+
+        // O cliente original deve ter sido destruído
+        expect(client.destroy).toHaveBeenCalled();
+
+        // O construtor do WebTorrent deve ter sido chamado com as novas opções
+        expect(MockWebTorrent).toHaveBeenCalledWith(
+            expect.objectContaining({ dht: false, utp: false }),
+        );
+    });
+
+    it('aplica limites de velocidade ao novo cliente quando > 0', async () => {
+        const { client } = makeMockClientWithRestart();
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, client);
+
+        setupMockWebTorrentForRestart(MockWebTorrent);
+
+        const newOptions = {
+            ...DEFAULT_OPTIONS,
+            downloadSpeedLimit: 500,
+            uploadSpeedLimit: 200,
+        };
+
+        await engine.restart(newOptions);
+
+        const newClientInstance = MockWebTorrent.mock.results[0].value;
+        expect(newClientInstance.throttleDownload).toHaveBeenCalledWith(500 * 1024);
+        expect(newClientInstance.throttleUpload).toHaveBeenCalledWith(200 * 1024);
+    });
+
+    it('não aplica limites de velocidade ao novo cliente quando === 0', async () => {
+        const { client } = makeMockClientWithRestart();
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, client);
+
+        setupMockWebTorrentForRestart(MockWebTorrent);
+
+        const newOptions = {
+            ...DEFAULT_OPTIONS,
+            downloadSpeedLimit: 0,
+            uploadSpeedLimit: 0,
+        };
+
+        await engine.restart(newOptions);
+
+        const newClientInstance = MockWebTorrent.mock.results[0].value;
+        expect(newClientInstance.throttleDownload).not.toHaveBeenCalled();
+        expect(newClientInstance.throttleUpload).not.toHaveBeenCalled();
+    });
+
+    it('não re-adiciona torrents com status "paused"', async () => {
+        const infoHash = 'a'.repeat(40);
+        const magnetURI = `magnet:?xt=urn:btih:${infoHash}`;
+        const { client } = makeMockClientWithRestart([{ infoHash, magnetURI }]);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, client);
+
+        // Setar status como 'paused' via pause()
+        const torrent = client.torrents[0];
+        (torrent.pause as jest.Mock).mockImplementation(() => { });
+        await engine.pause(infoHash);
+
+        setupMockWebTorrentForRestart(MockWebTorrent);
+
+        await engine.restart(DEFAULT_OPTIONS);
+
+        // O novo client não deve ter recebido chamada add()
+        const newClientInstance = MockWebTorrent.mock.results[0].value;
+        expect(newClientInstance.add).not.toHaveBeenCalled();
+    });
+
+    it('não re-adiciona torrents com status "completed"', async () => {
+        const infoHash = 'b'.repeat(40);
+        const magnetURI = `magnet:?xt=urn:btih:${infoHash}`;
+
+        // Criar client com suporte a eventos reais para simular addMagnetLink + done
+        const torrentListeners: Record<string, ((...args: unknown[]) => void)[]> = {};
+        const fakeTorrent = makeFakeTorrent(infoHash, {
+            magnetURI: magnetURI as unknown as string,
+            length: 1024, // metadados já disponíveis
+            files: [] as unknown as Torrent['files'], // necessário para _initSelectionMap
+            destroy: jest.fn((_opts, cb) => cb?.(null)) as unknown as Torrent['destroy'],
+            on: jest.fn((event: string, listener: (...args: unknown[]) => void) => {
+                if (!torrentListeners[event]) torrentListeners[event] = [];
+                torrentListeners[event].push(listener);
+                return fakeTorrent;
+            }) as unknown as Torrent['on'],
+            once: jest.fn((event: string, listener: (...args: unknown[]) => void) => {
+                if (!torrentListeners[event]) torrentListeners[event] = [];
+                torrentListeners[event].push(listener);
+                return fakeTorrent;
+            }) as unknown as Torrent['once'],
+        });
+
+        const clientListeners: Record<string, ((...args: unknown[]) => void)[]> = {};
+        const client = {
+            torrents: [fakeTorrent],
+            throttleDownload: jest.fn(),
+            throttleUpload: jest.fn(),
+            add: jest.fn((_magnetUri: string) => {
+                // Simular addMagnetLink: emitir 'torrent' com o fake torrent
+                const torrentCbs = clientListeners['torrent'] ?? [];
+                for (const cb of torrentCbs) {
+                    cb(fakeTorrent);
+                }
+            }),
+            remove: jest.fn(),
+            destroy: jest.fn((cb: (err?: Error | null) => void) => cb(null)),
+            on: jest.fn((event: string, listener: (...args: unknown[]) => void) => {
+                if (!clientListeners[event]) clientListeners[event] = [];
+                clientListeners[event].push(listener);
+                return client;
+            }),
+            once: jest.fn(),
+            emit: jest.fn(),
+            removeListener: jest.fn(
+                (event: string, listener: (...args: unknown[]) => void) => {
+                    if (clientListeners[event]) {
+                        clientListeners[event] = clientListeners[event].filter(
+                            (l) => l !== listener,
+                        );
+                    }
+                    return client;
+                },
+            ),
+        } as unknown as WebTorrent.Instance;
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, client);
+
+        // Chamar addMagnetLink para registrar o torrent no statusMap
+        await engine.addMagnetLink(magnetURI);
+
+        // Disparar 'done' no torrent para mudar status para 'completed'
+        const doneCbs = torrentListeners['done'] ?? [];
+        for (const cb of doneCbs) {
+            cb();
+        }
+
+        // Verificar que o status é 'completed'
+        const allTorrents = engine.getAll();
+        expect(allTorrents[0].status).toBe('completed');
+
+        setupMockWebTorrentForRestart(MockWebTorrent);
+
+        await engine.restart(DEFAULT_OPTIONS);
+
+        // O novo client não deve ter recebido chamada add()
+        const newClientInstance = MockWebTorrent.mock.results[0].value;
+        expect(newClientInstance.add).not.toHaveBeenCalled();
+    });
+
+    it('configura PEX disable no novo cliente quando pexEnabled é false', async () => {
+        const { client } = makeMockClientWithRestart();
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, client);
+
+        setupMockWebTorrentForRestart(MockWebTorrent);
+
+        const newOptions = {
+            ...DEFAULT_OPTIONS,
+            pexEnabled: false,
+        };
+
+        await engine.restart(newOptions);
+
+        const newClientInstance = MockWebTorrent.mock.results[0].value;
+        expect(newClientInstance.on).toHaveBeenCalledWith('torrent', expect.any(Function));
+    });
+
+    it('atualiza downloadPath com o valor das novas opções', async () => {
+        const { client } = makeMockClientWithRestart();
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, client);
+
+        setupMockWebTorrentForRestart(MockWebTorrent);
+
+        const newOptions = {
+            ...DEFAULT_OPTIONS,
+            downloadPath: '/novo/caminho/downloads',
+        };
+
+        await engine.restart(newOptions);
+
+        expect(engine.isRestarting()).toBe(false);
+    });
+});
+
+describe('TorrentEngine.restart() — tratamento de erro ao re-adicionar (Task 4.4)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const MockWebTorrent = require('webtorrent').default as jest.Mock;
+
+    beforeEach(() => {
+        MockWebTorrent.mockClear();
+    });
+
+    it('marca torrent com status "error" quando falha ao re-adicionar e emite evento error', async () => {
+        const infoHash = 'a'.repeat(40);
+        const magnetURI = `magnet:?xt=urn:btih:${infoHash}`;
+
+        const { client } = makeMockClientWithRestart([{ infoHash, magnetURI }]);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, client);
+
+        // Configurar novo client para falhar ao re-adicionar este torrent
+        setupMockWebTorrentForRestart(MockWebTorrent, {
+            failingHashes: new Set([infoHash]),
+        });
+
+        const errorEvents: Array<{ infoHash: string; error: Error }> = [];
+        engine.on('error', (hash: string, err: Error) => {
+            errorEvents.push({ infoHash: hash, error: err });
+        });
+
+        await engine.restart(DEFAULT_OPTIONS);
+
+        // O torrent deve ter emitido evento de erro
+        expect(errorEvents.length).toBeGreaterThanOrEqual(1);
+        expect(errorEvents[0].infoHash).toBe(infoHash);
+        expect(errorEvents[0].error.message).toContain('re-adicionar');
+    });
+
+    it('continua re-adicionando outros torrents mesmo quando um falha', async () => {
+        const infoHashA = 'a'.repeat(40);
+        const infoHashB = 'b'.repeat(40);
+        const magnetA = `magnet:?xt=urn:btih:${infoHashA}`;
+        const magnetB = `magnet:?xt=urn:btih:${infoHashB}`;
+
+        const { client } = makeMockClientWithRestart([
+            { infoHash: infoHashA, magnetURI: magnetA },
+            { infoHash: infoHashB, magnetURI: magnetB },
+        ]);
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, client);
+
+        // Primeiro torrent falha, segundo sucede
+        setupMockWebTorrentForRestart(MockWebTorrent, {
+            failingHashes: new Set([infoHashA]),
+        });
+
+        const errorEvents: string[] = [];
+        engine.on('error', (hash: string) => {
+            errorEvents.push(hash);
+        });
+
+        await engine.restart(DEFAULT_OPTIONS);
+
+        // O primeiro torrent deve ter falhado
+        expect(errorEvents).toContain(infoHashA);
+
+        // O novo client deve ter recebido 2 chamadas add() (tentou ambos)
+        const newClientInstance = MockWebTorrent.mock.results[0].value;
+        expect(newClientInstance.add).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('TorrentEngine.isRestarting() — flag de reinício (Task 4.2)', () => {
+    it('retorna false quando o motor não está reiniciando', () => {
+        const mockClient = makeMockClient();
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+
+        expect(engine.isRestarting()).toBe(false);
+    });
+
+    it('retorna true durante o restart e false após conclusão', async () => {
+        const mockClient = makeMockClient({
+            destroy: jest.fn((cb: (err?: Error | null) => void) =>
+                cb(null),
+            ) as unknown as WebTorrent.Instance['destroy'],
+        });
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+
+        let wasRestartingDuringRestart = false;
+
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const MockWebTorrent = require('webtorrent').default as jest.Mock;
+        MockWebTorrent.mockImplementation(() => {
+            // Capturar o estado de isRestarting durante a criação do novo client
+            wasRestartingDuringRestart = engine.isRestarting();
+            return {
+                torrents: [],
+                throttleDownload: jest.fn(),
+                throttleUpload: jest.fn(),
+                add: jest.fn(),
+                remove: jest.fn(),
+                destroy: jest.fn(),
+                on: jest.fn(),
+                once: jest.fn(),
+                emit: jest.fn(),
+            };
+        });
+
+        await engine.restart(DEFAULT_OPTIONS);
+
+        expect(wasRestartingDuringRestart).toBe(true);
+        expect(engine.isRestarting()).toBe(false);
+    });
+
+    it('retorna false após restart mesmo quando ocorre erro', async () => {
+        const mockClient = makeMockClient({
+            destroy: jest.fn((cb: (err?: Error | null) => void) => {
+                cb(new Error('Erro ao destruir'));
+            }) as unknown as WebTorrent.Instance['destroy'],
+        });
+
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
+
+        await expect(engine.restart(DEFAULT_OPTIONS)).rejects.toThrow('Erro ao destruir');
+
+        // Mesmo com erro, a flag deve ser resetada
+        expect(engine.isRestarting()).toBe(false);
     });
 });

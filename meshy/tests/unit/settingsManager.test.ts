@@ -61,12 +61,15 @@ describe('SettingsManager.get()', () => {
             [
                 'autoApplyGlobalTrackers',
                 'destinationFolder',
+                'dhtEnabled',
                 'downloadSpeedLimit',
                 'globalTrackers',
                 'maxConcurrentDownloads',
                 'notificationsEnabled',
+                'pexEnabled',
                 'theme',
                 'uploadSpeedLimit',
+                'utpEnabled',
             ].sort(),
         );
     });
@@ -117,6 +120,97 @@ describe('SettingsManager.set()', () => {
 });
 
 // ─── getDefaultDownloadFolder() ───────────────────────────────────────────────
+
+// ─── Configurações de rede (dhtEnabled, pexEnabled, utpEnabled) ───────────────
+
+describe('SettingsManager — configurações de rede (defaults)', () => {
+    it('retorna dhtEnabled=true quando store está vazio', () => {
+        const manager = makeManager();
+        expect(manager.get().dhtEnabled).toBe(true);
+    });
+
+    it('retorna pexEnabled=true quando store está vazio', () => {
+        const manager = makeManager();
+        expect(manager.get().pexEnabled).toBe(true);
+    });
+
+    it('retorna utpEnabled=true quando store está vazio', () => {
+        const manager = makeManager();
+        expect(manager.get().utpEnabled).toBe(true);
+    });
+});
+
+describe('SettingsManager — configurações de rede (persistência)', () => {
+    it('persiste dhtEnabled=false e recupera corretamente', () => {
+        const manager = makeManager();
+        manager.set({ dhtEnabled: false });
+        expect(manager.get().dhtEnabled).toBe(false);
+    });
+
+    it('persiste pexEnabled=false e recupera corretamente', () => {
+        const manager = makeManager();
+        manager.set({ pexEnabled: false });
+        expect(manager.get().pexEnabled).toBe(false);
+    });
+
+    it('persiste utpEnabled=false e recupera corretamente', () => {
+        const manager = makeManager();
+        manager.set({ utpEnabled: false });
+        expect(manager.get().utpEnabled).toBe(false);
+    });
+
+    it('persiste múltiplos campos de rede em uma única chamada', () => {
+        const manager = makeManager();
+        manager.set({ dhtEnabled: false, pexEnabled: false, utpEnabled: false });
+        const settings = manager.get();
+        expect(settings.dhtEnabled).toBe(false);
+        expect(settings.pexEnabled).toBe(false);
+        expect(settings.utpEnabled).toBe(false);
+    });
+
+    it('atualização parcial de rede não afeta outros campos de rede', () => {
+        const manager = makeManager();
+        manager.set({ dhtEnabled: false });
+        const settings = manager.get();
+        expect(settings.dhtEnabled).toBe(false);
+        expect(settings.pexEnabled).toBe(true);
+        expect(settings.utpEnabled).toBe(true);
+    });
+});
+
+describe('SettingsManager — configurações de rede (restauração entre sessões)', () => {
+    it('restaura valores de rede previamente armazenados no store', () => {
+        const manager = makeManager({
+            dhtEnabled: false,
+            pexEnabled: false,
+            utpEnabled: true,
+        });
+        const settings = manager.get();
+        expect(settings.dhtEnabled).toBe(false);
+        expect(settings.pexEnabled).toBe(false);
+        expect(settings.utpEnabled).toBe(true);
+    });
+
+    it('restaura valores de rede usando store compartilhado entre instâncias', () => {
+        const sharedStore = createFakeStore();
+        const manager1 = createSettingsManager({
+            store: sharedStore,
+            getDownloadsPath: () => FAKE_DOWNLOADS_PATH,
+        });
+        manager1.set({ dhtEnabled: false, pexEnabled: true, utpEnabled: false });
+
+        const manager2 = createSettingsManager({
+            store: sharedStore,
+            getDownloadsPath: () => FAKE_DOWNLOADS_PATH,
+        });
+        const settings = manager2.get();
+        expect(settings.dhtEnabled).toBe(false);
+        expect(settings.pexEnabled).toBe(true);
+        expect(settings.utpEnabled).toBe(false);
+    });
+});
+
+// ─── getDefaultDownloadFolder() (original) ────────────────────────────────────
 
 describe('SettingsManager.getDefaultDownloadFolder()', () => {
     it('returns a non-empty string', () => {
@@ -290,6 +384,33 @@ describe('Property 10: Round-trip de persistência de configurações', () => {
     });
 });
 
+// Feature: dht-pex-settings, Property 3: Round-trip de persistência das configurações de rede
+describe('Property 3: Round-trip de persistência das configurações de rede', () => {
+    // **Validates: Requirements 1.3, 1.4**
+    it('persistir via set() e recuperar via get() retorna valores iguais aos persistidos', () => {
+        fc.assert(
+            fc.property(
+                fc.record({
+                    dhtEnabled: fc.boolean(),
+                    pexEnabled: fc.boolean(),
+                    utpEnabled: fc.boolean(),
+                }),
+                (networkSettings) => {
+                    const manager = makeManager();
+
+                    manager.set(networkSettings);
+                    const result = manager.get();
+
+                    expect(result.dhtEnabled).toBe(networkSettings.dhtEnabled);
+                    expect(result.pexEnabled).toBe(networkSettings.pexEnabled);
+                    expect(result.utpEnabled).toBe(networkSettings.utpEnabled);
+                },
+            ),
+            { numRuns: 100 },
+        );
+    });
+});
+
 // ─── Property 6: Lista global persiste entre sessões ──────────────────────────
 
 // Feature: tracker-management, Property 6: Lista global persiste entre sessões
@@ -396,6 +517,8 @@ function makeMockEngine(infoHash: string): TorrentEngine & EventEmitter {
         removeTracker: jest.fn(),
         setTorrentDownloadSpeedLimit: jest.fn(),
         setTorrentUploadSpeedLimit: jest.fn(),
+        restart: jest.fn().mockResolvedValue(undefined),
+        isRestarting: jest.fn().mockReturnValue(false),
     });
 
     return engine;

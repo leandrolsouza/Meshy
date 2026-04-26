@@ -19,6 +19,10 @@ interface PersistedSettings {
     theme: string; // identificador do tema ativo (ex: "vs-code-dark")
     globalTrackers: string[]; // lista de Tracker URLs favoritas
     autoApplyGlobalTrackers: boolean; // aplicar automaticamente a novos torrents
+    // Configurações avançadas de rede
+    dhtEnabled: boolean; // DHT — Distributed Hash Table (padrão: true)
+    pexEnabled: boolean; // PEX — Peer Exchange (padrão: true)
+    utpEnabled: boolean; // uTP — Micro Transport Protocol (padrão: true)
     schemaVersion: number; // para migrações futuras
 }
 
@@ -116,6 +120,9 @@ export function createSettingsManager(options: CreateSettingsManagerOptions = {}
                 theme: store.get('theme') ?? 'vs-code-dark',
                 globalTrackers: store.get('globalTrackers') ?? [],
                 autoApplyGlobalTrackers: store.get('autoApplyGlobalTrackers') ?? false,
+                dhtEnabled: store.get('dhtEnabled') ?? true,
+                pexEnabled: store.get('pexEnabled') ?? true,
+                utpEnabled: store.get('utpEnabled') ?? true,
             };
         },
 
@@ -143,6 +150,15 @@ export function createSettingsManager(options: CreateSettingsManagerOptions = {}
             }
             if (partial.autoApplyGlobalTrackers !== undefined) {
                 store.set('autoApplyGlobalTrackers', partial.autoApplyGlobalTrackers);
+            }
+            if (partial.dhtEnabled !== undefined) {
+                store.set('dhtEnabled', partial.dhtEnabled);
+            }
+            if (partial.pexEnabled !== undefined) {
+                store.set('pexEnabled', partial.pexEnabled);
+            }
+            if (partial.utpEnabled !== undefined) {
+                store.set('utpEnabled', partial.utpEnabled);
             }
         },
 
@@ -202,6 +218,9 @@ function createElectronStore(): SettingsStore {
             theme: 'vs-code-dark',
             globalTrackers: [],
             autoApplyGlobalTrackers: false,
+            dhtEnabled: true,
+            pexEnabled: true,
+            utpEnabled: true,
             schemaVersion: SCHEMA_VERSION,
         },
     });

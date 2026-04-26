@@ -9,7 +9,12 @@ import type {
     TorrentFileInfo,
     TrackerInfo,
 } from '../shared/types';
-import { isValidSpeedLimit, isValidMaxConcurrentDownloads, isValidThemeId } from './validators';
+import {
+    isValidSpeedLimit,
+    isValidMaxConcurrentDownloads,
+    isValidThemeId,
+    isValidNetworkToggle,
+} from './validators';
 import { isValidTrackerUrl } from '../shared/validators';
 import { logger } from './logger';
 
@@ -95,6 +100,13 @@ export function registerIpcHandlers(
         'torrent:add-file',
         async (_event, payload: unknown): Promise<IPCResponse<DownloadItem>> => {
             try {
+                // Guarda contra operações durante reinício do motor
+                if (torrentEngine?.isRestarting()) {
+                    return fail(
+                        'Motor de torrents está reiniciando. Tente novamente em alguns segundos.',
+                    );
+                }
+
                 if (
                     typeof payload !== 'object' ||
                     payload === null ||
@@ -119,6 +131,13 @@ export function registerIpcHandlers(
         'torrent:add-magnet',
         async (_event, payload: unknown): Promise<IPCResponse<DownloadItem>> => {
             try {
+                // Guarda contra operações durante reinício do motor
+                if (torrentEngine?.isRestarting()) {
+                    return fail(
+                        'Motor de torrents está reiniciando. Tente novamente em alguns segundos.',
+                    );
+                }
+
                 if (
                     typeof payload !== 'object' ||
                     payload === null ||
@@ -143,6 +162,13 @@ export function registerIpcHandlers(
         'torrent:pause',
         async (_event, payload: unknown): Promise<IPCResponse<void>> => {
             try {
+                // Guarda contra operações durante reinício do motor
+                if (torrentEngine?.isRestarting()) {
+                    return fail(
+                        'Motor de torrents está reiniciando. Tente novamente em alguns segundos.',
+                    );
+                }
+
                 if (
                     typeof payload !== 'object' ||
                     payload === null ||
@@ -167,6 +193,13 @@ export function registerIpcHandlers(
         'torrent:resume',
         async (_event, payload: unknown): Promise<IPCResponse<void>> => {
             try {
+                // Guarda contra operações durante reinício do motor
+                if (torrentEngine?.isRestarting()) {
+                    return fail(
+                        'Motor de torrents está reiniciando. Tente novamente em alguns segundos.',
+                    );
+                }
+
                 if (
                     typeof payload !== 'object' ||
                     payload === null ||
@@ -191,6 +224,13 @@ export function registerIpcHandlers(
         'torrent:remove',
         async (_event, payload: unknown): Promise<IPCResponse<void>> => {
             try {
+                // Guarda contra operações durante reinício do motor
+                if (torrentEngine?.isRestarting()) {
+                    return fail(
+                        'Motor de torrents está reiniciando. Tente novamente em alguns segundos.',
+                    );
+                }
+
                 if (
                     typeof payload !== 'object' ||
                     payload === null ||
@@ -300,6 +340,33 @@ export function registerIpcHandlers(
                     return fail('Tema inválido: deve ser uma string não-vazia');
                 }
 
+                // Validar dhtEnabled se fornecido
+                if (
+                    partial.dhtEnabled !== undefined &&
+                    !isValidNetworkToggle(partial.dhtEnabled)
+                ) {
+                    return fail('Valor inválido: dhtEnabled deve ser um booleano');
+                }
+
+                // Validar pexEnabled se fornecido
+                if (
+                    partial.pexEnabled !== undefined &&
+                    !isValidNetworkToggle(partial.pexEnabled)
+                ) {
+                    return fail('Valor inválido: pexEnabled deve ser um booleano');
+                }
+
+                // Validar utpEnabled se fornecido
+                if (
+                    partial.utpEnabled !== undefined &&
+                    !isValidNetworkToggle(partial.utpEnabled)
+                ) {
+                    return fail('Valor inválido: utpEnabled deve ser um booleano');
+                }
+
+                // Capturar configurações anteriores ANTES de persistir (para detecção de mudança)
+                const previousSettings = settingsManager.get();
+
                 settingsManager.set(partial);
 
                 // Notificar o downloadManager sobre a mudança no limite de downloads simultâneos
@@ -313,6 +380,27 @@ export function registerIpcHandlers(
                     partial.uploadSpeedLimit !== undefined
                 ) {
                     downloadManager.onGlobalSpeedLimitChanged();
+                }
+
+                // Verificar se configurações de rede mudaram e acionar restart
+                const networkChanged =
+                    (partial.dhtEnabled !== undefined &&
+                        partial.dhtEnabled !== previousSettings.dhtEnabled) ||
+                    (partial.pexEnabled !== undefined &&
+                        partial.pexEnabled !== previousSettings.pexEnabled) ||
+                    (partial.utpEnabled !== undefined &&
+                        partial.utpEnabled !== previousSettings.utpEnabled);
+
+                if (networkChanged && torrentEngine) {
+                    const currentSettings = settingsManager.get();
+                    await torrentEngine.restart({
+                        downloadPath: currentSettings.destinationFolder,
+                        downloadSpeedLimit: currentSettings.downloadSpeedLimit,
+                        uploadSpeedLimit: currentSettings.uploadSpeedLimit,
+                        dhtEnabled: currentSettings.dhtEnabled,
+                        pexEnabled: currentSettings.pexEnabled,
+                        utpEnabled: currentSettings.utpEnabled,
+                    });
                 }
 
                 const updated = settingsManager.get();

@@ -1,15 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { VscTrash } from 'react-icons/vsc';
 import { useSettings } from '../../hooks/useSettings';
-import {
-    isValidSpeedLimit,
-    isValidMaxConcurrentDownloads,
-    MIN_CONCURRENT_DOWNLOADS,
-    MAX_CONCURRENT_DOWNLOADS,
-} from '../../../shared/validators';
-import { ThemeSwitcher } from './ThemeSwitcher';
 import { applyTheme } from '../../themes/themeApplier';
 import { isValidThemeId, DEFAULT_THEME_ID } from '../../themes/themeRegistry';
+import { SettingsTabs, type SettingsTabId } from './SettingsTabs';
+import { GeneralSettings } from './GeneralSettings';
+import { TransferSettings, validateTransferFields } from './TransferSettings';
+import { NetworkSettings } from './NetworkSettings';
+import { TrackerSettings } from './TrackerSettings';
 import styles from './SettingsPanel.module.css';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -22,11 +19,11 @@ interface SettingsPanelProps {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 /**
- * Settings panel for configuring destination folder and speed limits.
+ * Painel de configurações organizado em abas.
  *
- * Renders inline in the Editor Area when accessed via the Activity Bar.
- * Accepts `isOpen` and `onClose` props for compatibility — when `isOpen`
- * is false the component returns null.
+ * Renderiza inline no Editor Area quando acessado via Activity Bar.
+ * Aceita `isOpen` e `onClose` para compatibilidade — quando `isOpen`
+ * é false o componente retorna null.
  */
 export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JSX.Element | null {
     const {
@@ -39,6 +36,10 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
         removeGlobalTracker,
     } = useSettings();
 
+    // ── Aba ativa ─────────────────────────────────────────────────────────────
+    const [activeTab, setActiveTab] = useState<SettingsTabId>('general');
+
+    // ── Estado do formulário ──────────────────────────────────────────────────
     const [downloadLimit, setDownloadLimit] = useState('');
     const [uploadLimit, setUploadLimit] = useState('');
     const [maxConcurrent, setMaxConcurrent] = useState('');
@@ -49,51 +50,50 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
     const [isSaving, setIsSaving] = useState(false);
     const [currentThemeId, setCurrentThemeId] = useState(DEFAULT_THEME_ID);
 
-    // ── Estado local para trackers globais ────────────────────────────────────
-    const [newGlobalTracker, setNewGlobalTracker] = useState('');
-    const [globalTrackerError, setGlobalTrackerError] = useState<string | null>(null);
+    // ── Estado de rede avançada ───────────────────────────────────────────────
+    const [dhtEnabled, setDhtEnabled] = useState(true);
+    const [pexEnabled, setPexEnabled] = useState(true);
+    const [utpEnabled, setUtpEnabled] = useState(true);
+    const [isRestarting, setIsRestarting] = useState(false);
+    const [restartError, setRestartError] = useState<string | null>(null);
 
-    // Sync local form state when settings load from the main process.
-    // This is intentional: the effect bridges async IPC data into local form state.
+    // ── Sincroniza estado local quando settings carrega via IPC ───────────────
     useEffect(() => {
         if (settings) {
-            setDownloadLimit(String(settings.downloadSpeedLimit)); // eslint-disable-line react-hooks/set-state-in-effect
+            setDownloadLimit(String(settings.downloadSpeedLimit));
             setUploadLimit(String(settings.uploadSpeedLimit));
             setMaxConcurrent(String(settings.maxConcurrentDownloads));
             setNotificationsEnabled(settings.notificationsEnabled);
-            // Sincroniza o tema local com o valor persistido
+            setDhtEnabled(settings.dhtEnabled);
+            setPexEnabled(settings.pexEnabled);
+            setUtpEnabled(settings.utpEnabled);
             if (settings.theme) {
                 setCurrentThemeId(settings.theme);
             }
         }
     }, [settings]);
 
-    // Aplica o tema salvo na inicialização, com fallback para o padrão
+    // ── Aplica tema salvo na inicialização ────────────────────────────────────
     useEffect(() => {
         if (settings) {
             if (settings.theme && isValidThemeId(settings.theme)) {
-                // Tema salvo existe no registro — aplica normalmente
                 applyTheme(settings.theme);
             } else if (settings.theme && !isValidThemeId(settings.theme)) {
-                // Tema salvo não existe no registro — aplica padrão e persiste correção
                 applyTheme(DEFAULT_THEME_ID);
                 setCurrentThemeId(DEFAULT_THEME_ID);
                 updateSettings({ theme: DEFAULT_THEME_ID });
             } else {
-                // Sem tema salvo (primeira execução) — aplica padrão
                 applyTheme(DEFAULT_THEME_ID);
             }
         }
     }, [settings, updateSettings]);
 
-    // Callback para troca imediata de tema
+    // ── Handlers ──────────────────────────────────────────────────────────────
+
     const handleThemeChange = useCallback(
         (newId: string) => {
-            // Efeito visual imediato
             applyTheme(newId);
-            // Atualiza estado local
             setCurrentThemeId(newId);
-            // Persiste via IPC (fire-and-forget para sensação imediata)
             updateSettings({ theme: newId });
         },
         [updateSettings],
@@ -103,63 +103,9 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
         await selectFolder();
     }, [selectFolder]);
 
-    const handleDownloadLimitChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        setDownloadLimit(e.target.value);
-        setDownloadLimitError(null);
-    }, []);
-
-    const handleUploadLimitChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        setUploadLimit(e.target.value);
-        setUploadLimitError(null);
-    }, []);
-
-    const handleMaxConcurrentChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        setMaxConcurrent(e.target.value);
-        setMaxConcurrentError(null);
-    }, []);
-
-    const handleNotificationsChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        setNotificationsEnabled(e.target.checked);
-    }, []);
-
-    // ── Handlers de trackers globais ──────────────────────────────────────────
-
-    const handleAddGlobalTracker = useCallback(async () => {
-        const url = newGlobalTracker.trim();
-        if (!url) {
-            setGlobalTrackerError('Informe a URL do tracker.');
-            return;
-        }
-
-        setGlobalTrackerError(null);
-        const success = await addGlobalTracker(url);
-        if (success) {
-            setNewGlobalTracker('');
-        } else {
-            setGlobalTrackerError(error ?? 'Erro ao adicionar tracker.');
-        }
-    }, [newGlobalTracker, addGlobalTracker, error]);
-
-    const handleRemoveGlobalTracker = useCallback(
-        async (url: string) => {
-            await removeGlobalTracker(url);
-        },
-        [removeGlobalTracker],
-    );
-
-    const handleGlobalTrackerKeyDown = useCallback(
-        (e: React.KeyboardEvent<HTMLInputElement>) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                handleAddGlobalTracker();
-            }
-        },
-        [handleAddGlobalTracker],
-    );
-
     const handleAutoApplyChange = useCallback(
-        (e: React.ChangeEvent<HTMLInputElement>) => {
-            updateSettings({ autoApplyGlobalTrackers: e.target.checked });
+        (enabled: boolean) => {
+            updateSettings({ autoApplyGlobalTrackers: enabled });
         },
         [updateSettings],
     );
@@ -168,52 +114,135 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
         async (e: React.FormEvent) => {
             e.preventDefault();
 
-            let hasError = false;
+            // Valida campos de transferência
+            const transferValid = validateTransferFields(
+                downloadLimit,
+                uploadLimit,
+                maxConcurrent,
+                setDownloadLimitError,
+                setUploadLimitError,
+                setMaxConcurrentError,
+            );
 
-            if (!isValidSpeedLimit(Number(downloadLimit))) {
-                setDownloadLimitError('Valor inválido: deve ser um inteiro não-negativo.');
-                hasError = true;
+            if (!transferValid) return;
+
+            // Detectar se configurações de rede mudaram
+            const networkChanged =
+                settings?.dhtEnabled !== dhtEnabled ||
+                settings?.pexEnabled !== pexEnabled ||
+                settings?.utpEnabled !== utpEnabled;
+
+            if (networkChanged) {
+                setIsRestarting(true);
             }
 
-            if (!isValidSpeedLimit(Number(uploadLimit))) {
-                setUploadLimitError('Valor inválido: deve ser um inteiro não-negativo.');
-                hasError = true;
-            }
-
-            if (!isValidMaxConcurrentDownloads(Number(maxConcurrent))) {
-                setMaxConcurrentError(
-                    `Valor inválido: deve ser um inteiro entre ${MIN_CONCURRENT_DOWNLOADS} e ${MAX_CONCURRENT_DOWNLOADS}.`,
-                );
-                hasError = true;
-            }
-
-            if (hasError) return;
-
+            setRestartError(null);
             setIsSaving(true);
+
             try {
-                await updateSettings({
+                const success = await updateSettings({
                     downloadSpeedLimit: Number(downloadLimit),
                     uploadSpeedLimit: Number(uploadLimit),
                     maxConcurrentDownloads: Number(maxConcurrent),
                     notificationsEnabled,
+                    dhtEnabled,
+                    pexEnabled,
+                    utpEnabled,
                 });
+
+                if (!success && networkChanged) {
+                    setRestartError(error ?? 'Erro ao reiniciar motor de torrents');
+                }
             } finally {
                 setIsSaving(false);
+                setIsRestarting(false);
             }
         },
-        [downloadLimit, uploadLimit, maxConcurrent, notificationsEnabled, updateSettings],
+        [
+            downloadLimit,
+            uploadLimit,
+            maxConcurrent,
+            notificationsEnabled,
+            dhtEnabled,
+            pexEnabled,
+            utpEnabled,
+            settings,
+            error,
+            updateSettings,
+        ],
     );
 
     if (!isOpen) return null;
 
-    const dlInputClass = downloadLimitError ? 'input input--error' : 'input';
-    const ulInputClass = uploadLimitError ? 'input input--error' : 'input';
-    const mcInputClass = maxConcurrentError ? 'input input--error' : 'input';
+    // ── Conteúdo da aba ativa ─────────────────────────────────────────────────
 
-    // ── Form content shared between inline and modal rendering ────────────
+    const renderTabContent = () => {
+        if (!settings) return null;
 
-    const formContent = (
-        <>
+        switch (activeTab) {
+            case 'general':
+                return (
+                    <GeneralSettings
+                        settings={settings}
+                        currentThemeId={currentThemeId}
+                        notificationsEnabled={notificationsEnabled}
+                        onThemeChange={handleThemeChange}
+                        onSelectFolder={handleSelectFolder}
+                        onNotificationsChange={setNotificationsEnabled}
+                    />
+                );
+            case 'transfer':
+                return (
+                    <TransferSettings
+                        downloadLimit={downloadLimit}
+                        uploadLimit={uploadLimit}
+                        maxConcurrent={maxConcurrent}
+                        downloadLimitError={downloadLimitError}
+                        uploadLimitError={uploadLimitError}
+                        maxConcurrentError={maxConcurrentError}
+                        onDownloadLimitChange={setDownloadLimit}
+                        onUploadLimitChange={setUploadLimit}
+                        onMaxConcurrentChange={setMaxConcurrent}
+                        onDownloadLimitErrorChange={setDownloadLimitError}
+                        onUploadLimitErrorChange={setUploadLimitError}
+                        onMaxConcurrentErrorChange={setMaxConcurrentError}
+                    />
+                );
+            case 'network':
+                return (
+                    <NetworkSettings
+                        dhtEnabled={dhtEnabled}
+                        pexEnabled={pexEnabled}
+                        utpEnabled={utpEnabled}
+                        onDhtChange={setDhtEnabled}
+                        onPexChange={setPexEnabled}
+                        onUtpChange={setUtpEnabled}
+                    />
+                );
+            case 'trackers':
+                return (
+                    <TrackerSettings
+                        settings={settings}
+                        error={error}
+                        onAddGlobalTracker={addGlobalTracker}
+                        onRemoveGlobalTracker={removeGlobalTracker}
+                        onAutoApplyChange={handleAutoApplyChange}
+                    />
+                );
+            default:
+                return null;
+        }
+    };
+
+    // ── Abas que precisam do botão "Salvar" ───────────────────────────────────
+    const showSaveButton = activeTab === 'transfer' || activeTab === 'network';
+
+    return (
+        <section className={styles.settingsPanel} aria-labelledby="settings-panel-title">
+            <h2 id="settings-panel-title" className={styles.panelTitle}>
+                Configurações
+            </h2>
+
             {loading && <p>Carregando configurações...</p>}
             {error && (
                 <p role="alert" className="modal__error">
@@ -223,250 +252,45 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps): React.JS
 
             {settings && (
                 <>
-                    <form onSubmit={handleSave} noValidate>
-                        {/* Seletor de tema — aplicação imediata, sem "Salvar" */}
-                        <div className={styles.fieldGroup}>
-                            <label htmlFor="theme-select" className="label">
-                                Tema
-                            </label>
-                            <ThemeSwitcher
-                                currentThemeId={currentThemeId}
-                                onThemeChange={handleThemeChange}
-                            />
-                        </div>
+                    <SettingsTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
-                        {/* Destination folder */}
-                        <div className={styles.fieldGroup}>
-                            <label htmlFor="destination-folder" className="label">
-                                Pasta de destino
-                            </label>
-                            <div className={styles.folderRow}>
-                                <input
-                                    id="destination-folder"
-                                    type="text"
-                                    className={`input input--readonly ${styles.folderInput}`}
-                                    value={settings.destinationFolder}
-                                    readOnly
-                                />
-                                <button
-                                    type="button"
-                                    className="btn"
-                                    onClick={handleSelectFolder}
-                                >
-                                    Selecionar pasta
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Download speed limit */}
-                        <div className={styles.fieldGroup}>
-                            <label htmlFor="download-speed-limit" className="label">
-                                Limite de download (KB/s, 0 = sem limite)
-                            </label>
-                            <input
-                                id="download-speed-limit"
-                                type="number"
-                                min={0}
-                                step={1}
-                                className={dlInputClass}
-                                value={downloadLimit}
-                                onChange={handleDownloadLimitChange}
-                                aria-describedby={
-                                    downloadLimitError ? 'download-limit-error' : undefined
-                                }
-                                aria-invalid={downloadLimitError !== null}
-                            />
-                            {downloadLimitError && (
-                                <p
-                                    id="download-limit-error"
-                                    role="alert"
-                                    className="modal__error"
-                                >
-                                    {downloadLimitError}
-                                </p>
-                            )}
-                        </div>
-
-                        {/* Upload speed limit */}
-                        <div className={styles.fieldGroup}>
-                            <label htmlFor="upload-speed-limit" className="label">
-                                Limite de upload (KB/s, 0 = sem limite)
-                            </label>
-                            <input
-                                id="upload-speed-limit"
-                                type="number"
-                                min={0}
-                                step={1}
-                                className={ulInputClass}
-                                value={uploadLimit}
-                                onChange={handleUploadLimitChange}
-                                aria-describedby={
-                                    uploadLimitError ? 'upload-limit-error' : undefined
-                                }
-                                aria-invalid={uploadLimitError !== null}
-                            />
-                            {uploadLimitError && (
-                                <p
-                                    id="upload-limit-error"
-                                    role="alert"
-                                    className="modal__error"
-                                >
-                                    {uploadLimitError}
-                                </p>
-                            )}
-                        </div>
-
-                        {/* Max concurrent downloads */}
-                        <div className={styles.fieldGroup}>
-                            <label htmlFor="max-concurrent-downloads" className="label">
-                                Downloads simultâneos (máx)
-                            </label>
-                            <input
-                                id="max-concurrent-downloads"
-                                type="number"
-                                min={MIN_CONCURRENT_DOWNLOADS}
-                                max={MAX_CONCURRENT_DOWNLOADS}
-                                step={1}
-                                className={mcInputClass}
-                                value={maxConcurrent}
-                                onChange={handleMaxConcurrentChange}
-                                aria-describedby={
-                                    maxConcurrentError ? 'max-concurrent-error' : undefined
-                                }
-                                aria-invalid={maxConcurrentError !== null}
-                            />
-                            {maxConcurrentError && (
-                                <p
-                                    id="max-concurrent-error"
-                                    role="alert"
-                                    className="modal__error"
-                                >
-                                    {maxConcurrentError}
-                                </p>
-                            )}
-                        </div>
-
-                        {/* Notificações nativas */}
-                        <div className={styles.fieldGroupLast}>
-                            <label className={styles.checkboxLabel}>
-                                <input
-                                    type="checkbox"
-                                    checked={notificationsEnabled}
-                                    onChange={handleNotificationsChange}
-                                    className={styles.checkbox}
-                                />
-                                Notificações do sistema (download concluído ou com erro)
-                            </label>
-                        </div>
-
-                        {/* Actions */}
-                        <div className={styles.actions}>
-                            <button
-                                type="submit"
-                                className="btn btn--primary"
-                                disabled={isSaving}
-                            >
-                                {isSaving ? 'Salvando...' : 'Salvar'}
-                            </button>
-                        </div>
-                    </form>
-
-                    {/* ── Seção de Trackers Globais ─────────────────────────── */}
-                    <section
-                        className={styles.globalTrackersSection}
-                        aria-labelledby="global-trackers-title"
+                    <div
+                        id={`settings-tabpanel-${activeTab}`}
+                        role="tabpanel"
+                        aria-labelledby={`settings-tab-${activeTab}`}
+                        className={styles.tabContent}
                     >
-                        <h3 id="global-trackers-title" className={styles.sectionTitle}>
-                            Trackers Globais (Favoritos)
-                        </h3>
+                        {showSaveButton ? (
+                            <form onSubmit={handleSave} noValidate>
+                                {renderTabContent()}
 
-                        {/* Lista de trackers globais */}
-                        {settings.globalTrackers.length > 0 ? (
-                            <ul
-                                className={styles.globalTrackerList}
-                                aria-label="Lista de trackers globais"
-                            >
-                                {settings.globalTrackers.map((url) => (
-                                    <li key={url} className={styles.globalTrackerItem}>
-                                        <span
-                                            className={styles.globalTrackerUrl}
-                                            title={url}
-                                        >
-                                            {url}
-                                        </span>
-                                        <button
-                                            className={styles.globalTrackerRemoveButton}
-                                            onClick={() => handleRemoveGlobalTracker(url)}
-                                            aria-label={`Remover tracker ${url}`}
-                                        >
-                                            <VscTrash />
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
+                                {/* Erro de reinício do motor */}
+                                {restartError && activeTab === 'network' && (
+                                    <p className={styles.errorMessage} role="alert">
+                                        {restartError}
+                                    </p>
+                                )}
+
+                                <div className={styles.actions}>
+                                    <button
+                                        type="submit"
+                                        className="btn btn--primary"
+                                        disabled={isSaving}
+                                    >
+                                        {isRestarting
+                                            ? 'Reiniciando motor...'
+                                            : isSaving
+                                                ? 'Salvando...'
+                                                : 'Salvar'}
+                                    </button>
+                                </div>
+                            </form>
                         ) : (
-                            <p className={styles.globalTrackerEmpty}>
-                                Nenhum tracker global adicionado.
-                            </p>
+                            renderTabContent()
                         )}
-
-                        {/* Campo para adicionar tracker global */}
-                        <div className={styles.globalTrackerAddRow}>
-                            <input
-                                type="text"
-                                className="input"
-                                placeholder="udp://tracker.example.com:6969/announce"
-                                value={newGlobalTracker}
-                                onChange={(e) => {
-                                    setNewGlobalTracker(e.target.value);
-                                    setGlobalTrackerError(null);
-                                }}
-                                onKeyDown={handleGlobalTrackerKeyDown}
-                                aria-label="URL do tracker global"
-                            />
-                            <button
-                                type="button"
-                                className="btn btn--primary"
-                                onClick={handleAddGlobalTracker}
-                                disabled={!newGlobalTracker.trim()}
-                            >
-                                Adicionar
-                            </button>
-                        </div>
-
-                        {/* Erro de adição */}
-                        {globalTrackerError && (
-                            <p className="modal__error" role="alert">
-                                {globalTrackerError}
-                            </p>
-                        )}
-
-                        {/* Toggle de aplicação automática */}
-                        <div className={styles.globalTrackerToggle}>
-                            <label className={styles.checkboxLabel}>
-                                <input
-                                    type="checkbox"
-                                    checked={settings.autoApplyGlobalTrackers}
-                                    onChange={handleAutoApplyChange}
-                                    className={styles.checkbox}
-                                />
-                                Aplicar trackers globais automaticamente a novos torrents
-                            </label>
-                        </div>
-                    </section>
+                    </div>
                 </>
             )}
-        </>
-    );
-
-    // ── Inline rendering (Activity Bar navigation) ────────────────────────
-
-    return (
-        <section className={styles.settingsPanel} aria-labelledby="settings-panel-title">
-            <h2 id="settings-panel-title" className={styles.panelTitle}>
-                Configurações
-            </h2>
-            {formContent}
         </section>
     );
 }

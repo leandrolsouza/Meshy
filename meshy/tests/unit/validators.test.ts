@@ -3,6 +3,7 @@ import {
     isValidTorrentFile,
     hasTorrentMagicBytes,
     isValidSpeedLimit,
+    isValidNetworkToggle,
 } from '../../main/validators';
 import fc from 'fast-check';
 
@@ -832,6 +833,73 @@ describe('[PBT] Propriedade 1: calcularLimiteEfetivo retorna o menor valor posit
                 }
             }),
             { numRuns: 100 },
+        );
+    });
+});
+
+// ─── isValidNetworkToggle (testes unitários) ──────────────────────────────────
+
+describe('isValidNetworkToggle', () => {
+    it('aceita true', () => {
+        expect(isValidNetworkToggle(true)).toBe(true);
+    });
+
+    it('aceita false', () => {
+        expect(isValidNetworkToggle(false)).toBe(true);
+    });
+
+    it('rejeita null', () => {
+        expect(isValidNetworkToggle(null)).toBe(false);
+    });
+
+    it('rejeita undefined', () => {
+        expect(isValidNetworkToggle(undefined)).toBe(false);
+    });
+
+    it('rejeita número', () => {
+        expect(isValidNetworkToggle(0)).toBe(false);
+        expect(isValidNetworkToggle(1)).toBe(false);
+        expect(isValidNetworkToggle(42)).toBe(false);
+    });
+
+    it('rejeita string', () => {
+        expect(isValidNetworkToggle('')).toBe(false);
+        expect(isValidNetworkToggle('true')).toBe(false);
+        expect(isValidNetworkToggle('false')).toBe(false);
+    });
+});
+
+// ─── PBT: Propriedade 1 — Validação rejeita valores não-booleanos ─────────────
+
+// Feature: dht-pex-settings, Property 1: Validação rejeita valores não-booleanos
+// **Validates: Requirements 2.1, 2.2**
+describe('[PBT] Propriedade 1: Para qualquer não-booleano, isValidNetworkToggle retorna false; para qualquer booleano, retorna true', () => {
+    it('retorna true para qualquer valor booleano', () => {
+        fc.assert(
+            fc.property(fc.boolean(), (value) => {
+                expect(isValidNetworkToggle(value)).toBe(true);
+            }),
+            { numRuns: 100 },
+        );
+    });
+
+    it('retorna false para qualquer valor não-booleano', () => {
+        fc.assert(
+            fc.property(
+                fc.oneof(
+                    fc.integer(),
+                    fc.string(),
+                    fc.double({ noNaN: true, noDefaultInfinity: true }),
+                    fc.constant(null),
+                    fc.constant(undefined),
+                    fc.object(),
+                    fc.array(fc.anything()),
+                ),
+                (value) => {
+                    expect(isValidNetworkToggle(value)).toBe(false);
+                },
+            ),
+            { numRuns: 200 },
         );
     });
 });

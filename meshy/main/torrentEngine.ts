@@ -22,6 +22,9 @@ export interface TorrentEngineOptions {
     downloadPath: string;
     downloadSpeedLimit: number; // KB/s, 0 = sem limite
     uploadSpeedLimit: number; // KB/s, 0 = sem limite
+    dhtEnabled: boolean; // DHT — Distributed Hash Table (padrão: true)
+    pexEnabled: boolean; // PEX — Peer Exchange (padrão: true)
+    utpEnabled: boolean; // uTP — Micro Transport Protocol (padrão: true)
 }
 
 export interface TorrentInfo {
@@ -61,6 +64,10 @@ export interface TorrentEngine {
     addTracker(infoHash: string, trackerUrl: string): void;
     /** Remove um tracker de um torrent e encerra a conexão */
     removeTracker(infoHash: string, trackerUrl: string): void;
+    /** Reinicia o motor com novas opções, re-adicionando torrents ativos */
+    restart(options: TorrentEngineOptions): Promise<void>;
+    /** Indica se o motor está em processo de reinício */
+    isRestarting(): boolean;
     on(event: 'progress', listener: (info: TorrentInfo) => void): void;
     on(event: 'done', listener: (infoHash: string) => void): void;
     on(event: 'error', listener: (infoHash: string, err: Error) => void): void;
@@ -93,8 +100,8 @@ function torrentToInfo(torrent: Torrent, status: TorrentStatus): TorrentInfo {
 // ─── Implementation ───────────────────────────────────────────────────────────
 
 class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
-    private readonly client: WebTorrentInstanceWithThrottle;
-    private readonly downloadPath: string;
+    private client: WebTorrentInstanceWithThrottle;
+    private downloadPath: string;
     /** Tracks the current status for each infoHash */
     private readonly statusMap = new Map<string, TorrentStatus>();
     /** Tracks selected file indices per torrent */
@@ -104,11 +111,21 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
     /** ThrottleGroup de upload individual por torrent */
     private readonly uploadThrottleMap = new Map<string, ThrottleGroup>();
 
+    /** Armazena as opções para uso posterior (ex: restart) */
+    private options: TorrentEngineOptions;
+
     constructor(options: TorrentEngineOptions, client?: WebTorrent.Instance) {
         super();
         this.downloadPath = options.downloadPath;
+        this.options = options;
 
-        this.client = (client ?? new WebTorrent()) as WebTorrentInstanceWithThrottle;
+        // Passa opções de rede ao construtor do WebTorrent.
+        // PEX não é uma opção do construtor — é controlado via wire extension (ut_pex).
+        this.client = (client ??
+            new WebTorrent({
+                dht: options.dhtEnabled,
+                utp: options.utpEnabled,
+            })) as WebTorrentInstanceWithThrottle;
 
         // Apply initial speed limits
         if (options.downloadSpeedLimit > 0) {
@@ -116,6 +133,11 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
         }
         if (options.uploadSpeedLimit > 0) {
             this.client.throttleUpload(options.uploadSpeedLimit * 1024);
+        }
+
+        // Desabilitar PEX removendo a extensão ut_pex dos wires quando pexEnabled é false
+        if (!options.pexEnabled) {
+            this._setupPexDisable();
         }
     }
 
@@ -511,6 +533,105 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
     }
 
     // ── Private helpers ─────────────────────────────────────────────────────────
+
+    /** Flag que indica se o motor está em processo de reinício */
+    private _restarting = false;
+
+    // ── isRestarting ────────────────────────────────────────────────────────────
+
+    isRestarting(): boolean {
+        return this._restarting;
+    }
+
+    // ── restart ─────────────────────────────────────────────────────────────────
+
+    async restart(options: TorrentEngineOptions): Promise<void> {
+        this._restarting = true;
+
+        try {
+            // 1. Coletar infoHashes e magnetURIs dos torrents ativos
+            const activeTorrents = this.client.torrents.map((t) => ({
+                infoHash: t.infoHash,
+                magnetURI: t.magnetURI,
+                status: this.statusMap.get(t.infoHash),
+            }));
+
+            // 2. Destruir todos os torrents sem deletar arquivos
+            for (const t of this.client.torrents) {
+                await new Promise<void>((resolve) => {
+                    t.destroy({ destroyStore: false }, () => resolve());
+                });
+            }
+
+            // 3. Destruir o cliente atual
+            await new Promise<void>((resolve, reject) => {
+                this.client.destroy((err) => {
+                    if (err) reject(err);
+                    else resolve();
+                });
+            });
+
+            // 4. Criar novo cliente com novas opções
+            this.client = new WebTorrent({
+                dht: options.dhtEnabled,
+                utp: options.utpEnabled,
+            }) as WebTorrentInstanceWithThrottle;
+
+            this.downloadPath = options.downloadPath;
+            this.options = options;
+
+            // Aplicar limites de velocidade
+            if (options.downloadSpeedLimit > 0) {
+                this.client.throttleDownload(options.downloadSpeedLimit * 1024);
+            }
+            if (options.uploadSpeedLimit > 0) {
+                this.client.throttleUpload(options.uploadSpeedLimit * 1024);
+            }
+
+            // Configurar PEX se desabilitado
+            if (!options.pexEnabled) {
+                this._setupPexDisable();
+            }
+
+            // 5. Re-adicionar torrents que estavam ativos (pular pausados/concluídos)
+            for (const torrentInfo of activeTorrents) {
+                if (torrentInfo.status === 'paused' || torrentInfo.status === 'completed') {
+                    continue;
+                }
+                try {
+                    if (torrentInfo.magnetURI) {
+                        await this.addMagnetLink(torrentInfo.magnetURI);
+                    }
+                } catch {
+                    this.statusMap.set(torrentInfo.infoHash, 'error');
+                    this.emit(
+                        'error',
+                        torrentInfo.infoHash,
+                        new Error('Falha ao re-adicionar torrent após reinício'),
+                    );
+                }
+            }
+        } finally {
+            this._restarting = false;
+        }
+    }
+
+    // ── _setupPexDisable ────────────────────────────────────────────────────────
+
+    /** Registra listener para desabilitar PEX (ut_pex) nos wires de todos os torrents */
+    private _setupPexDisable(): void {
+        this.client.on('torrent', (torrent) => {
+            torrent.on('wire', (wire) => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const w = wire as any;
+                if (w.ut_pex) {
+                    w.ut_pex.destroy?.();
+                }
+            });
+        });
+    }
+
+    // ── _getTorrent ─────────────────────────────────────────────────────────────
 
     private _getTorrent(infoHash: string): Torrent | undefined {
         return this.client.torrents.find((t) => t.infoHash === infoHash);

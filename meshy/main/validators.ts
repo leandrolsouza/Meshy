@@ -9,6 +9,7 @@ export {
     isValidThemeId,
     isValidTrackerUrl,
     normalizeTrackerUrl,
+    isValidNetworkToggle,
     MIN_CONCURRENT_DOWNLOADS,
     MAX_CONCURRENT_DOWNLOADS,
     DEFAULT_MAX_CONCURRENT_DOWNLOADS,

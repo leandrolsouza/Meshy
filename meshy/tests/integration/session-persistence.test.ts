@@ -72,6 +72,8 @@ function makeMockEngine(): TorrentEngine & EventEmitter {
         removeTracker: jest.fn(),
         setTorrentDownloadSpeedLimit: jest.fn(),
         setTorrentUploadSpeedLimit: jest.fn(),
+        restart: jest.fn().mockResolvedValue(undefined),
+        isRestarting: jest.fn().mockReturnValue(false),
     });
 
     return engine;

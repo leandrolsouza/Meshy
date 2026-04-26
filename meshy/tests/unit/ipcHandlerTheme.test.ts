@@ -54,6 +54,9 @@ function makeMockSettingsManager(): SettingsManager {
         theme: 'vs-code-dark',
         globalTrackers: [],
         autoApplyGlobalTrackers: false,
+        dhtEnabled: true,
+        pexEnabled: true,
+        utpEnabled: true,
     };
     return {
         get: jest.fn().mockReturnValue(settings),
