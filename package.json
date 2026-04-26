@@ -43,7 +43,7 @@
         "@types/react-dom": "19.2.3",
         "@types/webtorrent": "^0.109.7",
         "@vitejs/plugin-react": "^5.2.0",
-        "electron": "^33.3.1",
+        "electron": "^41.3.0",
         "electron-vite": "^5.0.0",
         "eslint": "^10.2.1",
         "eslint-config-prettier": "^10.1.8",
