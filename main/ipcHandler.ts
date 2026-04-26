@@ -12,7 +12,8 @@ import type {
 import { isValidSpeedLimit } from './validators';
 import { isValidTrackerUrl } from '../shared/validators';
 import { ErrorCodes } from '../shared/errorCodes';
-import { logger } from './logger';
+import { logger, createScopedLogger } from './logger';
+import type { ScopedLogger } from './logger';
 import {
     validatePayload,
     infoHashSchema,
@@ -33,9 +34,13 @@ function fail(error: string): IPCResponse<never> {
     return { success: false, error };
 }
 
-function failWithLog(channel: string, err: unknown): IPCResponse<never> {
+function failWithLog(channel: string, err: unknown, scopedLog?: ScopedLogger): IPCResponse<never> {
     const message = err instanceof Error ? err.message : String(err);
-    logger.error(`[IPC] ${channel} failed:`, message);
+    if (scopedLog) {
+        scopedLog.error('Falha na operação', { errorCode: message });
+    } else {
+        logger.error(`[IPC] ${channel} failed:`, message);
+    }
     return { success: false, error: message };
 }
 
@@ -549,8 +554,8 @@ export function registerIpcHandlers(
                 for (const url of globalTrackers) {
                     try {
                         torrentEngine.addTracker(infoHash, url);
-                    } catch {
-                        // Silenciosamente ignora erros individuais (ex: duplicatas)
+                    } catch (_trackerErr) {
+                        // Erros individuais de tracker (ex: duplicatas) são esperados
                     }
                 }
 
@@ -619,6 +624,7 @@ export function registerIpcHandlers(
     ipcMain.handle(
         'renderer:report-error',
         async (_event, payload: unknown): Promise<IPCResponse<void>> => {
+            const scopedLog = createScopedLogger(logger, { channel: 'renderer:report-error' });
             try {
                 const result = validatePayload<{ message: string; source: string }>(payload, {
                     message: { type: 'string', nonEmpty: true },
@@ -643,16 +649,18 @@ export function registerIpcHandlers(
                 const componentStackStr =
                     typeof componentStack === 'string' ? componentStack : undefined;
 
-                logger.error(
-                    `[Renderer] ${source}:`,
-                    message,
-                    stackStr ? `\nStack: ${stackStr}` : '',
-                    componentStackStr ? `\nComponent: ${componentStackStr}` : '',
+                scopedLog.error(
+                    `${source}: ${message}`,
+                    {
+                        source,
+                        ...(stackStr ? { stack: stackStr } : {}),
+                        ...(componentStackStr ? { componentStack: componentStackStr } : {}),
+                    },
                 );
 
                 return ok(undefined);
             } catch (err) {
-                return failWithLog('renderer:report-error', err);
+                return failWithLog('renderer:report-error', err, scopedLog);
             }
         },
     );

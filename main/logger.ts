@@ -2,16 +2,48 @@ import log from 'electron-log';
 
 // ─── Logger ───────────────────────────────────────────────────────────────────
 //
-// Thin wrapper around electron-log for the main process.
+// Wrapper around electron-log for the main process com suporte a contexto
+// estruturado. Cada mensagem pode incluir campos adicionais (channel, infoHash,
+// durationMs, etc.) que são serializados junto ao log para facilitar debugging.
+//
 // Logs are written to:
 //   Windows: %APPDATA%/Meshy/logs/
 //   macOS:   ~/Library/Logs/Meshy/
 //   Linux:   ~/.config/Meshy/logs/
 
+/** Campos de contexto opcionais para enriquecer mensagens de log */
+export interface LogContext {
+    /** Canal IPC que originou a operação */
+    channel?: string;
+    /** InfoHash do torrent relacionado */
+    infoHash?: string;
+    /** Duração da operação em milissegundos */
+    durationMs?: number;
+    /** Código de erro estruturado */
+    errorCode?: string;
+    /** Origem do erro (módulo/componente) */
+    source?: string;
+    /** Campos adicionais livres */
+    [key: string]: unknown;
+}
+
 export interface Logger {
     info(message: string, ...args: unknown[]): void;
     warn(message: string, ...args: unknown[]): void;
     error(message: string, ...args: unknown[]): void;
+}
+
+/**
+ * Formata campos de contexto como string legível para append ao log.
+ * Campos undefined/null são omitidos. Resultado: `{channel=torrent:pause, infoHash=abc123}`
+ */
+function formatContext(ctx: LogContext): string {
+    const entries = Object.entries(ctx).filter(
+        ([, v]) => v !== undefined && v !== null && v !== '',
+    );
+    if (entries.length === 0) return '';
+    const fields = entries.map(([k, v]) => `${k}=${String(v)}`).join(', ');
+    return ` {${fields}}`;
 }
 
 /**
@@ -29,3 +61,47 @@ export const logger: Logger = {
         log.error(message, ...args);
     },
 };
+
+// ─── Scoped logger ────────────────────────────────────────────────────────────
+
+/**
+ * Cria um logger com contexto fixo (ex: módulo, canal IPC).
+ * Cada chamada de log inclui automaticamente os campos do contexto base,
+ * podendo ser enriquecido com campos adicionais por chamada.
+ *
+ * @example
+ * const log = createScopedLogger(logger, { channel: 'torrent:pause' });
+ * log.info('Operação iniciada', { infoHash: 'abc123' });
+ * // => "[torrent:pause] Operação iniciada {infoHash=abc123}"
+ *
+ * log.error('Falha na operação', { infoHash: 'abc123', durationMs: 150 });
+ * // => "[torrent:pause] Falha na operação {infoHash=abc123, durationMs=150}"
+ */
+export interface ScopedLogger {
+    info(message: string, ctx?: LogContext): void;
+    warn(message: string, ctx?: LogContext): void;
+    error(message: string, ctx?: LogContext): void;
+}
+
+export function createScopedLogger(base: Logger, baseCtx: LogContext): ScopedLogger {
+    const prefix = baseCtx.channel ? `[${baseCtx.channel}]` : '[Meshy]';
+
+    return {
+        info(message: string, ctx?: LogContext): void {
+            const merged = { ...baseCtx, ...ctx };
+            // Remover channel do contexto formatado (já está no prefixo)
+            delete merged.channel;
+            base.info(`${prefix} ${message}${formatContext(merged)}`);
+        },
+        warn(message: string, ctx?: LogContext): void {
+            const merged = { ...baseCtx, ...ctx };
+            delete merged.channel;
+            base.warn(`${prefix} ${message}${formatContext(merged)}`);
+        },
+        error(message: string, ctx?: LogContext): void {
+            const merged = { ...baseCtx, ...ctx };
+            delete merged.channel;
+            base.error(`${prefix} ${message}${formatContext(merged)}`);
+        },
+    };
+}

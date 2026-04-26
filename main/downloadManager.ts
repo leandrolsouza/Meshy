@@ -180,8 +180,8 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                         progress = totalSize > 0 ? downloadedSize / totalSize : 0;
                     }
                 }
-            } catch {
-                // If getFiles fails (e.g., torrent not in engine yet), use engine values
+            } catch (_getFilesErr) {
+                // getFiles pode falhar se o torrent ainda não está no engine (ex: resolving-metadata)
             }
 
             // Detectar conclusão baseada nos arquivos selecionados:
@@ -271,6 +271,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             const updated: DownloadItem = {
                 ...existing,
                 status: 'error',
+                errorMessage: err.message,
             };
             this.items.set(infoHash, updated);
             this.emit('update', updated);
@@ -440,8 +441,8 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             if (!this.queuedMagnetUris.has(infoHash)) {
                 try {
                     await this.engine.pause(infoHash);
-                } catch {
-                    // Pode não estar no engine se era um magnet enfileirado
+                } catch (pauseErr) {
+                    this.log.warn('[DownloadManager] Falha ao pausar item enfileirado:', infoHash, (pauseErr as Error).message);
                 }
             }
 
@@ -570,8 +571,8 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
         if (!(wasQueued && hadQueuedMagnet)) {
             try {
                 await this.engine.remove(infoHash, deleteFiles);
-            } catch {
-                // Pode não estar no engine
+            } catch (removeErr) {
+                this.log.warn('[DownloadManager] Falha ao remover do engine:', infoHash, (removeErr as Error).message);
             }
         }
 
@@ -613,8 +614,8 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                         totalFileCount: files.length,
                     };
                 }
-            } catch {
-                // If getFiles fails, return item as-is
+            } catch (_getFilesErr) {
+                // getFiles pode falhar — retornar item sem enriquecimento
             }
             return enriched;
         });
@@ -659,6 +660,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                 elapsedMs: persistedItem.elapsedMs,
                 downloadSpeedLimitKBps: restoredDl,
                 uploadSpeedLimitKBps: restoredUl,
+                errorMessage: persistedItem.errorMessage,
             };
 
             this.items.set(item.infoHash, item);
@@ -739,8 +741,8 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                                 this.engine.setFileSelection(item.infoHash, validIndices);
                                 this.selectedFileIndicesMap.set(item.infoHash, validIndices);
                             }
-                        } catch {
-                            // If reapplying selection fails, continue without it
+                        } catch (selectionErr) {
+                            this.log.warn('[DownloadManager] Falha ao reaplicar seleção de arquivos:', item.infoHash, (selectionErr as Error).message);
                         }
                     }
 
@@ -764,9 +766,11 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                         this.engine.setTorrentDownloadSpeedLimit(item.infoHash, effectiveDl);
                         this.engine.setTorrentUploadSpeedLimit(item.infoHash, effectiveUl);
                     }
-                } catch {
-                    // If re-add fails, mark as error
-                    const errItem: DownloadItem = { ...item, status: 'error' };
+                } catch (restoreErr) {
+                    // Falha ao re-adicionar — marcar como erro com mensagem
+                    const errMsg = (restoreErr as Error).message;
+                    this.log.error('[DownloadManager] Falha ao restaurar torrent:', item.infoHash, errMsg);
+                    const errItem: DownloadItem = { ...item, status: 'error', errorMessage: errMsg };
                     this.items.set(item.infoHash, errItem);
                     this.emit('update', errItem);
                 }
@@ -797,6 +801,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                 magnetUri: this.queuedMagnetUris.get(item.infoHash),
                 downloadSpeedLimitKBps: limits?.downloadSpeedLimitKBps,
                 uploadSpeedLimitKBps: limits?.uploadSpeedLimitKBps,
+                errorMessage: item.errorMessage,
             };
         });
 
@@ -907,8 +912,8 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             for (const trackerUrl of globalTrackers) {
                 try {
                     this.engine.addTracker(infoHash, trackerUrl);
-                } catch {
-                    // Silenciosamente ignorar erros individuais (ex: duplicata)
+                } catch (trackerErr) {
+                    this.log.warn('[DownloadManager] Falha ao aplicar tracker global:', infoHash, trackerUrl, (trackerErr as Error).message);
                 }
             }
         } catch (err) {
@@ -1017,7 +1022,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                         );
                         const current = this.items.get(infoHash);
                         if (current) {
-                            const errItem: DownloadItem = { ...current, status: 'error' };
+                            const errItem: DownloadItem = { ...current, status: 'error', errorMessage: (err as Error).message };
                             this.items.set(infoHash, errItem);
                             this.emit('update', errItem);
                         }
@@ -1047,7 +1052,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                     );
                     const current = this.items.get(infoHash);
                     if (current) {
-                        const errItem: DownloadItem = { ...current, status: 'error' };
+                        const errItem: DownloadItem = { ...current, status: 'error', errorMessage: (err as Error).message };
                         this.items.set(infoHash, errItem);
                         this.emit('update', errItem);
                     }

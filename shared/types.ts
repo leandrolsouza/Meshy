@@ -61,6 +61,7 @@ export interface DownloadItem {
     totalFileCount?: number; // quantidade total de arquivos
     downloadSpeedLimitKBps: number; // limite individual de download em KB/s (0 = sem limite)
     uploadSpeedLimitKBps: number; // limite individual de upload em KB/s (0 = sem limite)
+    errorMessage?: string; // mensagem de erro (quando status === 'error')
 }
 
 // ─── PersistedDownloadItem ────────────────────────────────────────────────────
@@ -81,6 +82,7 @@ export interface PersistedDownloadItem {
     selectedFileIndices?: number[]; // índices dos arquivos selecionados
     downloadSpeedLimitKBps?: number; // limite individual de download (persistido)
     uploadSpeedLimitKBps?: number; // limite individual de upload (persistido)
+    errorMessage?: string; // mensagem de erro (persistida)
 }
 
 // ─── AppSettings ──────────────────────────────────────────────────────────────
