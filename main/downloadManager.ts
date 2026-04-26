@@ -185,7 +185,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                         progress = totalSize > 0 ? downloadedSize / totalSize : 0;
                     }
                 }
-            } catch (_getFilesErr) {
+            } catch {
                 // getFiles pode falhar se o torrent ainda não está no engine (ex: resolving-metadata)
             }
 
@@ -589,7 +589,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
         // Tentar remover do engine (pode já ter sido removido)
         try {
             await this.engine.remove(infoHash, false);
-        } catch (_removeErr) {
+        } catch {
             // Pode não estar no engine — ok
         }
 
@@ -731,7 +731,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                         totalFileCount: files.length,
                     };
                 }
-            } catch (_getFilesErr) {
+            } catch {
                 // getFiles pode falhar — retornar item sem enriquecimento
             }
             return enriched;

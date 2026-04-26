@@ -2,8 +2,6 @@ import ElectronStoreDefault from 'electron-store';
 import type { AppSettings } from '../shared/types';
 import {
     DEFAULT_MAX_CONCURRENT_DOWNLOADS,
-    MIN_CONCURRENT_DOWNLOADS,
-    MAX_CONCURRENT_DOWNLOADS,
     isValidTrackerUrl,
     normalizeTrackerUrl,
     isValidSpeedLimit,

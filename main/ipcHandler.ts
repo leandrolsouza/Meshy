@@ -647,7 +647,7 @@ export function registerIpcHandlers(
                 for (const url of globalTrackers) {
                     try {
                         torrentEngine.addTracker(infoHash, url);
-                    } catch (_trackerErr) {
+                    } catch {
                         // Erros individuais de tracker (ex: duplicatas) são esperados
                     }
                 }
