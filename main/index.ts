@@ -22,11 +22,32 @@ let downloadManager: DownloadManager | null = null;
 process.on('uncaughtException', (error) => {
     logger.error('[CRASH] Exceção não capturada:', error.message, error.stack);
 
+    // Erros de rede do WebTorrent (uTP bind, DHT) são não-fatais.
+    // O app pode continuar funcionando sem uTP — apenas logar e continuar.
+    const isNetworkError =
+        error.message === 'permission denied' ||
+        error.message?.includes('EACCES') ||
+        error.message?.includes('EADDRINUSE') ||
+        error.stack?.includes('utp-native') ||
+        error.stack?.includes('bittorrent-dht');
+
+    if (isNetworkError) {
+        logger.warn('[CRASH] Erro de rede não-fatal ignorado:', error.message);
+        return;
+    }
+
     // Persistir sessão para não perder o estado dos downloads
     try {
         downloadManager?.persistSession();
     } catch (persistError) {
         logger.error('[CRASH] Falha ao persistir sessão:', String(persistError));
+    }
+
+    // Persistir métricas para análise post-mortem
+    try {
+        metrics.persistSnapshot();
+    } catch {
+        // Falha silenciosa — não queremos erros ao persistir métricas
     }
 
     // Exibir diálogo de erro para o usuário (se o app ainda estiver funcional)
@@ -53,6 +74,13 @@ process.on('unhandledRejection', (reason) => {
     } catch (persistError) {
         logger.error('[CRASH] Falha ao persistir sessão:', String(persistError));
     }
+
+    // Persistir métricas para análise post-mortem
+    try {
+        metrics.persistSnapshot();
+    } catch {
+        // Falha silenciosa
+    }
 });
 
 // ─── Factory para criação de BrowserWindow ────────────────────────────────────
@@ -76,21 +104,33 @@ function createMainWindow(): BrowserWindow {
 
     // ── CSP — Content-Security-Policy ─────────────────────────────────────────
     // Define uma política restritiva para mitigar XSS no renderer.
-    // 'unsafe-inline' em style-src é necessário para CSS-in-JS do React.
+    // Em dev, o Vite injeta scripts inline para HMR e precisa de connect-src
+    // para WebSocket. Relaxamos a CSP apenas em dev.
+    const isDev = !app.isPackaged;
+
     window.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+        const cspDirectives = isDev
+            ? [
+                "default-src 'self'",
+                "script-src 'self' 'unsafe-inline'",
+                "style-src 'self' 'unsafe-inline'",
+                "img-src 'self' data:",
+                "font-src 'self'",
+                "connect-src 'self' ws://localhost:*",
+            ]
+            : [
+                "default-src 'self'",
+                "script-src 'self'",
+                "style-src 'self' 'unsafe-inline'",
+                "img-src 'self' data:",
+                "font-src 'self'",
+                "connect-src 'self'",
+            ];
+
         callback({
             responseHeaders: {
                 ...details.responseHeaders,
-                'Content-Security-Policy': [
-                    [
-                        "default-src 'self'",
-                        "script-src 'self'",
-                        "style-src 'self' 'unsafe-inline'",
-                        "img-src 'self' data:",
-                        "font-src 'self'",
-                        "connect-src 'self'",
-                    ].join('; '),
-                ],
+                'Content-Security-Policy': [cspDirectives.join('; ')],
             },
         });
     });
@@ -129,6 +169,14 @@ function createMainWindow(): BrowserWindow {
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
+    // ── Habilitar persistência de métricas ─────────────────────────────────────
+    try {
+        const logsDir = app.getPath('logs');
+        metrics.enablePersistence(logsDir);
+    } catch {
+        logger.warn('[Metrics] Falha ao habilitar persistência de métricas');
+    }
+
     // ── Instantiate core services ──────────────────────────────────────────────
     const settingsManager = createSettingsManager();
     const settings = settingsManager.get();
@@ -145,9 +193,9 @@ app.whenReady().then(async () => {
     // Shared electron-store instance for download session persistence
     const downloadsStore = new ElectronStore({ name: 'downloads' });
     const persistedStore = {
-        get: (key: 'downloads') => downloadsStore.get(key),
-        set: (key: 'downloads', value: unknown) => downloadsStore.set(key, value),
-    };
+        get: (key: string) => downloadsStore.get(key),
+        set: (key: string, value: unknown) => downloadsStore.set(key, value),
+    } as import('./downloadManager').PersistedStore;
 
     downloadManager = createDownloadManager(torrentEngine, settingsManager, persistedStore);
 
@@ -157,6 +205,7 @@ app.whenReady().then(async () => {
     // ── Register before-quit handler to persist session ────────────────────────
     app.on('before-quit', () => {
         downloadManager?.persistSession();
+        metrics.persistSnapshot();
     });
 
     // ── Create main window ────────────────────────────────────────────────────

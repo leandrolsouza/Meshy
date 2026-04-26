@@ -143,6 +143,7 @@ function makeMockTorrentEngine() {
         setFileSelection: jest.fn().mockReturnValue([]),
         restart: jest.fn().mockResolvedValue(undefined),
         isRestarting: jest.fn().mockReturnValue(false),
+        healthCheck: jest.fn().mockReturnValue({ healthy: true, restarting: false, activeTorrents: 0, totalPeers: 0, uptimeMs: 0 }),
         on: jest.fn(),
         removeListener: jest.fn(),
     };

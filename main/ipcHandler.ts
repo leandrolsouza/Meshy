@@ -19,8 +19,16 @@ import { metrics } from './metrics';
 import type { MetricsSnapshot } from './metrics';
 import { validatePayload, infoHashSchema, infoHashUrlSchema, urlSchema } from './payloadValidator';
 import { validateSettingsPayload } from './settingsValidator';
+import { randomBytes } from 'crypto';
 
 export type { IPCResponse } from '../shared/types';
+
+// ─── Correlation ID ───────────────────────────────────────────────────────────
+
+/** Gera um correlation ID curto (8 caracteres hex) para rastreamento de operações IPC */
+function generateCorrelationId(): string {
+    return randomBytes(4).toString('hex');
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -150,6 +158,7 @@ function withTimeout<T>(
  */
 function withMetrics<T>(
     channel: string,
+    correlationId: string,
     handler: () => Promise<IPCResponse<T>>,
 ): Promise<IPCResponse<T>> {
     const start = Date.now();
@@ -158,6 +167,7 @@ function withMetrics<T>(
         metrics.recordIpcCall(channel, durationMs, result.success);
         logger.debug(
             `[IPC] ${channel} concluído`,
+            `cid=${correlationId}`,
             `durationMs=${durationMs}`,
             `success=${result.success}`,
         );
@@ -232,11 +242,12 @@ export function registerIpcHandlers(
         handler: (event: Electron.IpcMainInvokeEvent, payload: unknown) => Promise<IPCResponse<T>>,
     ): void => {
         ipcMain.handle(channel, async (event, payload) => {
+            const cid = generateCorrelationId();
             if (!rateLimiter.tryConsume(channel)) {
-                logger.warn(`[IPC] Rate limit excedido para canal: ${channel}`);
+                logger.warn(`[IPC] Rate limit excedido para canal: ${channel} cid=${cid}`);
                 return fail(RATE_LIMITED) as IPCResponse<T>;
             }
-            return withMetrics(channel, () => handler(event, payload));
+            return withMetrics(channel, cid, () => handler(event, payload));
         });
     };
 

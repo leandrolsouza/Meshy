@@ -74,6 +74,7 @@ function makeMockEngine(): TorrentEngine & EventEmitter {
         setTorrentUploadSpeedLimit: jest.fn(),
         restart: jest.fn().mockResolvedValue(undefined),
         isRestarting: jest.fn().mockReturnValue(false),
+        healthCheck: jest.fn().mockReturnValue({ healthy: true, restarting: false, activeTorrents: 0, totalPeers: 0, uptimeMs: 0 }),
     });
 
     return engine;
@@ -84,11 +85,14 @@ function makeMockEngine(): TorrentEngine & EventEmitter {
  * electron-store behavior for integration testing.
  */
 function makeMockStore(initial: PersistedDownloadItem[] = []): PersistedStore {
-    let data: PersistedDownloadItem[] | undefined = initial.length > 0 ? initial : undefined;
+    const data = new Map<string, unknown>();
+    if (initial.length > 0) {
+        data.set('downloads', initial);
+    }
     return {
-        get: jest.fn().mockImplementation(() => data),
-        set: jest.fn().mockImplementation((_key: string, value: PersistedDownloadItem[]) => {
-            data = value;
+        get: jest.fn().mockImplementation((key: string) => data.get(key)),
+        set: jest.fn().mockImplementation((key: string, value: unknown) => {
+            data.set(key, value);
         }),
     };
 }

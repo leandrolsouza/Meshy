@@ -54,7 +54,9 @@ export interface DownloadManager {
  */
 export interface PersistedStore {
     get(key: 'downloads'): PersistedDownloadItem[] | undefined;
+    get(key: 'downloadsSchemaVersion'): number | undefined;
     set(key: 'downloads', value: PersistedDownloadItem[]): void;
+    set(key: 'downloadsSchemaVersion', value: number): void;
 }
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -86,6 +88,16 @@ function torrentInfoToDownloadItem(
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const METADATA_TIMEOUT_MS = 60_000;
+
+/** Versão atual do schema de downloads persistidos */
+const DOWNLOADS_SCHEMA_VERSION = 1;
+
+/** Configuração de retry com exponential backoff */
+const RETRY_MAX_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 1_000; // 1s, 4s, 16s (base^attempt²)
+
+/** Intervalo de limpeza periódica de recursos órfãos (5 minutos) */
+const ORPHAN_CLEANUP_INTERVAL_MS = 5 * 60 * 1_000;
 
 // ─── Folder validation ────────────────────────────────────────────────────────
 
@@ -127,20 +139,39 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
     private readonly settings: SettingsManager;
     private readonly store: PersistedStore | undefined;
     private readonly log: Logger;
+    /** Timer de limpeza periódica de recursos órfãos */
+    private readonly cleanupTimer: ReturnType<typeof setInterval> | null;
 
     constructor(
         engine: TorrentEngine,
         settings: SettingsManager,
         store?: PersistedStore,
         log?: Logger,
+        options?: { disableCleanupTimer?: boolean },
     ) {
         super();
+        // Evitar warnings de memory leak — o ipcHandler e notificationManager
+        // registram listeners de 'update' e 'remove' por janela.
+        this.setMaxListeners(0);
         this.engine = engine;
         this.settings = settings;
         this.store = store;
         this.log = log ?? defaultLogger;
         this.maxConcurrent =
             settings.get().maxConcurrentDownloads ?? DEFAULT_MAX_CONCURRENT_DOWNLOADS;
+
+        // Limpeza periódica de recursos órfãos (5 minutos).
+        // Desabilitável em testes para evitar interferência com fake timers.
+        // unref() permite que o timer não impeça o encerramento do processo.
+        if (options?.disableCleanupTimer) {
+            this.cleanupTimer = null;
+        } else {
+            this.cleanupTimer = setInterval(
+                () => this._cleanupOrphans(),
+                ORPHAN_CLEANUP_INTERVAL_MS,
+            );
+            this.cleanupTimer.unref();
+        }
 
         // Subscribe to engine events
         this.engine.on('progress', (info: TorrentInfo) => {
@@ -612,58 +643,101 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             return retrying;
         }
 
-        // Há slots — tentar re-adicionar ao engine
-        if (magnetUri) {
-            try {
-                const info = await this.engine.addMagnetLink(magnetUri);
-                const updated: DownloadItem = {
-                    ...retrying,
-                    name: info.name || retrying.name,
-                    totalSize: info.totalSize || retrying.totalSize,
-                    status: info.status === 'downloading' ? 'downloading' : 'resolving-metadata',
-                };
-                this.items.set(infoHash, updated);
-                this.emit('update', updated);
+        // Há slots — tentar re-adicionar com exponential backoff
+        return this._retryWithBackoff(infoHash, retrying, magnetUri);
+    }
 
-                if (updated.status === 'resolving-metadata') {
-                    this._startMetadataTimer(infoHash);
+    /**
+     * Tenta re-adicionar um torrent ao engine com exponential backoff.
+     * Faz até RETRY_MAX_ATTEMPTS tentativas com delays crescentes (1s, 4s, 16s).
+     * Se todas falharem, marca o item como 'error' com a mensagem da última falha.
+     */
+    private async _retryWithBackoff(
+        infoHash: string,
+        retrying: DownloadItem,
+        magnetUri: string | undefined,
+    ): Promise<DownloadItem> {
+        let lastError: string = '';
+
+        for (let attempt = 0; attempt < RETRY_MAX_ATTEMPTS; attempt++) {
+            // Delay com exponential backoff (0ms na primeira tentativa)
+            if (attempt > 0) {
+                const delayMs = RETRY_BASE_DELAY_MS * Math.pow(4, attempt - 1);
+                this.log.info(
+                    `[DownloadManager] Retry tentativa ${attempt + 1}/${RETRY_MAX_ATTEMPTS}`,
+                    `aguardando ${delayMs}ms`,
+                    infoHash,
+                );
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+                // Verificar se o item ainda existe e está em estado retentável
+                const current = this.items.get(infoHash);
+                if (!current || (current.status !== 'queued' && current.status !== 'error')) {
+                    // Item foi removido ou mudou de estado durante o delay — abortar
+                    return current ?? retrying;
                 }
+            }
 
-                this._applyGlobalTrackers(infoHash);
-                return updated;
-            } catch (err) {
-                const errMsg = (err as Error).message;
-                this.log.error('[DownloadManager] Falha ao retentar download:', infoHash, errMsg);
-                const errItem: DownloadItem = {
-                    ...retrying,
-                    status: 'error',
-                    errorMessage: errMsg,
-                };
-                this.items.set(infoHash, errItem);
-                this.emit('update', errItem);
-                return errItem;
+            if (magnetUri) {
+                try {
+                    const info = await this.engine.addMagnetLink(magnetUri);
+                    const updated: DownloadItem = {
+                        ...retrying,
+                        name: info.name || retrying.name,
+                        totalSize: info.totalSize || retrying.totalSize,
+                        status:
+                            info.status === 'downloading' ? 'downloading' : 'resolving-metadata',
+                    };
+                    this.items.set(infoHash, updated);
+                    this.emit('update', updated);
+
+                    if (updated.status === 'resolving-metadata') {
+                        this._startMetadataTimer(infoHash);
+                    }
+
+                    this._applyGlobalTrackers(infoHash);
+                    return updated;
+                } catch (err) {
+                    lastError = (err as Error).message;
+                    this.log.warn(
+                        `[DownloadManager] Retry tentativa ${attempt + 1}/${RETRY_MAX_ATTEMPTS} falhou:`,
+                        infoHash,
+                        lastError,
+                    );
+                }
+            } else {
+                // Sem magnet URI — tentar retomar via engine.resume
+                try {
+                    await this.engine.resume(infoHash);
+                    const updated: DownloadItem = { ...retrying, status: 'downloading' };
+                    this.items.set(infoHash, updated);
+                    this.emit('update', updated);
+                    return updated;
+                } catch (err) {
+                    lastError = (err as Error).message;
+                    this.log.warn(
+                        `[DownloadManager] Retry tentativa ${attempt + 1}/${RETRY_MAX_ATTEMPTS} falhou (resume):`,
+                        infoHash,
+                        lastError,
+                    );
+                }
             }
         }
 
-        // Sem magnet URI — tentar retomar via engine.resume
-        try {
-            await this.engine.resume(infoHash);
-            const updated: DownloadItem = { ...retrying, status: 'downloading' };
-            this.items.set(infoHash, updated);
-            this.emit('update', updated);
-            return updated;
-        } catch (err) {
-            const errMsg = (err as Error).message;
-            this.log.error(
-                '[DownloadManager] Falha ao retentar download (resume):',
-                infoHash,
-                errMsg,
-            );
-            const errItem: DownloadItem = { ...retrying, status: 'error', errorMessage: errMsg };
-            this.items.set(infoHash, errItem);
-            this.emit('update', errItem);
-            return errItem;
-        }
+        // Todas as tentativas falharam
+        this.log.error(
+            `[DownloadManager] Retry esgotado após ${RETRY_MAX_ATTEMPTS} tentativas:`,
+            infoHash,
+            lastError,
+        );
+        const errItem: DownloadItem = {
+            ...retrying,
+            status: 'error',
+            errorMessage: lastError,
+        };
+        this.items.set(infoHash, errItem);
+        this.emit('update', errItem);
+        return errItem;
     }
 
     // ── remove ──────────────────────────────────────────────────────────────────
@@ -742,6 +816,24 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
 
     async restoreSession(): Promise<void> {
         if (!this.store) return;
+
+        // ── Migração de schema ────────────────────────────────────────────────
+        // Verifica a versão do schema persistido e aplica migrações se necessário.
+        // Dados sem versão (legado) são tratados como versão 1 (formato atual).
+        const persistedVersion = this.store.get('downloadsSchemaVersion') ?? 1;
+
+        if (persistedVersion > DOWNLOADS_SCHEMA_VERSION) {
+            this.log.warn(
+                '[DownloadManager] Schema de downloads mais recente que o esperado:',
+                `persistido=${persistedVersion}`,
+                `atual=${DOWNLOADS_SCHEMA_VERSION}`,
+                '— tentando carregar mesmo assim',
+            );
+        }
+
+        // Migrações futuras seriam aplicadas aqui:
+        // if (persistedVersion < 2) { migrateV1toV2(store); }
+        // if (persistedVersion < 3) { migrateV2toV3(store); }
 
         const persisted = this.store.get('downloads') ?? [];
 
@@ -991,6 +1083,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
         });
 
         this.store.set('downloads', persisted);
+        this.store.set('downloadsSchemaVersion', DOWNLOADS_SCHEMA_VERSION);
     }
 
     // ── setMaxConcurrentDownloads ───────────────────────────────────────────────
@@ -1077,6 +1170,48 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
     }
 
     // ── Private helpers ─────────────────────────────────────────────────────────
+
+    /**
+     * Limpa recursos órfãos: entries em metadataTimers, speedLimitsMap,
+     * selectedFileIndicesMap e queuedMagnetUris que não possuem item
+     * correspondente no mapa de downloads. Isso pode acontecer se uma
+     * remoção falhar parcialmente ou se houver um bug de sincronização.
+     */
+    private _cleanupOrphans(): void {
+        let cleaned = 0;
+
+        for (const infoHash of this.metadataTimers.keys()) {
+            if (!this.items.has(infoHash)) {
+                this._clearMetadataTimer(infoHash);
+                cleaned++;
+            }
+        }
+
+        for (const infoHash of this.speedLimitsMap.keys()) {
+            if (!this.items.has(infoHash)) {
+                this.speedLimitsMap.delete(infoHash);
+                cleaned++;
+            }
+        }
+
+        for (const infoHash of this.selectedFileIndicesMap.keys()) {
+            if (!this.items.has(infoHash)) {
+                this.selectedFileIndicesMap.delete(infoHash);
+                cleaned++;
+            }
+        }
+
+        for (const infoHash of this.queuedMagnetUris.keys()) {
+            if (!this.items.has(infoHash)) {
+                this.queuedMagnetUris.delete(infoHash);
+                cleaned++;
+            }
+        }
+
+        if (cleaned > 0) {
+            this.log.warn(`[DownloadManager] Limpeza periódica: ${cleaned} recurso(s) órfão(s) removido(s)`);
+        }
+    }
 
     /**
      * Aplica trackers globais automaticamente a um torrent recém-adicionado.
@@ -1277,12 +1412,14 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
  * @param settings  SettingsManager instance to read configuration from.
  * @param store     Optional persisted store for session persistence (injectable for tests).
  * @param log       Optional logger instance (defaults to electron-log; injectable for tests).
+ * @param options   Optional configuration (e.g., disableCleanupTimer for tests).
  */
 export function createDownloadManager(
     engine: TorrentEngine,
     settings: SettingsManager,
     store?: PersistedStore,
     log?: Logger,
+    options?: { disableCleanupTimer?: boolean },
 ): DownloadManager {
-    return new DownloadManagerImpl(engine, settings, store, log);
+    return new DownloadManagerImpl(engine, settings, store, log, options);
 }

@@ -518,6 +518,7 @@ function makeMockEngine(infoHash: string): TorrentEngine & EventEmitter {
         setTorrentUploadSpeedLimit: jest.fn(),
         restart: jest.fn().mockResolvedValue(undefined),
         isRestarting: jest.fn().mockReturnValue(false),
+        healthCheck: jest.fn().mockReturnValue({ healthy: true, restarting: false, activeTorrents: 0, totalPeers: 0, uptimeMs: 0 }),
     });
 
     return engine;
@@ -551,10 +552,10 @@ describe('Property 11: Novos downloads usam a pasta de destino atual', () => {
                     const magnetUri = `magnet:?xt=urn:btih:${infoHash}`;
 
                     const silentLogger = {
-                        info: () => {},
-                        warn: () => {},
-                        error: () => {},
-                        debug: () => {},
+                        info: () => { },
+                        warn: () => { },
+                        error: () => { },
+                        debug: () => { },
                     };
 
                     const downloadManager = createDownloadManager(
@@ -562,6 +563,7 @@ describe('Property 11: Novos downloads usam a pasta de destino atual', () => {
                         settingsManager,
                         undefined,
                         silentLogger,
+                        { disableCleanupTimer: true },
                     );
                     const item = await downloadManager.addMagnetLink(magnetUri);
 
@@ -618,10 +620,10 @@ describe('Property 12: Pasta inválida resulta em erro antes de iniciar download
                     const magnetUri = `magnet:?xt=urn:btih:${infoHash}`;
 
                     const silentLogger = {
-                        info: () => {},
-                        warn: () => {},
-                        error: () => {},
-                        debug: () => {},
+                        info: () => { },
+                        warn: () => { },
+                        error: () => { },
+                        debug: () => { },
                     };
 
                     const downloadManager = createDownloadManager(
@@ -629,6 +631,7 @@ describe('Property 12: Pasta inválida resulta em erro antes de iniciar download
                         settingsManager,
                         undefined,
                         silentLogger,
+                        { disableCleanupTimer: true },
                     );
 
                     // Attempting to add a download with an invalid folder should throw

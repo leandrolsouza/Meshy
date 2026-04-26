@@ -76,6 +76,7 @@ function makeMockEngine(magnetInfo: TorrentInfo = makeTorrentInfo()): TorrentEng
         setTorrentUploadSpeedLimit: jest.fn(),
         restart: jest.fn().mockResolvedValue(undefined),
         isRestarting: jest.fn().mockReturnValue(false),
+        healthCheck: jest.fn().mockReturnValue({ healthy: true, restarting: false, activeTorrents: 0, totalPeers: 0, uptimeMs: 0 }),
     });
 
     return engine;
@@ -778,11 +779,14 @@ function makePersistedItem(overrides: Partial<PersistedDownloadItem> = {}): Pers
 }
 
 function makeMockStore(initial: PersistedDownloadItem[] = []): PersistedStore {
-    let data: PersistedDownloadItem[] | undefined = initial.length > 0 ? initial : undefined;
+    const data = new Map<string, unknown>();
+    if (initial.length > 0) {
+        data.set('downloads', initial);
+    }
     return {
-        get: jest.fn().mockImplementation(() => data),
-        set: jest.fn().mockImplementation((_key: string, value: PersistedDownloadItem[]) => {
-            data = value;
+        get: jest.fn().mockImplementation((key: string) => data.get(key)),
+        set: jest.fn().mockImplementation((key: string, value: unknown) => {
+            data.set(key, value);
         }),
     };
 }
@@ -1607,11 +1611,11 @@ describe('DownloadManager — Aplicação automática de trackers globais (Requi
 
         // Segundo tracker lança erro (duplicata)
         (engine.addTracker as jest.Mock)
-            .mockImplementationOnce(() => {}) // tracker1 OK
+            .mockImplementationOnce(() => { }) // tracker1 OK
             .mockImplementationOnce(() => {
                 throw new Error('Tracker já presente');
             }) // tracker2 falha
-            .mockImplementationOnce(() => {}); // tracker3 OK
+            .mockImplementationOnce(() => { }); // tracker3 OK
 
         const info = makeTorrentInfo({
             infoHash: INFO_HASH,
