@@ -75,6 +75,15 @@
     border-top: 1px solid var(--color-border-light);
 }
 
+/* ─── Action Error ─────────────────────────────────────────────────────── */
+
+.actionError {
+    padding: var(--space-sm) var(--space-md);
+    margin-top: var(--space-sm);
+    font-size: var(--font-size-sm);
+    color: var(--color-danger);
+}
+
 /* ─── Expanded File Selector Section ──────────────────────────────────────── */
 
 .fileSelectorSection {
@@ -113,4 +122,40 @@
     margin-bottom: calc(-1 * var(--space-lg));
     padding: var(--space-md) var(--space-lg) var(--space-sm);
     border-radius: 0 0 var(--card-radius) var(--card-radius);
+}
+
+/* ─── Context Menu ────────────────────────────────────────────────────────── */
+
+.contextMenu {
+    position: fixed;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-md);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    list-style: none;
+    margin: 0;
+    padding: var(--space-xs) 0;
+    min-width: 180px;
+}
+
+.contextMenuItem {
+    padding: var(--space-sm) var(--space-md);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    transition: background-color var(--transition-fast);
+}
+
+.contextMenuItem:hover {
+    background-color: var(--color-hover);
+}
+
+.contextMenuItemDisabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.contextMenuItemDisabled:hover {
+    background-color: transparent;
 }

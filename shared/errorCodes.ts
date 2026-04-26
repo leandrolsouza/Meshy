@@ -31,6 +31,12 @@ export const ErrorCodes = {
     // Seleção de arquivos
     FILE_SELECTION_EMPTY: 'error.files.selectionEmpty',
     FILE_INDEX_INVALID: 'error.files.indexInvalid',
+
+    // Destino (pasta/arquivo)
+    DESTINATION_FOLDER_NOT_FOUND: 'error.destination.folderNotFound',
+    DESTINATION_FILE_NOT_FOUND: 'error.destination.fileNotFound',
+    DESTINATION_OPEN_FAILED: 'error.destination.openFailed',
+    DESTINATION_NOT_COMPLETED: 'error.destination.notCompleted',
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

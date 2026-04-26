@@ -66,11 +66,17 @@
     "downloads.actions.expandFiles": "Files",
     "downloads.actions.expandFilesAriaLabel": "Expand file list",
     "downloads.actions.collapseFilesAriaLabel": "Collapse file list",
+    "downloads.actions.openFolder": "Open folder",
+    "downloads.actions.openFile": "Open file",
+    "downloads.actions.openFolderAriaLabel": "Open destination folder for {name}",
+    "downloads.actions.openFileAriaLabel": "Open file for {name}",
     "downloads.actions.expandTrackers": "Trackers",
     "downloads.actions.expandTrackersAriaLabel": "Expand tracker panel",
     "downloads.actions.collapseTrackersAriaLabel": "Collapse tracker panel",
     "downloads.filesLoading": "Loading files...",
     "downloads.filesError": "Error fetching files",
+    "downloads.contextMenu.openFolder": "Open folder",
+    "downloads.contextMenu.openFile": "Open file",
     "addTorrent.title": "Add Torrent",
     "addTorrent.magnetLink.label": "Magnet Links",
     "addTorrent.magnetLink.placeholder": "Paste one or more magnet links (one per line)\nmagnet:?xt=urn:btih:...\nmagnet:?xt=urn:btih:...",
@@ -187,5 +193,9 @@
     "error.settings.invalidPayload": "Invalid settings.",
     "error.settings.invalidLocale": "Invalid language.",
     "error.files.selectionEmpty": "File selection is empty.",
-    "error.files.indexInvalid": "Invalid file index."
+    "error.files.indexInvalid": "Invalid file index.",
+    "error.destination.folderNotFound": "Destination folder not found",
+    "error.destination.fileNotFound": "File not found",
+    "error.destination.openFailed": "Failed to open destination",
+    "error.destination.notCompleted": "Download not completed"
 }

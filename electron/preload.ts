@@ -100,6 +100,16 @@ const meshyAPI: MeshyAPI = {
         return ipcRenderer.invoke('tracker:remove-global', { url });
     },
 
+    // ── Destino — abrir pasta ou arquivo ────────────────────────────────────────
+
+    openFolder(infoHash: string): Promise<IPCResponse<void>> {
+        return ipcRenderer.invoke('torrent:open-folder', { infoHash });
+    },
+
+    openFile(infoHash: string): Promise<IPCResponse<void>> {
+        return ipcRenderer.invoke('torrent:open-file', { infoHash });
+    },
+
     // ── Events ──────────────────────────────────────────────────────────────────
 
     /**

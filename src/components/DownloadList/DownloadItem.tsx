@@ -8,6 +8,8 @@ import {
     VscTrash,
     VscChevronDown,
     VscChevronRight,
+    VscFolderOpened,
+    VscGoToFile,
 } from 'react-icons/vsc';
 import type { DownloadItem as DownloadItemType, TorrentFileInfo } from '../../../shared/types';
 import { ProgressBar } from '../common/ProgressBar';
@@ -94,6 +96,12 @@ export function DownloadItem({
     const [filesError, setFilesError] = useState<string | null>(null);
     const [selectionLoading, setSelectionLoading] = useState(false);
     const [selectionError, setSelectionError] = useState<string | null>(null);
+
+    // ── Action error state (Task 5.3) ────────────────────────────────────────
+    const [actionError, setActionError] = useState<string | null>(null);
+
+    // ── Context menu state (Task 5.4) ────────────────────────────────────────
+    const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
     // Can expand when torrent is not in resolving-metadata state
     const canExpand = item.status !== 'resolving-metadata' && item.status !== 'queued';
@@ -208,6 +216,58 @@ export function DownloadItem({
         setTrackersExpanded((prev) => !prev);
     }, []);
 
+    // ── Auto-dismiss action error after 5 seconds (Task 5.3) ────────────────
+    useEffect(() => {
+        if (!actionError) return;
+
+        const timer = setTimeout(() => {
+            setActionError(null);
+        }, 5000);
+
+        return () => {
+            clearTimeout(timer);
+        };
+    }, [actionError]);
+
+    // ── Open folder handler (Task 5.1 + 5.3) ────────────────────────────────
+    const handleOpenFolder = useCallback(async () => {
+        setActionError(null);
+        const response = await window.meshy.openFolder(item.infoHash);
+        if (response.success === false) {
+            setActionError(resolveErrorMessage(intl, response.error));
+        }
+    }, [item.infoHash, intl]);
+
+    // ── Open file handler (Task 5.2 + 5.3) ──────────────────────────────────
+    const handleOpenFile = useCallback(async () => {
+        setActionError(null);
+        const response = await window.meshy.openFile(item.infoHash);
+        if (response.success === false) {
+            setActionError(resolveErrorMessage(intl, response.error));
+        }
+    }, [item.infoHash, intl]);
+
+    // ── Context menu handler (Task 5.4) ─────────────────────────────────────
+    const handleContextMenu = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        setContextMenu({ x: e.clientX, y: e.clientY });
+    }, [setContextMenu]);
+
+    // ── Close context menu on outside click (Task 5.4) ───────────────────────
+    useEffect(() => {
+        if (!contextMenu) return;
+
+        const handleClick = (): void => {
+            setContextMenu(null);
+        };
+
+        document.addEventListener('click', handleClick);
+
+        return () => {
+            document.removeEventListener('click', handleClick);
+        };
+    }, [contextMenu]);
+
     // ── File count display (Task 6.4) ────────────────────────────────────────
     const hasFileCount =
         item.selectedFileCount !== undefined &&
@@ -215,7 +275,7 @@ export function DownloadItem({
         item.totalFileCount > 0;
 
     return (
-        <div className={cardClassName}>
+        <div className={cardClassName} onContextMenu={handleContextMenu}>
             {/* Name and status */}
             <div className={styles.header}>
                 <span className={styles.name} title={item.name}>
@@ -334,6 +394,32 @@ export function DownloadItem({
                         {intl.formatMessage({ id: 'downloads.actions.expandTrackers' })}
                     </button>
                 )}
+                {isCompleted && (
+                    <button
+                        className="btn"
+                        onClick={handleOpenFolder}
+                        aria-label={intl.formatMessage(
+                            { id: 'downloads.actions.openFolderAriaLabel' },
+                            { name: item.name },
+                        )}
+                    >
+                        <VscFolderOpened />{' '}
+                        {intl.formatMessage({ id: 'downloads.actions.openFolder' })}
+                    </button>
+                )}
+                {isCompleted && item.selectedFileCount === 1 && (
+                    <button
+                        className="btn"
+                        onClick={handleOpenFile}
+                        aria-label={intl.formatMessage(
+                            { id: 'downloads.actions.openFileAriaLabel' },
+                            { name: item.name },
+                        )}
+                    >
+                        <VscGoToFile />{' '}
+                        {intl.formatMessage({ id: 'downloads.actions.openFile' })}
+                    </button>
+                )}
                 {item.status === 'downloading' && (
                     <button
                         className="btn"
@@ -369,6 +455,13 @@ export function DownloadItem({
                     <VscTrash /> {intl.formatMessage({ id: 'common.remove' })}
                 </button>
             </div>
+
+            {/* Action error display (Task 5.3) */}
+            {actionError && (
+                <div className={styles.actionError} role="alert">
+                    {actionError}
+                </div>
+            )}
 
             {/* Expanded file selector section (Task 6.2) */}
             {expanded && (
@@ -422,6 +515,44 @@ export function DownloadItem({
                 }}
                 onCancel={() => setIsConfirmDialogOpen(false)}
             />
+
+            {/* Context menu (Task 5.4) */}
+            {contextMenu && (
+                <ul
+                    role="menu"
+                    className={styles.contextMenu}
+                    style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y }}
+                >
+                    <li
+                        role="menuitem"
+                        className={`${styles.contextMenuItem}${!isCompleted ? ` ${styles.contextMenuItemDisabled}` : ''}`}
+                        aria-disabled={!isCompleted}
+                        onClick={() => {
+                            if (isCompleted) {
+                                handleOpenFolder();
+                                setContextMenu(null);
+                            }
+                        }}
+                    >
+                        {intl.formatMessage({ id: 'downloads.contextMenu.openFolder' })}
+                    </li>
+                    {item.selectedFileCount === 1 && (
+                        <li
+                            role="menuitem"
+                            className={`${styles.contextMenuItem}${!isCompleted ? ` ${styles.contextMenuItemDisabled}` : ''}`}
+                            aria-disabled={!isCompleted}
+                            onClick={() => {
+                                if (isCompleted) {
+                                    handleOpenFile();
+                                    setContextMenu(null);
+                                }
+                            }}
+                        >
+                            {intl.formatMessage({ id: 'downloads.contextMenu.openFile' })}
+                        </li>
+                    )}
+                </ul>
+            )}
         </div>
     );
 }

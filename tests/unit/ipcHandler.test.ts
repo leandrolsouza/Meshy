@@ -122,6 +122,8 @@ describe('registerIpcHandlers — IPC channel registration (Requirement 8.1)', (
         'tracker:remove-global',
         'renderer:report-error',
         'app:get-metrics',
+        'torrent:open-folder',
+        'torrent:open-file',
     ];
 
     beforeEach(() => {
@@ -144,7 +146,7 @@ describe('registerIpcHandlers — IPC channel registration (Requirement 8.1)', (
         }
     });
 
-    it('registers exactly 23 IPC channels (no extra channels)', () => {
+    it('registers exactly 22 IPC channels (no extra channels)', () => {
         const downloadManager = makeMockDownloadManager();
         const settingsManager = makeMockSettingsManager();
         const torrentEngine = makeMockTorrentEngine();

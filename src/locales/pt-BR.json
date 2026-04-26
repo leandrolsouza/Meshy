@@ -66,11 +66,17 @@
     "downloads.actions.expandFiles": "Arquivos",
     "downloads.actions.expandFilesAriaLabel": "Expandir lista de arquivos",
     "downloads.actions.collapseFilesAriaLabel": "Recolher lista de arquivos",
+    "downloads.actions.openFolder": "Abrir pasta",
+    "downloads.actions.openFile": "Abrir arquivo",
+    "downloads.actions.openFolderAriaLabel": "Abrir pasta de destino de {name}",
+    "downloads.actions.openFileAriaLabel": "Abrir arquivo de {name}",
     "downloads.actions.expandTrackers": "Trackers",
     "downloads.actions.expandTrackersAriaLabel": "Expandir painel de trackers",
     "downloads.actions.collapseTrackersAriaLabel": "Recolher painel de trackers",
     "downloads.filesLoading": "Carregando arquivos...",
     "downloads.filesError": "Erro ao buscar arquivos",
+    "downloads.contextMenu.openFolder": "Abrir pasta",
+    "downloads.contextMenu.openFile": "Abrir arquivo",
     "addTorrent.title": "Adicionar Torrent",
     "addTorrent.magnetLink.label": "Magnet Links",
     "addTorrent.magnetLink.placeholder": "Cole um ou mais magnet links (um por linha)\nmagnet:?xt=urn:btih:...\nmagnet:?xt=urn:btih:...",
@@ -187,5 +193,9 @@
     "error.settings.invalidPayload": "Configurações inválidas.",
     "error.settings.invalidLocale": "Idioma inválido.",
     "error.files.selectionEmpty": "Seleção de arquivos vazia.",
-    "error.files.indexInvalid": "Índice de arquivo inválido."
+    "error.files.indexInvalid": "Índice de arquivo inválido.",
+    "error.destination.folderNotFound": "Pasta de destino não encontrada",
+    "error.destination.fileNotFound": "Arquivo não encontrado",
+    "error.destination.openFailed": "Falha ao abrir destino",
+    "error.destination.notCompleted": "Download não concluído"
 }

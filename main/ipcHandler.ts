@@ -1,5 +1,6 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron';
+import { ipcMain, dialog, shell, BrowserWindow } from 'electron';
 import { existsSync, accessSync, constants as fsConstants } from 'fs';
+import { join } from 'path';
 import type { DownloadManager } from './downloadManager';
 import type { SettingsManager } from './settingsManager';
 import type { TorrentEngine } from './torrentEngine';
@@ -787,6 +788,108 @@ export function registerIpcHandlers(
                 return ok(undefined);
             } catch (err) {
                 return failWithLog('renderer:report-error', err, scopedLog);
+            }
+        },
+    );
+
+    // ── torrent:open-folder ───────────────────────────────────────────────────
+    // Abre a pasta de destino do download no gerenciador de arquivos do SO.
+    trackedHandle(
+        'torrent:open-folder',
+        async (_event, payload: unknown): Promise<IPCResponse<void>> => {
+            try {
+                const result = validatePayload<{ infoHash: string }>(payload, infoHashSchema);
+                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
+
+                const { infoHash } = result.data;
+
+                // Buscar o DownloadItem correspondente
+                const allItems = downloadManager.getAll();
+                const item = allItems.find((i) => i.infoHash === infoHash);
+
+                if (!item) {
+                    return fail(ErrorCodes.TORRENT_NOT_FOUND);
+                }
+
+                // Verificar se a pasta de destino existe
+                if (!existsSync(item.destinationFolder)) {
+                    return fail(ErrorCodes.DESTINATION_FOLDER_NOT_FOUND);
+                }
+
+                // Abrir a pasta no gerenciador de arquivos do SO
+                const shellError = await shell.openPath(item.destinationFolder);
+
+                if (shellError) {
+                    return fail(ErrorCodes.DESTINATION_OPEN_FAILED);
+                }
+
+                return ok(undefined);
+            } catch (err) {
+                return failWithLog('torrent:open-folder', err);
+            }
+        },
+    );
+
+    // ── torrent:open-file ────────────────────────────────────────────────────
+    // Abre o arquivo baixado diretamente no aplicativo padrão do SO.
+    trackedHandle(
+        'torrent:open-file',
+        async (_event, payload: unknown): Promise<IPCResponse<void>> => {
+            try {
+                if (torrentEngine?.isRestarting()) {
+                    return fail(ErrorCodes.ENGINE_RESTARTING);
+                }
+
+                const result = validatePayload<{ infoHash: string }>(payload, infoHashSchema);
+                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
+
+                const { infoHash } = result.data;
+
+                // Buscar o DownloadItem correspondente
+                const allItems = downloadManager.getAll();
+                const item = allItems.find((i) => i.infoHash === infoHash);
+
+                if (!item) {
+                    return fail(ErrorCodes.TORRENT_NOT_FOUND);
+                }
+
+                // Verificar se o download está concluído
+                if (item.status !== 'completed') {
+                    return fail(ErrorCodes.DESTINATION_NOT_COMPLETED);
+                }
+
+                // Obter a lista de arquivos do torrent
+                if (!torrentEngine) {
+                    return fail(ErrorCodes.ENGINE_NOT_AVAILABLE);
+                }
+
+                const files = torrentEngine.getFiles(infoHash);
+
+                // Encontrar o primeiro arquivo selecionado
+                const selectedFile = files.find((file) => file.selected === true);
+
+                if (!selectedFile) {
+                    return fail(ErrorCodes.DESTINATION_FILE_NOT_FOUND);
+                }
+
+                // Construir o caminho completo do arquivo
+                const fullPath = join(item.destinationFolder, selectedFile.path);
+
+                // Verificar se o arquivo existe
+                if (!existsSync(fullPath)) {
+                    return fail(ErrorCodes.DESTINATION_FILE_NOT_FOUND);
+                }
+
+                // Abrir o arquivo no aplicativo padrão do SO
+                const shellError = await shell.openPath(fullPath);
+
+                if (shellError) {
+                    return fail(ErrorCodes.DESTINATION_OPEN_FAILED);
+                }
+
+                return ok(undefined);
+            } catch (err) {
+                return failWithLog('torrent:open-file', err);
             }
         },
     );

@@ -133,6 +133,9 @@ export interface MeshyAPI {
     removeGlobalTracker(url: string): Promise<IPCResponse<string[]>>;
     // Retry
     retryDownload(infoHash: string): Promise<IPCResponse<DownloadItem>>;
+    // Destino — abrir pasta ou arquivo
+    openFolder(infoHash: string): Promise<IPCResponse<void>>;
+    openFile(infoHash: string): Promise<IPCResponse<void>>;
     // Events
     onProgress(callback: (items: DownloadItem[]) => void): () => void;
     onError(callback: (data: { infoHash: string; message: string }) => void): () => void;
