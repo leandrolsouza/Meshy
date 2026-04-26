@@ -10,6 +10,8 @@
  * @returns String legível, ex: "0 B", "1.50 KB", "1.00 MB", "2.50 GB"
  */
 export function formatBytes(n: number): string {
+    if (n < 0) n = 0;
+
     const GB = 1024 ** 3;
     const MB = 1024 ** 2;
     const KB = 1024;

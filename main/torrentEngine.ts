@@ -430,7 +430,10 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
             name: file.name,
             path: file.path,
             length: file.length,
-            downloaded: file.downloaded,
+            // Clamp: o WebTorrent pode retornar valores negativos ou acima do
+            // tamanho real após falhas de verificação de peças ou desseleção
+            // dinâmica de arquivos.
+            downloaded: Math.max(0, Math.min(file.downloaded, file.length)),
             selected: selected.has(index),
         }));
     }
