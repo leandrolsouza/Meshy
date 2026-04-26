@@ -38,6 +38,8 @@ export interface DownloadManager {
     ): { downloadSpeedLimitKBps: number; uploadSpeedLimitKBps: number };
     /** Recalcula o limite efetivo de todos os torrents com limite individual ao alterar o limite global */
     onGlobalSpeedLimitChanged(): void;
+    /** Retenta um download que está em status 'error' ou 'metadata-failed' */
+    retryDownload(infoHash: string): Promise<DownloadItem>;
     on(event: 'update', listener: (item: DownloadItem) => void): void;
     on(event: 'remove', listener: (infoHash: string) => void): void;
 }
@@ -551,6 +553,102 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
         }
 
         return updatedFiles;
+    }
+
+    // ── retryDownload ─────────────────────────────────────────────────────────
+
+    async retryDownload(infoHash: string): Promise<DownloadItem> {
+        const existing = this.items.get(infoHash);
+        if (!existing) {
+            throw new Error(`Torrent não encontrado: ${infoHash}`);
+        }
+
+        // Só permite retry de downloads em estado de erro
+        if (existing.status !== 'error' && existing.status !== 'metadata-failed') {
+            throw new Error(`Torrent não está em estado de erro: ${existing.status}`);
+        }
+
+        this.log.info('[DownloadManager] Retentando download:', infoHash, existing.name);
+
+        // Limpar estado de erro
+        const retrying: DownloadItem = {
+            ...existing,
+            status: 'queued',
+            errorMessage: undefined,
+        };
+        this.items.set(infoHash, retrying);
+        this.emit('update', retrying);
+
+        // Tentar remover do engine (pode já ter sido removido)
+        try {
+            await this.engine.remove(infoHash, false);
+        } catch (_removeErr) {
+            // Pode não estar no engine — ok
+        }
+
+        // Se há um magnet URI persistido, usar para re-adicionar
+        const magnetUri = this.queuedMagnetUris.get(infoHash);
+        if (magnetUri) {
+            this.queuedMagnetUris.delete(infoHash);
+        }
+
+        // Verificar se há slots disponíveis
+        if (this._activeCount() >= this.maxConcurrent) {
+            // Sem slots — enfileirar
+            if (!this.queue.includes(infoHash)) {
+                this.queue.push(infoHash);
+            }
+            if (magnetUri) {
+                this.queuedMagnetUris.set(infoHash, magnetUri);
+            }
+            this.emit('update', retrying);
+            return retrying;
+        }
+
+        // Há slots — tentar re-adicionar ao engine
+        if (magnetUri) {
+            try {
+                const info = await this.engine.addMagnetLink(magnetUri);
+                const updated: DownloadItem = {
+                    ...retrying,
+                    name: info.name || retrying.name,
+                    totalSize: info.totalSize || retrying.totalSize,
+                    status: info.status === 'downloading' ? 'downloading' : 'resolving-metadata',
+                };
+                this.items.set(infoHash, updated);
+                this.emit('update', updated);
+
+                if (updated.status === 'resolving-metadata') {
+                    this._startMetadataTimer(infoHash);
+                }
+
+                this._applyGlobalTrackers(infoHash);
+                return updated;
+            } catch (err) {
+                const errMsg = (err as Error).message;
+                this.log.error('[DownloadManager] Falha ao retentar download:', infoHash, errMsg);
+                const errItem: DownloadItem = { ...retrying, status: 'error', errorMessage: errMsg };
+                this.items.set(infoHash, errItem);
+                this.emit('update', errItem);
+                return errItem;
+            }
+        }
+
+        // Sem magnet URI — tentar retomar via engine.resume
+        try {
+            await this.engine.resume(infoHash);
+            const updated: DownloadItem = { ...retrying, status: 'downloading' };
+            this.items.set(infoHash, updated);
+            this.emit('update', updated);
+            return updated;
+        } catch (err) {
+            const errMsg = (err as Error).message;
+            this.log.error('[DownloadManager] Falha ao retentar download (resume):', infoHash, errMsg);
+            const errItem: DownloadItem = { ...retrying, status: 'error', errorMessage: errMsg };
+            this.items.set(infoHash, errItem);
+            this.emit('update', errItem);
+            return errItem;
+        }
     }
 
     // ── remove ──────────────────────────────────────────────────────────────────

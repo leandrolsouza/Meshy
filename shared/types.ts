@@ -144,6 +144,8 @@ export interface MeshyAPI {
     getTorrentSpeedLimits(
         infoHash: string,
     ): Promise<IPCResponse<{ downloadSpeedLimitKBps: number; uploadSpeedLimitKBps: number }>>;
+    // Retry
+    retryDownload(infoHash: string): Promise<IPCResponse<DownloadItem>>;
     // Events
     onProgress(callback: (items: DownloadItem[]) => void): () => void;
     onError(callback: (data: { infoHash: string; message: string }) => void): () => void;

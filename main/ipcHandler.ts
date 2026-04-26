@@ -44,6 +44,33 @@ function failWithLog(channel: string, err: unknown, scopedLog?: ScopedLogger): I
     return { success: false, error: message };
 }
 
+// ─── Timeout wrapper ──────────────────────────────────────────────────────────
+
+/** Timeout padrão para operações IPC (30 segundos) */
+const IPC_TIMEOUT_MS = 30_000;
+
+/**
+ * Envolve uma Promise com um timeout. Se a operação não completar dentro do
+ * prazo, rejeita com um erro descritivo incluindo o nome do canal IPC.
+ */
+function withTimeout<T>(promise: Promise<T>, channel: string, timeoutMs = IPC_TIMEOUT_MS): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        const timer = setTimeout(() => {
+            reject(new Error(`Operação expirou após ${timeoutMs}ms`));
+        }, timeoutMs);
+
+        promise
+            .then((result) => {
+                clearTimeout(timer);
+                resolve(result);
+            })
+            .catch((err) => {
+                clearTimeout(timer);
+                reject(err);
+            });
+    });
+}
+
 // ─── Handler registration ─────────────────────────────────────────────────────
 
 /**
@@ -116,7 +143,10 @@ export function registerIpcHandlers(
                 });
                 if (!result.valid) return fail(ErrorCodes.INVALID_FILE_PATH);
 
-                const item = await downloadManager.addTorrentFile(result.data.filePath);
+                const item = await withTimeout(
+                    downloadManager.addTorrentFile(result.data.filePath),
+                    'torrent:add-file',
+                );
                 return ok(item);
             } catch (err) {
                 return failWithLog('torrent:add-file', err);
@@ -138,7 +168,10 @@ export function registerIpcHandlers(
                 });
                 if (!result.valid) return fail(ErrorCodes.INVALID_MAGNET_URI);
 
-                const item = await downloadManager.addMagnetLink(result.data.magnetUri);
+                const item = await withTimeout(
+                    downloadManager.addMagnetLink(result.data.magnetUri),
+                    'torrent:add-magnet',
+                );
                 return ok(item);
             } catch (err) {
                 return failWithLog('torrent:add-magnet', err);
@@ -158,7 +191,10 @@ export function registerIpcHandlers(
                 const result = validatePayload<{ infoHash: string }>(payload, infoHashSchema);
                 if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
 
-                await downloadManager.pause(result.data.infoHash);
+                await withTimeout(
+                    downloadManager.pause(result.data.infoHash),
+                    'torrent:pause',
+                );
                 return ok(undefined);
             } catch (err) {
                 return failWithLog('torrent:pause', err);
@@ -178,7 +214,10 @@ export function registerIpcHandlers(
                 const result = validatePayload<{ infoHash: string }>(payload, infoHashSchema);
                 if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
 
-                await downloadManager.resume(result.data.infoHash);
+                await withTimeout(
+                    downloadManager.resume(result.data.infoHash),
+                    'torrent:resume',
+                );
                 return ok(undefined);
             } catch (err) {
                 return failWithLog('torrent:resume', err);
@@ -204,7 +243,10 @@ export function registerIpcHandlers(
                 );
                 if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
 
-                await downloadManager.remove(result.data.infoHash, result.data.deleteFiles);
+                await withTimeout(
+                    downloadManager.remove(result.data.infoHash, result.data.deleteFiles),
+                    'torrent:remove',
+                );
                 return ok(undefined);
             } catch (err) {
                 return failWithLog('torrent:remove', err);
@@ -457,6 +499,29 @@ export function registerIpcHandlers(
                 return ok(limits);
             } catch (err) {
                 return failWithLog('torrent:get-speed-limits', err);
+            }
+        },
+    );
+
+    // ── torrent:retry ─────────────────────────────────────────────────────────
+    ipcMain.handle(
+        'torrent:retry',
+        async (_event, payload: unknown): Promise<IPCResponse<DownloadItem>> => {
+            try {
+                if (torrentEngine?.isRestarting()) {
+                    return fail(ErrorCodes.ENGINE_RESTARTING);
+                }
+
+                const result = validatePayload<{ infoHash: string }>(payload, infoHashSchema);
+                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
+
+                const item = await withTimeout(
+                    downloadManager.retryDownload(result.data.infoHash),
+                    'torrent:retry',
+                );
+                return ok(item);
+            } catch (err) {
+                return failWithLog('torrent:retry', err);
             }
         },
     );

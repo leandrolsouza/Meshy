@@ -2,9 +2,15 @@ import ElectronStoreDefault from 'electron-store';
 import type { AppSettings } from '../shared/types';
 import {
     DEFAULT_MAX_CONCURRENT_DOWNLOADS,
+    MIN_CONCURRENT_DOWNLOADS,
+    MAX_CONCURRENT_DOWNLOADS,
     isValidTrackerUrl,
     normalizeTrackerUrl,
+    isValidSpeedLimit,
+    isValidMaxConcurrentDownloads,
 } from '../shared/validators';
+import { logger as defaultLogger } from './logger';
+import type { Logger } from './logger';
 
 export type { AppSettings } from '../shared/types';
 
@@ -62,6 +68,12 @@ export interface CreateSettingsManagerOptions {
      * Override in tests to avoid requiring a running Electron app.
      */
     getDownloadsPath?: () => string;
+
+    /**
+     * Injectable logger instance. Defaults to electron-log.
+     * Override in tests to avoid requiring Electron.
+     */
+    log?: Logger;
 }
 
 // ─── Current schema version ───────────────────────────────────────────────────
@@ -96,6 +108,9 @@ export function createSettingsManager(options: CreateSettingsManagerOptions = {}
     const getDownloadsPath: () => string =
         options.getDownloadsPath ?? getDefaultDownloadsPathFromElectron;
 
+    // ── Resolve the logger ────────────────────────────────────────────────────
+    const log: Logger = options.log ?? defaultLogger;
+
     // ── Ensure destinationFolder is initialised ────────────────────────────────
     const currentFolder = store.get('destinationFolder');
     if (!currentFolder) {
@@ -107,6 +122,11 @@ export function createSettingsManager(options: CreateSettingsManagerOptions = {}
     if (!currentVersion) {
         store.set('schemaVersion', SCHEMA_VERSION);
     }
+
+    // ── Sanitizar valores na carga ────────────────────────────────────────────
+    // Corrige valores inválidos que podem ter sido persistidos por corrupção,
+    // edição manual do arquivo de settings, ou bugs em versões anteriores.
+    sanitizeOnLoad(store, getDownloadsPath, log);
 
     // ── Public API ────────────────────────────────────────────────────────────
     return {
@@ -189,6 +209,88 @@ export function createSettingsManager(options: CreateSettingsManagerOptions = {}
             store.set('autoApplyGlobalTrackers', enabled);
         },
     };
+}
+
+// ─── Sanitização na carga ─────────────────────────────────────────────────────
+
+/**
+ * Valida e corrige valores persistidos que podem estar corrompidos.
+ * Cada campo é verificado individualmente — se inválido, é resetado para o default.
+ * Loga um warning para cada correção aplicada.
+ */
+function sanitizeOnLoad(
+    store: SettingsStore,
+    getDownloadsPath: () => string,
+    log: Logger,
+): void {
+    // downloadSpeedLimit: inteiro >= 0
+    const dl = store.get('downloadSpeedLimit');
+    if (dl !== undefined && !isValidSpeedLimit(dl)) {
+        log.warn('[SettingsManager] downloadSpeedLimit inválido, resetando para 0:', String(dl));
+        store.set('downloadSpeedLimit', 0);
+    }
+
+    // uploadSpeedLimit: inteiro >= 0
+    const ul = store.get('uploadSpeedLimit');
+    if (ul !== undefined && !isValidSpeedLimit(ul)) {
+        log.warn('[SettingsManager] uploadSpeedLimit inválido, resetando para 0:', String(ul));
+        store.set('uploadSpeedLimit', 0);
+    }
+
+    // maxConcurrentDownloads: inteiro entre MIN e MAX
+    const mc = store.get('maxConcurrentDownloads');
+    if (mc !== undefined && !isValidMaxConcurrentDownloads(mc)) {
+        log.warn(
+            `[SettingsManager] maxConcurrentDownloads inválido, resetando para ${DEFAULT_MAX_CONCURRENT_DOWNLOADS}:`,
+            String(mc),
+        );
+        store.set('maxConcurrentDownloads', DEFAULT_MAX_CONCURRENT_DOWNLOADS);
+    }
+
+    // notificationsEnabled: boolean
+    const ne = store.get('notificationsEnabled');
+    if (ne !== undefined && typeof ne !== 'boolean') {
+        log.warn('[SettingsManager] notificationsEnabled inválido, resetando para true:', String(ne));
+        store.set('notificationsEnabled', true);
+    }
+
+    // theme: string não-vazia
+    const theme = store.get('theme');
+    if (theme !== undefined && (typeof theme !== 'string' || theme.length === 0)) {
+        log.warn('[SettingsManager] theme inválido, resetando para vs-code-dark:', String(theme));
+        store.set('theme', 'vs-code-dark');
+    }
+
+    // locale: string não-vazia
+    const locale = store.get('locale');
+    if (locale !== undefined && (typeof locale !== 'string' || locale.trim().length === 0)) {
+        log.warn('[SettingsManager] locale inválido, resetando para pt-BR:', String(locale));
+        store.set('locale', 'pt-BR');
+    }
+
+    // destinationFolder: string não-vazia
+    const folder = store.get('destinationFolder');
+    if (typeof folder !== 'string' || folder.length === 0) {
+        const defaultFolder = getDownloadsPath();
+        log.warn('[SettingsManager] destinationFolder inválido, resetando para:', defaultFolder);
+        store.set('destinationFolder', defaultFolder);
+    }
+
+    // globalTrackers: array de strings válidas
+    const trackers = store.get('globalTrackers');
+    if (trackers !== undefined && !Array.isArray(trackers)) {
+        log.warn('[SettingsManager] globalTrackers inválido, resetando para []');
+        store.set('globalTrackers', []);
+    }
+
+    // Booleans de rede: dhtEnabled, pexEnabled, utpEnabled
+    for (const key of ['dhtEnabled', 'pexEnabled', 'utpEnabled'] as const) {
+        const val = store.get(key);
+        if (val !== undefined && typeof val !== 'boolean') {
+            log.warn(`[SettingsManager] ${key} inválido, resetando para true:`, String(val));
+            store.set(key, true);
+        }
+    }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

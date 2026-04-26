@@ -100,6 +100,12 @@ const meshyAPI: MeshyAPI = {
         return ipcRenderer.invoke('torrent:get-speed-limits', { infoHash });
     },
 
+    // ── Retry ───────────────────────────────────────────────────────────────────
+
+    retryDownload(infoHash: string): Promise<IPCResponse<DownloadItem>> {
+        return ipcRenderer.invoke('torrent:retry', { infoHash });
+    },
+
     // ── Trackers globais ────────────────────────────────────────────────────────
 
     getGlobalTrackers(): Promise<IPCResponse<string[]>> {

@@ -42,6 +42,7 @@ const EXPECTED_CHANNELS = [
     'torrent:set-file-selection',
     'torrent:set-speed-limits',
     'torrent:get-speed-limits',
+    'torrent:retry',
     'settings:get',
     'settings:set',
     'settings:select-folder',
@@ -166,9 +167,9 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
 
     // ── Smoke tests: all channels registered ─────────────────────────────────
 
-    describe('Smoke: all 21 IPC channels are registered and respond', () => {
-        it('registers exactly 21 IPC channels', () => {
-            expect(mockIpcMain.handle).toHaveBeenCalledTimes(21);
+    describe('Smoke: all 22 IPC channels are registered and respond', () => {
+        it('registers exactly 22 IPC channels', () => {
+            expect(mockIpcMain.handle).toHaveBeenCalledTimes(22);
         });
 
         it.each(EXPECTED_CHANNELS)('channel "%s" is registered', (channel) => {
