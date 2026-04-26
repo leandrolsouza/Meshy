@@ -1,110 +1,110 @@
 # Meshy
 
-Cliente torrent desktop multiplataforma, construído com Electron, React e WebTorrent.
+Cross-platform desktop torrent client built with Electron, React, and WebTorrent.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Version](https://img.shields.io/badge/version-0.1.0-green.svg)
 
-## Sobre
+## About
 
-Meshy é um cliente BitTorrent com interface moderna inspirada no VS Code. Ele roda inteiramente no desktop via Electron, usando WebTorrent como engine de download e React para a interface do usuário.
+Meshy is a BitTorrent client with a modern, VS Code-inspired interface. It runs entirely on the desktop via Electron, using WebTorrent as the download engine and React for the UI.
 
-### Funcionalidades
+### Features
 
-- Adicionar torrents via arquivo `.torrent` ou magnet link
-- Drag & drop de arquivos `.torrent` direto na interface
-- Pausar, retomar e remover downloads
-- Seleção individual de arquivos dentro de um torrent
-- Limites configuráveis de velocidade de download e upload
-- Barra de progresso em tempo real com velocidade e peers
-- Persistência de sessão — downloads são restaurados ao reabrir o app
-- Interface com tema escuro estilo VS Code
+- Add torrents via `.torrent` file or magnet link
+- Drag & drop `.torrent` files directly into the interface
+- Pause, resume, and remove downloads
+- Per-file selection within a torrent
+- Configurable download and upload speed limits
+- Real-time progress bar with speed and peer count
+- Session persistence — downloads are restored when the app is reopened
+- VS Code-style dark theme interface
 
 ## Stack
 
-| Camada       | Tecnologia                                                         |
-| ------------ | ------------------------------------------------------------------ |
-| Framework    | [Electron](https://www.electronjs.org/) 33                         |
-| Build        | [electron-vite](https://electron-vite.org/) + Vite 6               |
-| UI           | [React](https://react.dev/) 18                                     |
-| Estado       | [Zustand](https://zustand-demo.pmnd.rs/) 5                         |
-| Torrent      | [WebTorrent](https://webtorrent.io/) 2                             |
-| Persistência | [electron-store](https://github.com/sindresorhus/electron-store) 8 |
-| Linguagem    | TypeScript 5                                                       |
+| Layer       | Technology                                                         |
+| ----------- | ------------------------------------------------------------------ |
+| Framework   | [Electron](https://www.electronjs.org/) 33                         |
+| Build       | [electron-vite](https://electron-vite.org/) + Vite 6               |
+| UI          | [React](https://react.dev/) 18                                     |
+| State       | [Zustand](https://zustand-demo.pmnd.rs/) 5                         |
+| Torrent     | [WebTorrent](https://webtorrent.io/) 2                             |
+| Persistence | [electron-store](https://github.com/sindresorhus/electron-store) 8 |
+| Language    | TypeScript 5                                                       |
 
-## Arquitetura
+## Architecture
 
 ```
 meshy/
-├── main/               # Processo principal (Electron)
-│   ├── index.ts        # Entry point — cria janela e inicializa serviços
-│   ├── torrentEngine.ts    # Wrapper sobre WebTorrent (add, pause, resume, remove)
-│   ├── downloadManager.ts  # Orquestra downloads, persistência e eventos
-│   ├── settingsManager.ts  # Configurações do app (pasta destino, limites)
-│   ├── ipcHandler.ts       # Handlers IPC entre main ↔ renderer
-│   ├── validators.ts       # Validação de magnet URIs e arquivos .torrent
+├── main/               # Main process (Electron)
+│   ├── index.ts        # Entry point — creates window and initializes services
+│   ├── torrentEngine.ts    # WebTorrent wrapper (add, pause, resume, remove)
+│   ├── downloadManager.ts  # Orchestrates downloads, persistence, and events
+│   ├── settingsManager.ts  # App settings (destination folder, speed limits)
+│   ├── ipcHandler.ts       # IPC handlers between main ↔ renderer
+│   ├── validators.ts       # Magnet URI and .torrent file validation
 │   └── logger.ts           # Logging via electron-log
 ├── electron/
-│   └── preload.ts      # Preload script — expõe API segura via contextBridge
+│   └── preload.ts      # Preload script — exposes secure API via contextBridge
 ├── shared/
-│   └── types.ts        # Tipos compartilhados entre main e renderer
-├── src/                # Processo renderer (React)
-│   ├── App.tsx         # Componente raiz com layout Activity Bar + Editor Area
+│   └── types.ts        # Types shared between main and renderer
+├── src/                # Renderer process (React)
+│   ├── App.tsx         # Root component with Activity Bar + Editor Area layout
 │   ├── components/
-│   │   ├── AddTorrent/     # Modal e DropZone para adicionar torrents
-│   │   ├── DownloadList/   # Lista de downloads com itens individuais
-│   │   ├── FileSelector/   # Seleção de arquivos dentro de um torrent
-│   │   ├── Settings/       # Painel de configurações
+│   │   ├── AddTorrent/     # Modal and DropZone for adding torrents
+│   │   ├── DownloadList/   # Download list with individual items
+│   │   ├── FileSelector/   # File selection within a torrent
+│   │   ├── Settings/       # Settings panel
 │   │   └── common/         # ProgressBar, ConfirmDialog, ErrorBoundary, SpeedDisplay
 │   ├── hooks/          # useDownloads, useSettings
 │   ├── store/          # Zustand store (downloadStore)
-│   ├── utils/          # Formatadores (bytes, tempo)
-│   └── styles/         # CSS global
+│   ├── utils/          # Formatters (bytes, time)
+│   └── styles/         # Global CSS
 └── tests/
-    ├── unit/           # Testes unitários (Jest + Testing Library)
-    └── integration/    # Testes de integração (IPC, persistência)
+    ├── unit/           # Unit tests (Jest + Testing Library)
+    └── integration/    # Integration tests (IPC, persistence)
 ```
 
-A comunicação entre processos usa IPC com `contextIsolation: true` — o renderer nunca acessa Node.js diretamente. A API é exposta via `window.meshy` no preload script.
+Inter-process communication uses IPC with `contextIsolation: true` — the renderer never accesses Node.js directly. The API is exposed via `window.meshy` in the preload script.
 
-## Pré-requisitos
+## Prerequisites
 
 - [Node.js](https://nodejs.org/) >= 18
 - npm >= 9
 
-## Instalação
+## Installation
 
 ```bash
-git clone <url-do-repositorio>
+git clone <repository-url>
 cd meshy
 npm install
 ```
 
 ## Scripts
 
-| Comando                 | Descrição                                |
+| Command                 | Description                              |
 | ----------------------- | ---------------------------------------- |
-| `npm run dev`           | Inicia o app em modo desenvolvimento     |
-| `npm run build`         | Compila o app para produção              |
-| `npm run preview`       | Preview do build de produção             |
-| `npm start`             | Executa o app compilado                  |
-| `npm test`              | Roda os testes com Jest                  |
-| `npm run test:watch`    | Roda os testes em modo watch             |
-| `npm run test:coverage` | Gera relatório de cobertura de testes    |
-| `npm run typecheck`     | Verifica tipos com TypeScript            |
-| `npm run lint`          | Roda o ESLint                            |
-| `npm run lint:fix`      | Roda o ESLint e corrige automaticamente  |
-| `npm run format`        | Formata o código com Prettier            |
-| `npm run format:check`  | Verifica formatação sem alterar arquivos |
+| `npm run dev`           | Start the app in development mode        |
+| `npm run build`         | Build the app for production             |
+| `npm run preview`       | Preview the production build             |
+| `npm start`             | Run the compiled app                     |
+| `npm test`              | Run tests with Jest                      |
+| `npm run test:watch`    | Run tests in watch mode                  |
+| `npm run test:coverage` | Generate test coverage report            |
+| `npm run typecheck`     | Type-check with TypeScript               |
+| `npm run lint`          | Run ESLint                               |
+| `npm run lint:fix`      | Run ESLint with auto-fix                 |
+| `npm run format`        | Format code with Prettier                |
+| `npm run format:check`  | Check formatting without modifying files |
 
-## Desenvolvimento
+## Development
 
 ```bash
 npm run dev
 ```
 
-Isso inicia o Electron com hot reload via electron-vite. Alterações no renderer (React) são refletidas instantaneamente; alterações no main process reiniciam o Electron automaticamente.
+This starts Electron with hot reload via electron-vite. Changes to the renderer (React) are reflected instantly; changes to the main process restart Electron automatically.
 
-## Licença
+## License
 
 [MIT](LICENSE)
