@@ -145,6 +145,13 @@ export interface MeshyAPI {
     // Events
     onProgress(callback: (items: DownloadItem[]) => void): () => void;
     onError(callback: (data: { infoHash: string; message: string }) => void): () => void;
+    // Observabilidade — reportar erros do renderer ao main process
+    reportError(error: {
+        message: string;
+        source: string;
+        stack?: string;
+        componentStack?: string;
+    }): void;
 }
 
 // ─── Global window augmentation ───────────────────────────────────────────────

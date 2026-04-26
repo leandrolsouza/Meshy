@@ -612,4 +612,48 @@ export function registerIpcHandlers(
             }
         },
     );
+
+    // ── renderer:report-error ─────────────────────────────────────────────────
+    // Canal para o renderer reportar erros (ErrorBoundary, exceções não capturadas)
+    // ao main process, onde são persistidos via electron-log.
+    ipcMain.handle(
+        'renderer:report-error',
+        async (_event, payload: unknown): Promise<IPCResponse<void>> => {
+            try {
+                const result = validatePayload<{ message: string; source: string }>(payload, {
+                    message: { type: 'string', nonEmpty: true },
+                    source: { type: 'string', nonEmpty: true },
+                });
+                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
+
+                const { message, source } = result.data;
+
+                // Extrair stack trace opcional (não obrigatório)
+                const stack =
+                    typeof payload === 'object' && payload !== null
+                        ? (payload as Record<string, unknown>).stack
+                        : undefined;
+                const stackStr = typeof stack === 'string' ? stack : undefined;
+
+                // Extrair component stack opcional (React ErrorBoundary)
+                const componentStack =
+                    typeof payload === 'object' && payload !== null
+                        ? (payload as Record<string, unknown>).componentStack
+                        : undefined;
+                const componentStackStr =
+                    typeof componentStack === 'string' ? componentStack : undefined;
+
+                logger.error(
+                    `[Renderer] ${source}:`,
+                    message,
+                    stackStr ? `\nStack: ${stackStr}` : '',
+                    componentStackStr ? `\nComponent: ${componentStackStr}` : '',
+                );
+
+                return ok(undefined);
+            } catch (err) {
+                return failWithLog('renderer:report-error', err);
+            }
+        },
+    );
 }

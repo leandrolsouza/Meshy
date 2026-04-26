@@ -146,6 +146,23 @@ const meshyAPI: MeshyAPI = {
             ipcRenderer.removeListener('torrent:error', listener);
         };
     },
+
+    // ── Observabilidade ─────────────────────────────────────────────────────────
+
+    /**
+     * Reporta erros do renderer (ErrorBoundary, exceções não capturadas) ao main process
+     * para persistência via electron-log. Fire-and-forget — não bloqueia a UI.
+     */
+    reportError(error: {
+        message: string;
+        source: string;
+        stack?: string;
+        componentStack?: string;
+    }): void {
+        ipcRenderer.invoke('renderer:report-error', error).catch(() => {
+            // Silenciar falhas no report — não queremos erros ao reportar erros
+        });
+    },
 };
 
 contextBridge.exposeInMainWorld('meshy', meshyAPI);
