@@ -6,6 +6,16 @@ import { ThrottleGroup } from 'speed-limiter';
 import { isValidMagnetUri, hasTorrentMagicBytes } from './validators';
 import { isValidTrackerUrl, normalizeTrackerUrl } from '../shared/validators';
 import type { TorrentStatus, TorrentFileInfo, TrackerInfo, TrackerStatus } from '../shared/types';
+import {
+    getAnnounceList,
+    setAnnounceList,
+    getInternalTrackers,
+    destroyInternalTracker,
+    addTrackerToTorrent,
+    destroyAllWires,
+    getNumSeeders,
+} from './webtorrentInternals';
+import type { WireWithPex } from './webtorrentInternals';
 
 export type { TorrentStatus } from '../shared/types';
 export type { TorrentFileInfo } from '../shared/types';
@@ -90,7 +100,7 @@ function torrentToInfo(torrent: Torrent, status: TorrentStatus): TorrentInfo {
         downloadSpeed: torrent.downloadSpeed ?? 0,
         uploadSpeed: torrent.uploadSpeed ?? 0,
         numPeers: torrent.numPeers ?? 0,
-        numSeeders: (torrent as unknown as { numSeeders?: number }).numSeeders ?? 0,
+        numSeeders: getNumSeeders(torrent),
         timeRemaining: torrent.timeRemaining ?? Infinity,
         downloaded: torrent.downloaded ?? 0,
         status,
@@ -268,14 +278,7 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
                 // O torrent.pause() do WebTorrent apenas para de buscar novos peers,
                 // mas NÃO desconecta os peers já conectados — o download continua.
                 // Para realmente parar a transferência, destruímos todos os wires.
-                // O @types/webtorrent não declara 'wires', mas a propriedade existe
-                // em runtime no WebTorrent 2.x.
-                const wires = (torrent as unknown as { wires?: { destroy(): void }[] }).wires;
-                if (wires && Array.isArray(wires)) {
-                    for (const wire of [...wires]) {
-                        wire.destroy();
-                    }
-                }
+                destroyAllWires(torrent);
 
                 clearTimeout(timer);
                 this.statusMap.set(infoHash, 'paused');
@@ -432,13 +435,8 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
             throw new Error(`Torrent não encontrado: ${infoHash}`);
         }
 
-        const announce: string[] = (torrent as unknown as { announce?: string[] }).announce ?? [];
-
-        // O WebTorrent mantém internamente um objeto `_trackers` (mapa de URL → Tracker)
-        // que contém o estado de cada conexão com tracker.
-        const internalTrackers =
-            (torrent as unknown as { _trackers?: Record<string, { destroyed?: boolean }> })
-                ._trackers ?? {};
+        const announce = getAnnounceList(torrent);
+        const internalTrackers = getInternalTrackers(torrent);
 
         return announce.map((url) => {
             const tracker = internalTrackers[url];
@@ -471,7 +469,7 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
         }
 
         const normalized = normalizeTrackerUrl(trackerUrl);
-        const announce: string[] = (torrent as unknown as { announce?: string[] }).announce ?? [];
+        const announce = getAnnounceList(torrent);
         const alreadyExists = announce.some(
             (existing) => normalizeTrackerUrl(existing) === normalized,
         );
@@ -480,17 +478,7 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
             throw new Error(`Tracker já presente: ${normalized}`);
         }
 
-        // Usa o método addTracker do WebTorrent para adicionar ao swarm
-        const addTrackerFn = (
-            torrent as unknown as { addTracker?: (url: string) => void }
-        ).addTracker;
-        if (typeof addTrackerFn === 'function') {
-            addTrackerFn.call(torrent, normalized);
-        } else {
-            // Fallback: adiciona manualmente ao announce
-            announce.push(normalized);
-            (torrent as unknown as { announce: string[] }).announce = announce;
-        }
+        addTrackerToTorrent(torrent, normalized);
     }
 
     // ── removeTracker ───────────────────────────────────────────────────────────
@@ -502,7 +490,7 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
         }
 
         const normalized = normalizeTrackerUrl(trackerUrl);
-        const announce: string[] = (torrent as unknown as { announce?: string[] }).announce ?? [];
+        const announce = getAnnounceList(torrent);
         const index = announce.findIndex(
             (existing) => normalizeTrackerUrl(existing) === normalized,
         );
@@ -513,23 +501,10 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
 
         // Remove do array announce
         announce.splice(index, 1);
-        (torrent as unknown as { announce: string[] }).announce = announce;
+        setAnnounceList(torrent, announce);
 
         // Destrói a conexão com o tracker, se existir
-        const internalTrackers =
-            (torrent as unknown as { _trackers?: Record<string, { destroy?: () => void }> })
-                ._trackers ?? {};
-
-        // Procura o tracker pelo URL normalizado ou original
-        for (const [key, tracker] of Object.entries(internalTrackers)) {
-            if (normalizeTrackerUrl(key) === normalized) {
-                if (typeof tracker.destroy === 'function') {
-                    tracker.destroy();
-                }
-                delete internalTrackers[key];
-                break;
-            }
-        }
+        destroyInternalTracker(torrent, normalized, normalizeTrackerUrl);
     }
 
     // ── Private helpers ─────────────────────────────────────────────────────────
@@ -622,8 +597,7 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
     private _setupPexDisable(): void {
         this.client.on('torrent', (torrent) => {
             torrent.on('wire', (wire) => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const w = wire as any;
+                const w = wire as unknown as WireWithPex;
                 if (w.ut_pex) {
                     w.ut_pex.destroy?.();
                 }

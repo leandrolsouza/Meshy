@@ -13,14 +13,16 @@ import { useDownloadStore } from '../store/downloadStore';
  * Cleans up all listeners on unmount.
  */
 export function useDownloads() {
-    const { setItems, updateItem, removeItem } = useDownloadStore();
+    const { mergeItems, updateItem, removeItem } = useDownloadStore();
 
     // ── Register IPC event listeners ──────────────────────────────────────────
 
     useEffect(() => {
-        // onProgress: main process emits the full list of active items every second
+        // onProgress: main process emits the full list of active items every second.
+        // Usa mergeItems em vez de setItems para preservar mudanças locais de status
+        // (ex: 'error' via onError) que o main process ainda não refletiu.
         const removeProgressListener = window.meshy.onProgress((items: DownloadItem[]) => {
-            setItems(items);
+            mergeItems(items);
         });
 
         // onError: main process emits an error event for a specific torrent
@@ -41,7 +43,7 @@ export function useDownloads() {
             removeProgressListener();
             removeErrorListener();
         };
-    }, [setItems, updateItem]);
+    }, [mergeItems, updateItem]);
 
     // ── Actions ───────────────────────────────────────────────────────────────
 

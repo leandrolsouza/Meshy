@@ -129,41 +129,27 @@ export function createSettingsManager(options: CreateSettingsManagerOptions = {}
         },
 
         set(partial: Partial<AppSettings>): void {
-            if (partial.destinationFolder !== undefined) {
-                store.set('destinationFolder', partial.destinationFolder);
-            }
-            if (partial.downloadSpeedLimit !== undefined) {
-                store.set('downloadSpeedLimit', partial.downloadSpeedLimit);
-            }
-            if (partial.uploadSpeedLimit !== undefined) {
-                store.set('uploadSpeedLimit', partial.uploadSpeedLimit);
-            }
-            if (partial.maxConcurrentDownloads !== undefined) {
-                store.set('maxConcurrentDownloads', partial.maxConcurrentDownloads);
-            }
-            if (partial.notificationsEnabled !== undefined) {
-                store.set('notificationsEnabled', partial.notificationsEnabled);
-            }
-            if (partial.theme !== undefined) {
-                store.set('theme', partial.theme);
-            }
-            if (partial.locale !== undefined) {
-                store.set('locale', partial.locale);
-            }
-            if (partial.globalTrackers !== undefined) {
-                store.set('globalTrackers', partial.globalTrackers);
-            }
-            if (partial.autoApplyGlobalTrackers !== undefined) {
-                store.set('autoApplyGlobalTrackers', partial.autoApplyGlobalTrackers);
-            }
-            if (partial.dhtEnabled !== undefined) {
-                store.set('dhtEnabled', partial.dhtEnabled);
-            }
-            if (partial.pexEnabled !== undefined) {
-                store.set('pexEnabled', partial.pexEnabled);
-            }
-            if (partial.utpEnabled !== undefined) {
-                store.set('utpEnabled', partial.utpEnabled);
+            const settableKeys: (keyof AppSettings)[] = [
+                'destinationFolder',
+                'downloadSpeedLimit',
+                'uploadSpeedLimit',
+                'maxConcurrentDownloads',
+                'notificationsEnabled',
+                'theme',
+                'locale',
+                'globalTrackers',
+                'autoApplyGlobalTrackers',
+                'dhtEnabled',
+                'pexEnabled',
+                'utpEnabled',
+            ];
+
+            for (const key of settableKeys) {
+                if (partial[key] !== undefined) {
+                    // O cast é seguro: cada chave de AppSettings mapeia para o tipo
+                    // correspondente em PersistedSettings.
+                    store.set(key as keyof PersistedSettings, partial[key] as never);
+                }
             }
         },
 

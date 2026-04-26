@@ -9,15 +9,17 @@ import type {
     TorrentFileInfo,
     TrackerInfo,
 } from '../shared/types';
-import {
-    isValidSpeedLimit,
-    isValidMaxConcurrentDownloads,
-    isValidThemeId,
-    isValidNetworkToggle,
-} from './validators';
+import { isValidSpeedLimit } from './validators';
 import { isValidTrackerUrl } from '../shared/validators';
 import { ErrorCodes } from '../shared/errorCodes';
 import { logger } from './logger';
+import {
+    validatePayload,
+    infoHashSchema,
+    infoHashUrlSchema,
+    urlSchema,
+} from './payloadValidator';
+import { validateSettingsPayload } from './settingsValidator';
 
 export type { IPCResponse } from '../shared/types';
 
@@ -86,7 +88,7 @@ export function attachWindowEvents(
  * `attachWindowEvents` instead.
  *
  * Each handler:
- * - Validates its input payload and returns `{ success: false, error }` for invalid payloads.
+ * - Validates its input payload via `validatePayload` and returns `{ success: false, error }` for invalid payloads.
  * - Wraps all logic in try/catch, never throwing an unhandled exception.
  * - Returns a typed `IPCResponse<T>`.
  */
@@ -96,27 +98,20 @@ export function registerIpcHandlers(
     torrentEngine?: TorrentEngine,
 ): void {
     // ── torrent:add-file ──────────────────────────────────────────────────────
-    // payload: { filePath: string }
     ipcMain.handle(
         'torrent:add-file',
         async (_event, payload: unknown): Promise<IPCResponse<DownloadItem>> => {
             try {
-                // Guarda contra operações durante reinício do motor
                 if (torrentEngine?.isRestarting()) {
                     return fail(ErrorCodes.ENGINE_RESTARTING);
                 }
 
-                if (
-                    typeof payload !== 'object' ||
-                    payload === null ||
-                    typeof (payload as Record<string, unknown>).filePath !== 'string' ||
-                    (payload as Record<string, unknown>).filePath === ''
-                ) {
-                    return fail(ErrorCodes.INVALID_FILE_PATH);
-                }
+                const result = validatePayload<{ filePath: string }>(payload, {
+                    filePath: { type: 'string', nonEmpty: true },
+                });
+                if (!result.valid) return fail(ErrorCodes.INVALID_FILE_PATH);
 
-                const { filePath } = payload as { filePath: string };
-                const item = await downloadManager.addTorrentFile(filePath);
+                const item = await downloadManager.addTorrentFile(result.data.filePath);
                 return ok(item);
             } catch (err) {
                 return failWithLog('torrent:add-file', err);
@@ -125,27 +120,20 @@ export function registerIpcHandlers(
     );
 
     // ── torrent:add-magnet ────────────────────────────────────────────────────
-    // payload: { magnetUri: string }
     ipcMain.handle(
         'torrent:add-magnet',
         async (_event, payload: unknown): Promise<IPCResponse<DownloadItem>> => {
             try {
-                // Guarda contra operações durante reinício do motor
                 if (torrentEngine?.isRestarting()) {
                     return fail(ErrorCodes.ENGINE_RESTARTING);
                 }
 
-                if (
-                    typeof payload !== 'object' ||
-                    payload === null ||
-                    typeof (payload as Record<string, unknown>).magnetUri !== 'string' ||
-                    (payload as Record<string, unknown>).magnetUri === ''
-                ) {
-                    return fail(ErrorCodes.INVALID_MAGNET_URI);
-                }
+                const result = validatePayload<{ magnetUri: string }>(payload, {
+                    magnetUri: { type: 'string', nonEmpty: true },
+                });
+                if (!result.valid) return fail(ErrorCodes.INVALID_MAGNET_URI);
 
-                const { magnetUri } = payload as { magnetUri: string };
-                const item = await downloadManager.addMagnetLink(magnetUri);
+                const item = await downloadManager.addMagnetLink(result.data.magnetUri);
                 return ok(item);
             } catch (err) {
                 return failWithLog('torrent:add-magnet', err);
@@ -154,27 +142,18 @@ export function registerIpcHandlers(
     );
 
     // ── torrent:pause ─────────────────────────────────────────────────────────
-    // payload: { infoHash: string }
     ipcMain.handle(
         'torrent:pause',
         async (_event, payload: unknown): Promise<IPCResponse<void>> => {
             try {
-                // Guarda contra operações durante reinício do motor
                 if (torrentEngine?.isRestarting()) {
                     return fail(ErrorCodes.ENGINE_RESTARTING);
                 }
 
-                if (
-                    typeof payload !== 'object' ||
-                    payload === null ||
-                    typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
-                    (payload as Record<string, unknown>).infoHash === ''
-                ) {
-                    return fail(ErrorCodes.INVALID_PARAMS);
-                }
+                const result = validatePayload<{ infoHash: string }>(payload, infoHashSchema);
+                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
 
-                const { infoHash } = payload as { infoHash: string };
-                await downloadManager.pause(infoHash);
+                await downloadManager.pause(result.data.infoHash);
                 return ok(undefined);
             } catch (err) {
                 return failWithLog('torrent:pause', err);
@@ -183,27 +162,18 @@ export function registerIpcHandlers(
     );
 
     // ── torrent:resume ────────────────────────────────────────────────────────
-    // payload: { infoHash: string }
     ipcMain.handle(
         'torrent:resume',
         async (_event, payload: unknown): Promise<IPCResponse<void>> => {
             try {
-                // Guarda contra operações durante reinício do motor
                 if (torrentEngine?.isRestarting()) {
                     return fail(ErrorCodes.ENGINE_RESTARTING);
                 }
 
-                if (
-                    typeof payload !== 'object' ||
-                    payload === null ||
-                    typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
-                    (payload as Record<string, unknown>).infoHash === ''
-                ) {
-                    return fail(ErrorCodes.INVALID_PARAMS);
-                }
+                const result = validatePayload<{ infoHash: string }>(payload, infoHashSchema);
+                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
 
-                const { infoHash } = payload as { infoHash: string };
-                await downloadManager.resume(infoHash);
+                await downloadManager.resume(result.data.infoHash);
                 return ok(undefined);
             } catch (err) {
                 return failWithLog('torrent:resume', err);
@@ -212,31 +182,24 @@ export function registerIpcHandlers(
     );
 
     // ── torrent:remove ────────────────────────────────────────────────────────
-    // payload: { infoHash: string; deleteFiles: boolean }
     ipcMain.handle(
         'torrent:remove',
         async (_event, payload: unknown): Promise<IPCResponse<void>> => {
             try {
-                // Guarda contra operações durante reinício do motor
                 if (torrentEngine?.isRestarting()) {
                     return fail(ErrorCodes.ENGINE_RESTARTING);
                 }
 
-                if (
-                    typeof payload !== 'object' ||
-                    payload === null ||
-                    typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
-                    (payload as Record<string, unknown>).infoHash === '' ||
-                    typeof (payload as Record<string, unknown>).deleteFiles !== 'boolean'
-                ) {
-                    return fail(ErrorCodes.INVALID_PARAMS);
-                }
+                const result = validatePayload<{ infoHash: string; deleteFiles: boolean }>(
+                    payload,
+                    {
+                        infoHash: { type: 'string', nonEmpty: true },
+                        deleteFiles: { type: 'boolean' },
+                    },
+                );
+                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
 
-                const { infoHash, deleteFiles } = payload as {
-                    infoHash: string;
-                    deleteFiles: boolean;
-                };
-                await downloadManager.remove(infoHash, deleteFiles);
+                await downloadManager.remove(result.data.infoHash, result.data.deleteFiles);
                 return ok(undefined);
             } catch (err) {
                 return failWithLog('torrent:remove', err);
@@ -245,7 +208,6 @@ export function registerIpcHandlers(
     );
 
     // ── torrent:get-all ───────────────────────────────────────────────────────
-    // payload: void
     ipcMain.handle('torrent:get-all', async (_event): Promise<IPCResponse<DownloadItem[]>> => {
         try {
             const items = downloadManager.getAll();
@@ -256,7 +218,6 @@ export function registerIpcHandlers(
     });
 
     // ── settings:get ──────────────────────────────────────────────────────────
-    // payload: void
     ipcMain.handle('settings:get', async (_event): Promise<IPCResponse<AppSettings>> => {
         try {
             const settings = settingsManager.get();
@@ -267,7 +228,6 @@ export function registerIpcHandlers(
     });
 
     // ── settings:set ──────────────────────────────────────────────────────────
-    // payload: Partial<AppSettings>
     ipcMain.handle(
         'settings:set',
         async (_event, payload: unknown): Promise<IPCResponse<AppSettings>> => {
@@ -278,81 +238,10 @@ export function registerIpcHandlers(
 
                 const partial = payload as Partial<AppSettings>;
 
-                // Validate downloadSpeedLimit if provided
-                if (
-                    partial.downloadSpeedLimit !== undefined &&
-                    !isValidSpeedLimit(partial.downloadSpeedLimit)
-                ) {
-                    return fail(ErrorCodes.INVALID_SPEED_LIMIT);
-                }
-
-                // Validate uploadSpeedLimit if provided
-                if (
-                    partial.uploadSpeedLimit !== undefined &&
-                    !isValidSpeedLimit(partial.uploadSpeedLimit)
-                ) {
-                    return fail(ErrorCodes.INVALID_SPEED_LIMIT);
-                }
-
-                // Validate destinationFolder if provided
-                if (
-                    partial.destinationFolder !== undefined &&
-                    typeof partial.destinationFolder !== 'string'
-                ) {
-                    return fail(ErrorCodes.INVALID_PARAMS);
-                }
-
-                // Validate maxConcurrentDownloads if provided
-                if (
-                    partial.maxConcurrentDownloads !== undefined &&
-                    !isValidMaxConcurrentDownloads(partial.maxConcurrentDownloads)
-                ) {
-                    return fail(ErrorCodes.INVALID_PARAMS);
-                }
-
-                // Validate notificationsEnabled if provided
-                if (
-                    partial.notificationsEnabled !== undefined &&
-                    typeof partial.notificationsEnabled !== 'boolean'
-                ) {
-                    return fail(ErrorCodes.INVALID_PARAMS);
-                }
-
-                // Validate theme if provided
-                if (partial.theme !== undefined && !isValidThemeId(partial.theme)) {
-                    return fail(ErrorCodes.INVALID_PARAMS);
-                }
-
-                // Validate locale if provided
-                if (
-                    partial.locale !== undefined &&
-                    (typeof partial.locale !== 'string' || partial.locale.trim() === '')
-                ) {
-                    return fail(ErrorCodes.INVALID_LOCALE);
-                }
-
-                // Validar dhtEnabled se fornecido
-                if (
-                    partial.dhtEnabled !== undefined &&
-                    !isValidNetworkToggle(partial.dhtEnabled)
-                ) {
-                    return fail(ErrorCodes.INVALID_PARAMS);
-                }
-
-                // Validar pexEnabled se fornecido
-                if (
-                    partial.pexEnabled !== undefined &&
-                    !isValidNetworkToggle(partial.pexEnabled)
-                ) {
-                    return fail(ErrorCodes.INVALID_PARAMS);
-                }
-
-                // Validar utpEnabled se fornecido
-                if (
-                    partial.utpEnabled !== undefined &&
-                    !isValidNetworkToggle(partial.utpEnabled)
-                ) {
-                    return fail(ErrorCodes.INVALID_PARAMS);
+                // Validação declarativa de todos os campos
+                const validationError = validateSettingsPayload(partial);
+                if (validationError) {
+                    return fail(validationError);
                 }
 
                 // Capturar configurações anteriores ANTES de persistir (para detecção de mudança)
@@ -403,7 +292,6 @@ export function registerIpcHandlers(
     );
 
     // ── settings:select-folder ────────────────────────────────────────────────
-    // payload: void
     ipcMain.handle('settings:select-folder', async (_event): Promise<IPCResponse<string>> => {
         try {
             const result = await dialog.showOpenDialog({
@@ -421,21 +309,14 @@ export function registerIpcHandlers(
     });
 
     // ── torrent:get-files ─────────────────────────────────────────────────────
-    // payload: { infoHash: string }
     ipcMain.handle(
         'torrent:get-files',
         async (_event, payload: unknown): Promise<IPCResponse<TorrentFileInfo[]>> => {
             try {
-                if (
-                    typeof payload !== 'object' ||
-                    payload === null ||
-                    typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
-                    (payload as Record<string, unknown>).infoHash === ''
-                ) {
-                    return fail(ErrorCodes.INVALID_PARAMS);
-                }
+                const result = validatePayload<{ infoHash: string }>(payload, infoHashSchema);
+                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
 
-                const { infoHash } = payload as { infoHash: string };
+                const { infoHash } = result.data;
 
                 // Check if torrent exists in the download manager
                 const allItems = downloadManager.getAll();
@@ -463,21 +344,14 @@ export function registerIpcHandlers(
     );
 
     // ── torrent:set-file-selection ────────────────────────────────────────────
-    // payload: { infoHash: string, selectedIndices: number[] }
     ipcMain.handle(
         'torrent:set-file-selection',
         async (_event, payload: unknown): Promise<IPCResponse<TorrentFileInfo[]>> => {
             try {
-                if (
-                    typeof payload !== 'object' ||
-                    payload === null ||
-                    typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
-                    (payload as Record<string, unknown>).infoHash === ''
-                ) {
-                    return fail(ErrorCodes.INVALID_PARAMS);
-                }
+                const result = validatePayload<{ infoHash: string }>(payload, infoHashSchema);
+                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
 
-                const { infoHash } = payload as { infoHash: string };
+                const { infoHash } = result.data;
                 const rawIndices = (payload as Record<string, unknown>).selectedIndices;
 
                 // Validate selectedIndices is a non-empty array of non-negative integers
@@ -524,34 +398,30 @@ export function registerIpcHandlers(
     );
 
     // ── torrent:set-speed-limits ──────────────────────────────────────────────
-    // payload: { infoHash: string, downloadLimit: number, uploadLimit: number }
     ipcMain.handle(
         'torrent:set-speed-limits',
         async (_event, payload: unknown): Promise<IPCResponse<DownloadItem>> => {
             try {
-                if (typeof payload !== 'object' || payload === null) {
-                    return fail(ErrorCodes.INVALID_PARAMS);
-                }
-
-                const p = payload as Record<string, unknown>;
-
-                if (typeof p.infoHash !== 'string' || p.infoHash === '') {
-                    return fail(ErrorCodes.INVALID_PARAMS);
-                }
-
-                if (!isValidSpeedLimit(p.downloadLimit)) {
-                    return fail(ErrorCodes.INVALID_SPEED_LIMIT);
-                }
-
-                if (!isValidSpeedLimit(p.uploadLimit)) {
-                    return fail(ErrorCodes.INVALID_SPEED_LIMIT);
-                }
-
-                const { infoHash, downloadLimit, uploadLimit } = payload as {
+                const result = validatePayload<{
                     infoHash: string;
                     downloadLimit: number;
                     uploadLimit: number;
-                };
+                }>(payload, {
+                    infoHash: { type: 'string', nonEmpty: true },
+                    downloadLimit: { type: 'number' },
+                    uploadLimit: { type: 'number' },
+                });
+                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
+
+                const { infoHash, downloadLimit, uploadLimit } = result.data;
+
+                // Validação específica de speed limits com código de erro dedicado
+                if (!isValidSpeedLimit(downloadLimit)) {
+                    return fail(ErrorCodes.INVALID_SPEED_LIMIT);
+                }
+                if (!isValidSpeedLimit(uploadLimit)) {
+                    return fail(ErrorCodes.INVALID_SPEED_LIMIT);
+                }
 
                 const item = downloadManager.setTorrentSpeedLimits(
                     infoHash,
@@ -566,7 +436,6 @@ export function registerIpcHandlers(
     );
 
     // ── torrent:get-speed-limits ──────────────────────────────────────────────
-    // payload: { infoHash: string }
     ipcMain.handle(
         'torrent:get-speed-limits',
         async (
@@ -576,18 +445,10 @@ export function registerIpcHandlers(
             IPCResponse<{ downloadSpeedLimitKBps: number; uploadSpeedLimitKBps: number }>
         > => {
             try {
-                if (typeof payload !== 'object' || payload === null) {
-                    return fail(ErrorCodes.INVALID_PARAMS);
-                }
+                const result = validatePayload<{ infoHash: string }>(payload, infoHashSchema);
+                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
 
-                const p = payload as Record<string, unknown>;
-
-                if (typeof p.infoHash !== 'string' || p.infoHash === '') {
-                    return fail(ErrorCodes.INVALID_PARAMS);
-                }
-
-                const { infoHash } = payload as { infoHash: string };
-                const limits = downloadManager.getTorrentSpeedLimits(infoHash);
+                const limits = downloadManager.getTorrentSpeedLimits(result.data.infoHash);
                 return ok(limits);
             } catch (err) {
                 return failWithLog('torrent:get-speed-limits', err);
@@ -596,26 +457,18 @@ export function registerIpcHandlers(
     );
 
     // ── tracker:get ───────────────────────────────────────────────────────────
-    // payload: { infoHash: string }
     ipcMain.handle(
         'tracker:get',
         async (_event, payload: unknown): Promise<IPCResponse<TrackerInfo[]>> => {
             try {
-                if (
-                    typeof payload !== 'object' ||
-                    payload === null ||
-                    typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
-                    (payload as Record<string, unknown>).infoHash === ''
-                ) {
-                    return fail(ErrorCodes.INVALID_PARAMS);
-                }
+                const result = validatePayload<{ infoHash: string }>(payload, infoHashSchema);
+                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
 
                 if (!torrentEngine) {
                     return fail(ErrorCodes.ENGINE_NOT_AVAILABLE);
                 }
 
-                const { infoHash } = payload as { infoHash: string };
-                const trackers = torrentEngine.getTrackers(infoHash);
+                const trackers = torrentEngine.getTrackers(result.data.infoHash);
                 return ok(trackers);
             } catch (err) {
                 return failWithLog('tracker:get', err);
@@ -624,27 +477,21 @@ export function registerIpcHandlers(
     );
 
     // ── tracker:add ───────────────────────────────────────────────────────────
-    // payload: { infoHash: string, url: string }
     ipcMain.handle(
         'tracker:add',
         async (_event, payload: unknown): Promise<IPCResponse<TrackerInfo[]>> => {
             try {
-                if (
-                    typeof payload !== 'object' ||
-                    payload === null ||
-                    typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
-                    (payload as Record<string, unknown>).infoHash === '' ||
-                    typeof (payload as Record<string, unknown>).url !== 'string' ||
-                    (payload as Record<string, unknown>).url === ''
-                ) {
-                    return fail(ErrorCodes.INVALID_PARAMS);
-                }
+                const result = validatePayload<{ infoHash: string; url: string }>(
+                    payload,
+                    infoHashUrlSchema,
+                );
+                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
 
                 if (!torrentEngine) {
                     return fail(ErrorCodes.ENGINE_NOT_AVAILABLE);
                 }
 
-                const { infoHash, url } = payload as { infoHash: string; url: string };
+                const { infoHash, url } = result.data;
 
                 if (!isValidTrackerUrl(url)) {
                     return fail(ErrorCodes.INVALID_TRACKER_URL);
@@ -660,27 +507,21 @@ export function registerIpcHandlers(
     );
 
     // ── tracker:remove ────────────────────────────────────────────────────────
-    // payload: { infoHash: string, url: string }
     ipcMain.handle(
         'tracker:remove',
         async (_event, payload: unknown): Promise<IPCResponse<TrackerInfo[]>> => {
             try {
-                if (
-                    typeof payload !== 'object' ||
-                    payload === null ||
-                    typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
-                    (payload as Record<string, unknown>).infoHash === '' ||
-                    typeof (payload as Record<string, unknown>).url !== 'string' ||
-                    (payload as Record<string, unknown>).url === ''
-                ) {
-                    return fail(ErrorCodes.INVALID_PARAMS);
-                }
+                const result = validatePayload<{ infoHash: string; url: string }>(
+                    payload,
+                    infoHashUrlSchema,
+                );
+                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
 
                 if (!torrentEngine) {
                     return fail(ErrorCodes.ENGINE_NOT_AVAILABLE);
                 }
 
-                const { infoHash, url } = payload as { infoHash: string; url: string };
+                const { infoHash, url } = result.data;
                 torrentEngine.removeTracker(infoHash, url);
                 const trackers = torrentEngine.getTrackers(infoHash);
                 return ok(trackers);
@@ -691,25 +532,18 @@ export function registerIpcHandlers(
     );
 
     // ── tracker:apply-global ──────────────────────────────────────────────────
-    // payload: { infoHash: string }
     ipcMain.handle(
         'tracker:apply-global',
         async (_event, payload: unknown): Promise<IPCResponse<TrackerInfo[]>> => {
             try {
-                if (
-                    typeof payload !== 'object' ||
-                    payload === null ||
-                    typeof (payload as Record<string, unknown>).infoHash !== 'string' ||
-                    (payload as Record<string, unknown>).infoHash === ''
-                ) {
-                    return fail(ErrorCodes.INVALID_PARAMS);
-                }
+                const result = validatePayload<{ infoHash: string }>(payload, infoHashSchema);
+                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
 
                 if (!torrentEngine) {
                     return fail(ErrorCodes.ENGINE_NOT_AVAILABLE);
                 }
 
-                const { infoHash } = payload as { infoHash: string };
+                const { infoHash } = result.data;
                 const globalTrackers = settingsManager.getGlobalTrackers();
 
                 for (const url of globalTrackers) {
@@ -729,35 +563,24 @@ export function registerIpcHandlers(
     );
 
     // ── tracker:get-global ────────────────────────────────────────────────────
-    // payload: (nenhum)
-    ipcMain.handle(
-        'tracker:get-global',
-        async (_event): Promise<IPCResponse<string[]>> => {
-            try {
-                const trackers = settingsManager.getGlobalTrackers();
-                return ok(trackers);
-            } catch (err) {
-                return failWithLog('tracker:get-global', err);
-            }
-        },
-    );
+    ipcMain.handle('tracker:get-global', async (_event): Promise<IPCResponse<string[]>> => {
+        try {
+            const trackers = settingsManager.getGlobalTrackers();
+            return ok(trackers);
+        } catch (err) {
+            return failWithLog('tracker:get-global', err);
+        }
+    });
 
     // ── tracker:add-global ────────────────────────────────────────────────────
-    // payload: { url: string }
     ipcMain.handle(
         'tracker:add-global',
         async (_event, payload: unknown): Promise<IPCResponse<string[]>> => {
             try {
-                if (
-                    typeof payload !== 'object' ||
-                    payload === null ||
-                    typeof (payload as Record<string, unknown>).url !== 'string' ||
-                    (payload as Record<string, unknown>).url === ''
-                ) {
-                    return fail(ErrorCodes.INVALID_PARAMS);
-                }
+                const result = validatePayload<{ url: string }>(payload, urlSchema);
+                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
 
-                const { url } = payload as { url: string };
+                const { url } = result.data;
 
                 if (!isValidTrackerUrl(url)) {
                     return fail(ErrorCodes.INVALID_TRACKER_URL);
@@ -773,21 +596,14 @@ export function registerIpcHandlers(
     );
 
     // ── tracker:remove-global ─────────────────────────────────────────────────
-    // payload: { url: string }
     ipcMain.handle(
         'tracker:remove-global',
         async (_event, payload: unknown): Promise<IPCResponse<string[]>> => {
             try {
-                if (
-                    typeof payload !== 'object' ||
-                    payload === null ||
-                    typeof (payload as Record<string, unknown>).url !== 'string' ||
-                    (payload as Record<string, unknown>).url === ''
-                ) {
-                    return fail(ErrorCodes.INVALID_PARAMS);
-                }
+                const result = validatePayload<{ url: string }>(payload, urlSchema);
+                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
 
-                const { url } = payload as { url: string };
+                const { url } = result.data;
                 settingsManager.removeGlobalTracker(url);
                 const trackers = settingsManager.getGlobalTrackers();
                 return ok(trackers);

@@ -6,6 +6,7 @@ import type { DownloadItem } from '../../shared/types';
 interface DownloadStore {
     items: DownloadItem[];
     setItems(items: DownloadItem[]): void;
+    mergeItems(items: DownloadItem[]): void;
     updateItem(item: DownloadItem): void;
     removeItem(infoHash: string): void;
 }
@@ -17,10 +18,49 @@ export const useDownloadStore = create<DownloadStore>((set) => ({
 
     /**
      * Replaces the entire items array.
-     * Used when receiving a full snapshot from the main process (e.g., onProgress).
+     * Usado para carga inicial (getAll) onde não há estado local a preservar.
      */
     setItems(items: DownloadItem[]): void {
         set({ items });
+    },
+
+    /**
+     * Merge inteligente: atualiza a lista com o snapshot do main process,
+     * mas preserva mudanças locais de status feitas via updateItem (ex: onError)
+     * que o main process ainda não refletiu.
+     *
+     * O main process é a fonte de verdade para dados dinâmicos (progress, speed, peers),
+     * mas o renderer pode ter aplicado uma transição de status (ex: 'error' via onError)
+     * que o próximo snapshot de progresso ainda não contém.
+     *
+     * Estratégia: se o item local tem status 'error' e o snapshot do main ainda
+     * mostra 'downloading', preserva o status local. Para todos os outros campos,
+     * o snapshot do main prevalece.
+     */
+    mergeItems(incoming: DownloadItem[]): void {
+        set((state) => {
+            // Indexar itens locais por infoHash para lookup O(1)
+            const localMap = new Map<string, DownloadItem>();
+            for (const item of state.items) {
+                localMap.set(item.infoHash, item);
+            }
+
+            const merged = incoming.map((remote) => {
+                const local = localMap.get(remote.infoHash);
+                if (!local) return remote;
+
+                // Preservar status local 'error' quando o main ainda reporta 'downloading'.
+                // O main process eventualmente também transicionará para 'error',
+                // momento em que ambos estarão sincronizados.
+                if (local.status === 'error' && remote.status === 'downloading') {
+                    return { ...remote, status: local.status } as DownloadItem;
+                }
+
+                return remote;
+            });
+
+            return { items: merged };
+        });
     },
 
     /**
