@@ -42,9 +42,9 @@
         "@types/react": "19.2.14",
         "@types/react-dom": "19.2.3",
         "@types/webtorrent": "^0.109.7",
-        "@vitejs/plugin-react": "^4.3.4",
+        "@vitejs/plugin-react": "^5.2.0",
         "electron": "^33.3.1",
-        "electron-vite": "^3.0.0",
+        "electron-vite": "^5.0.0",
         "eslint": "^10.2.1",
         "eslint-config-prettier": "^10.1.8",
         "eslint-plugin-react-hooks": "^7.1.1",
@@ -56,6 +56,6 @@
         "ts-jest": "^29.2.5",
         "typescript": "~5.9.3",
         "typescript-eslint": "^8.59.0",
-        "vite": "^6.0.11"
+        "vite": "^7.3.2"
     }
 }
