@@ -117,10 +117,9 @@ function renderSettingsPanel(props: { isOpen: boolean; onClose: () => void }) {
  * Aguarda o carregamento das configurações e navega para a aba "Rede".
  */
 async function navigateToNetworkTab() {
-    // Aguarda o painel carregar (aba "Geral" é a padrão)
-    await screen.findByText('Configurações');
-    // Clica na aba "Rede"
+    // Aguarda as tabs aparecerem após carregamento assíncrono das settings
     const networkTab = await screen.findByRole('tab', { name: 'Rede' });
+    // Clica na aba "Rede"
     fireEvent.click(networkTab);
 }
 
@@ -135,9 +134,8 @@ describe('SettingsPanel — navegação por abas', () => {
         setupMocks();
         renderSettingsPanel({ isOpen: true, onClose: jest.fn() });
 
-        await screen.findByText('Configurações');
-
-        expect(screen.getByRole('tab', { name: 'Geral' })).toBeInTheDocument();
+        // Aguarda as tabs aparecerem após o carregamento assíncrono das settings
+        expect(await screen.findByRole('tab', { name: 'Geral' })).toBeInTheDocument();
         expect(screen.getByRole('tab', { name: 'Transferências' })).toBeInTheDocument();
         expect(screen.getByRole('tab', { name: 'Rede' })).toBeInTheDocument();
         expect(screen.getByRole('tab', { name: 'Trackers' })).toBeInTheDocument();
@@ -147,9 +145,7 @@ describe('SettingsPanel — navegação por abas', () => {
         setupMocks();
         renderSettingsPanel({ isOpen: true, onClose: jest.fn() });
 
-        await screen.findByText('Configurações');
-
-        const generalTab = screen.getByRole('tab', { name: 'Geral' });
+        const generalTab = await screen.findByRole('tab', { name: 'Geral' });
         expect(generalTab).toHaveAttribute('aria-selected', 'true');
     });
 
@@ -157,7 +153,8 @@ describe('SettingsPanel — navegação por abas', () => {
         setupMocks();
         renderSettingsPanel({ isOpen: true, onClose: jest.fn() });
 
-        await screen.findByText('Configurações');
+        // Aguarda carregamento assíncrono das settings
+        await screen.findByRole('tab', { name: 'Geral' });
 
         // Aba Geral mostra pasta de destino
         expect(screen.getByLabelText('Pasta de destino')).toBeInTheDocument();
