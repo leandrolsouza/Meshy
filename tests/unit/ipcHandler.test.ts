@@ -9,7 +9,7 @@
 
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { registerIpcHandlers } from '../../main/ipcHandler';
+import { registerIpcHandlers, _rateLimiter } from '../../main/ipcHandler';
 import { ErrorCodes } from '../../shared/errorCodes';
 import type { DownloadManager } from '../../main/downloadManager';
 import type { SettingsManager, AppSettings } from '../../main/settingsManager';
@@ -101,6 +101,11 @@ function makeMockTorrentEngine() {
 }
 
 // ─── Tests: Requirement 8.1 — All IPC channels are registered ────────────────
+
+// Resetar rate limiter entre testes para evitar falsos positivos
+afterEach(() => {
+    _rateLimiter.reset();
+});
 
 describe('registerIpcHandlers — IPC channel registration (Requirement 8.1)', () => {
     const EXPECTED_CHANNELS = [
@@ -584,7 +589,7 @@ describe('registerIpcHandlers — tracker handlers', () => {
                 'udp://fail.example.com:6969',
             ]);
             (mockTorrentEngine.addTracker as jest.Mock)
-                .mockImplementationOnce(() => {}) // primeiro sucesso
+                .mockImplementationOnce(() => { }) // primeiro sucesso
                 .mockImplementationOnce(() => {
                     throw new Error('Tracker já presente');
                 }); // segundo falha
@@ -1338,8 +1343,8 @@ describe('Property 19: Evento de progresso IPC contém todos os itens ativos', (
             hashes.length === 0
                 ? fc.constant([])
                 : fc
-                      .tuple(...hashes.map((h) => downloadItemArb(h)))
-                      .map((items) => items as DownloadItem[]),
+                    .tuple(...hashes.map((h) => downloadItemArb(h)))
+                    .map((items) => items as DownloadItem[]),
         );
 
     // ── Helpers ───────────────────────────────────────────────────────────────

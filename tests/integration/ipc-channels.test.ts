@@ -24,6 +24,13 @@ jest.mock('electron', () => ({
     },
 }));
 
+// Mock fs para validação de destinationFolder no handler settings:set
+jest.mock('fs', () => ({
+    ...jest.requireActual('fs'),
+    existsSync: jest.fn().mockReturnValue(true),
+    accessSync: jest.fn(),
+}));
+
 const { ipcMain: mockIpcMain, dialog: mockDialog } = require('electron') as {
     ipcMain: { handle: jest.Mock };
     dialog: { showOpenDialog: jest.Mock };

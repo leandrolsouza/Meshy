@@ -714,10 +714,10 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             const limits = this.speedLimitsMap.get(item.infoHash);
             const enriched: DownloadItem = limits
                 ? {
-                      ...item,
-                      downloadSpeedLimitKBps: limits.downloadSpeedLimitKBps,
-                      uploadSpeedLimitKBps: limits.uploadSpeedLimitKBps,
-                  }
+                    ...item,
+                    downloadSpeedLimitKBps: limits.downloadSpeedLimitKBps,
+                    uploadSpeedLimitKBps: limits.uploadSpeedLimitKBps,
+                }
                 : item;
 
             // Enrich with file count info if available
@@ -746,6 +746,62 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
         const persisted = this.store.get('downloads') ?? [];
 
         for (const persistedItem of persisted) {
+            // ── Validação de integridade dos dados persistidos ─────────────────
+            // Rejeita itens com campos obrigatórios inválidos ou corrompidos.
+            if (
+                typeof persistedItem.infoHash !== 'string' ||
+                persistedItem.infoHash.length !== 40
+            ) {
+                this.log.warn(
+                    '[DownloadManager] Item persistido com infoHash inválido, ignorando:',
+                    String(persistedItem.infoHash),
+                );
+                continue;
+            }
+
+            const validStatuses: TorrentStatus[] = [
+                'queued',
+                'resolving-metadata',
+                'downloading',
+                'paused',
+                'completed',
+                'error',
+                'metadata-failed',
+                'files-not-found',
+            ];
+            if (!validStatuses.includes(persistedItem.status)) {
+                this.log.warn(
+                    '[DownloadManager] Item persistido com status inválido, ignorando:',
+                    persistedItem.infoHash,
+                    String(persistedItem.status),
+                );
+                continue;
+            }
+
+            if (
+                persistedItem.magnetUri !== undefined &&
+                (typeof persistedItem.magnetUri !== 'string' ||
+                    !persistedItem.magnetUri.startsWith('magnet:'))
+            ) {
+                this.log.warn(
+                    '[DownloadManager] Item persistido com magnetUri inválido, ignorando:',
+                    persistedItem.infoHash,
+                );
+                continue;
+            }
+
+            if (
+                persistedItem.torrentFilePath !== undefined &&
+                (typeof persistedItem.torrentFilePath !== 'string' ||
+                    persistedItem.torrentFilePath.length === 0)
+            ) {
+                this.log.warn(
+                    '[DownloadManager] Item persistido com torrentFilePath inválido, ignorando:',
+                    persistedItem.infoHash,
+                );
+                continue;
+            }
+
             // Check if destination folder exists
             const folderExists = existsSync(persistedItem.destinationFolder);
 

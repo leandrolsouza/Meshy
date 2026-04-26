@@ -94,7 +94,7 @@ const VALID_TRACKER_PROTOCOLS = ['http:', 'https:', 'udp:'];
 /**
  * Valida se uma string é uma Tracker URL válida.
  * Aceita protocolos http://, https://, udp:// com hostname não-vazio.
- * Rejeita strings vazias, apenas espaços, e protocolos inválidos.
+ * Rejeita strings vazias, apenas espaços, protocolos inválidos e IPs privados/loopback.
  */
 export function isValidTrackerUrl(url: string): boolean {
     if (typeof url !== 'string') return false;
@@ -109,20 +109,64 @@ export function isValidTrackerUrl(url: string): boolean {
         const protocol = protocolMatch[1].toLowerCase() + ':';
         if (!VALID_TRACKER_PROTOCOLS.includes(protocol)) return false;
 
+        let hostname: string;
+
         // Para http/https, usamos o construtor URL nativo
         if (protocol === 'http:' || protocol === 'https:') {
             const parsed = new URL(trimmed);
-            return parsed.hostname.length > 0;
+            if (parsed.hostname.length === 0) return false;
+            hostname = parsed.hostname;
+        } else {
+            // Para udp://, extraímos o hostname manualmente
+            const afterProtocol = trimmed.slice(protocolMatch[0].length);
+            // Hostname é tudo antes de : ou / ou fim da string
+            const hostnameMatch = afterProtocol.match(/^([^:/]+)/);
+            if (!hostnameMatch || hostnameMatch[1].length === 0) return false;
+            hostname = hostnameMatch[1];
         }
 
-        // Para udp://, extraímos o hostname manualmente
-        const afterProtocol = trimmed.slice(protocolMatch[0].length);
-        // Hostname é tudo antes de : ou / ou fim da string
-        const hostnameMatch = afterProtocol.match(/^([^:/]+)/);
-        return hostnameMatch !== null && hostnameMatch[1].length > 0;
+        // Rejeitar IPs privados, loopback e reservados (SSRF protection)
+        if (isPrivateHost(hostname)) return false;
+
+        return true;
     } catch {
         return false;
     }
+}
+
+/**
+ * Verifica se um hostname é um IP privado, loopback ou reservado.
+ * Bloqueia: 127.x.x.x, 10.x.x.x, 172.16-31.x.x, 192.168.x.x,
+ * 169.254.x.x (link-local), 0.0.0.0, localhost, e IPv6 loopback (::1).
+ */
+function isPrivateHost(hostname: string): boolean {
+    const lower = hostname.toLowerCase();
+
+    // localhost e variantes
+    if (lower === 'localhost' || lower === 'localhost.localdomain') return true;
+
+    // IPv6 loopback
+    if (lower === '::1' || lower === '[::1]') return true;
+
+    // Verificar se é um endereço IPv4
+    const ipv4Match = lower.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (ipv4Match) {
+        const [, a, b] = ipv4Match.map(Number);
+        // 0.0.0.0/8
+        if (a === 0) return true;
+        // 10.0.0.0/8
+        if (a === 10) return true;
+        // 127.0.0.0/8 (loopback)
+        if (a === 127) return true;
+        // 169.254.0.0/16 (link-local)
+        if (a === 169 && b === 254) return true;
+        // 172.16.0.0/12
+        if (a === 172 && b >= 16 && b <= 31) return true;
+        // 192.168.0.0/16
+        if (a === 192 && b === 168) return true;
+    }
+
+    return false;
 }
 
 /**

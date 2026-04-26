@@ -1,4 +1,5 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron';
+import { existsSync, accessSync, constants as fsConstants } from 'fs';
 import type { DownloadManager } from './downloadManager';
 import type { SettingsManager } from './settingsManager';
 import type { TorrentEngine } from './torrentEngine';
@@ -9,7 +10,7 @@ import type {
     TorrentFileInfo,
     TrackerInfo,
 } from '../shared/types';
-import { isValidSpeedLimit } from './validators';
+import { isValidSpeedLimit, isValidTorrentFile } from './validators';
 import { isValidTrackerUrl } from '../shared/validators';
 import { ErrorCodes } from '../shared/errorCodes';
 import { logger, createScopedLogger } from './logger';
@@ -42,6 +43,74 @@ function failWithLog(channel: string, err: unknown, scopedLog?: ScopedLogger): I
 }
 
 // ─── Timeout wrapper ──────────────────────────────────────────────────────────
+
+/**
+ * Verifica se um caminho de diretório tem permissão de escrita.
+ * Retorna false em caso de erro (diretório inacessível, sem permissão, etc).
+ */
+function hasWritePermission(dirPath: string): boolean {
+    try {
+        accessSync(dirPath, fsConstants.W_OK);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+// ─── Rate limiter ─────────────────────────────────────────────────────────────
+
+/**
+ * Rate limiter simples por canal IPC usando sliding window.
+ * Limita o número de chamadas por segundo para evitar abuso do renderer.
+ */
+class ChannelRateLimiter {
+    private readonly timestamps = new Map<string, number[]>();
+    private readonly maxPerSecond: number;
+
+    constructor(maxPerSecond: number) {
+        this.maxPerSecond = maxPerSecond;
+    }
+
+    /**
+     * Tenta consumir um token para o canal. Retorna true se permitido.
+     */
+    tryConsume(channel: string): boolean {
+        const now = Date.now();
+        const windowStart = now - 1000;
+
+        let calls = this.timestamps.get(channel);
+        if (!calls) {
+            calls = [];
+            this.timestamps.set(channel, calls);
+        }
+
+        // Remover timestamps fora da janela de 1 segundo
+        while (calls.length > 0 && calls[0] <= windowStart) {
+            calls.shift();
+        }
+
+        if (calls.length >= this.maxPerSecond) {
+            return false;
+        }
+
+        calls.push(now);
+        return true;
+    }
+
+    /** Limpa todos os timestamps. Útil para testes. */
+    reset(): void {
+        this.timestamps.clear();
+    }
+}
+
+/** Rate limiter global para todos os canais IPC (500 chamadas/segundo por canal) */
+const rateLimiter = new ChannelRateLimiter(500);
+
+// Exportado para permitir reset nos testes
+export { rateLimiter as _rateLimiter };
+
+/** Código de erro para rate limiting */
+const RATE_LIMITED = 'error.rateLimit';
 
 /** Timeout padrão para operações IPC (30 segundos) */
 const IPC_TIMEOUT_MS = 30_000;
@@ -157,11 +226,16 @@ export function registerIpcHandlers(
 ): void {
     // ── Wrapper para tracking automático de métricas ──────────────────────────
     // Intercepta ipcMain.handle para medir latência e contar erros de cada canal.
+    // Inclui rate limiting para proteger contra abuso do renderer.
     const trackedHandle = <T>(
         channel: string,
         handler: (event: Electron.IpcMainInvokeEvent, payload: unknown) => Promise<IPCResponse<T>>,
     ): void => {
         ipcMain.handle(channel, async (event, payload) => {
+            if (!rateLimiter.tryConsume(channel)) {
+                logger.warn(`[IPC] Rate limit excedido para canal: ${channel}`);
+                return fail(RATE_LIMITED) as IPCResponse<T>;
+            }
             return withMetrics(channel, () => handler(event, payload));
         });
     };
@@ -179,6 +253,11 @@ export function registerIpcHandlers(
                     filePath: { type: 'string', nonEmpty: true },
                 });
                 if (!result.valid) return fail(ErrorCodes.INVALID_FILE_PATH);
+
+                // Validar extensão .torrent antes de ler o arquivo do filesystem
+                if (!isValidTorrentFile(result.data.filePath)) {
+                    return fail(ErrorCodes.INVALID_FILE_PATH);
+                }
 
                 const item = await withTimeout(
                     downloadManager.addTorrentFile(result.data.filePath),
@@ -317,6 +396,16 @@ export function registerIpcHandlers(
                 const validationError = validateSettingsPayload(partial);
                 if (validationError) {
                     return fail(validationError);
+                }
+
+                // Validar que a pasta de destino existe e tem permissão de escrita
+                if (partial.destinationFolder !== undefined) {
+                    if (
+                        !existsSync(partial.destinationFolder) ||
+                        !hasWritePermission(partial.destinationFolder)
+                    ) {
+                        return fail(ErrorCodes.INVALID_PARAMS);
+                    }
                 }
 
                 // Capturar configurações anteriores ANTES de persistir (para detecção de mudança)

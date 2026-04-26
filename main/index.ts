@@ -70,10 +70,54 @@ function createMainWindow(): BrowserWindow {
             preload: join(__dirname, '../preload/index.js'),
             nodeIntegration: false,
             contextIsolation: true,
+            sandbox: true,
         },
     });
 
-    if (process.env['ELECTRON_RENDERER_URL']) {
+    // ── CSP — Content-Security-Policy ─────────────────────────────────────────
+    // Define uma política restritiva para mitigar XSS no renderer.
+    // 'unsafe-inline' em style-src é necessário para CSS-in-JS do React.
+    window.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+        callback({
+            responseHeaders: {
+                ...details.responseHeaders,
+                'Content-Security-Policy': [
+                    [
+                        "default-src 'self'",
+                        "script-src 'self'",
+                        "style-src 'self' 'unsafe-inline'",
+                        "img-src 'self' data:",
+                        "font-src 'self'",
+                        "connect-src 'self'",
+                    ].join('; '),
+                ],
+            },
+        });
+    });
+
+    // ── Proteção contra navegação externa ─────────────────────────────────────
+    // Bloqueia qualquer tentativa de navegar para URLs externas dentro da janela
+    // principal. Impede que metadata malicioso de torrents redirecione o renderer.
+    window.webContents.on('will-navigate', (event, url) => {
+        const isLocal =
+            url.startsWith('file://') || url.startsWith('http://localhost');
+        if (!isLocal) {
+            event.preventDefault();
+            logger.warn('[Security] Navegação externa bloqueada:', url);
+        }
+    });
+
+    // Bloqueia abertura de novas janelas (popups, target="_blank", window.open)
+    window.webContents.setWindowOpenHandler(({ url }) => {
+        logger.warn('[Security] Abertura de janela bloqueada:', url);
+        return { action: 'deny' };
+    });
+
+    // ── Carregamento do renderer ──────────────────────────────────────────────
+    // ELECTRON_RENDERER_URL só é respeitada em dev (app não empacotado).
+    // Em produção, sempre carrega o arquivo local para evitar que uma env var
+    // maliciosa redirecione o renderer para uma URL arbitrária.
+    if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
         window.loadURL(process.env['ELECTRON_RENDERER_URL']);
     } else {
         window.loadFile(join(__dirname, '../renderer/index.html'));
