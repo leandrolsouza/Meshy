@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useState } from 'react';
+import React, { useMemo, useCallback, useState, useRef } from 'react';
 import { useIntl } from 'react-intl';
 import { VscChevronDown, VscChevronRight } from 'react-icons/vsc';
 import { useDownloads } from '../../hooks/useDownloads';
@@ -8,6 +8,10 @@ import type { StatusGroup } from '../../utils/downloadFilters';
 import { DownloadItem } from './DownloadItem';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import styles from './DownloadList.module.css';
+
+// ── Tempo mínimo que o overlay fica visível (ms) ─────────────────────────────
+// Evita flash rápido demais que confunde o usuário.
+const MIN_OVERLAY_MS = 400;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -27,6 +31,53 @@ export function DownloadList(): React.JSX.Element {
 
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const [collapsedGroups, setCollapsedGroups] = useState<Set<StatusGroup>>(new Set());
+
+    // ── Overlay de loading durante operações ─────────────────────────────────
+    // Bloqueia interações enquanto pause/resume/remove estão em andamento.
+    const [isBusy, setIsBusy] = useState(false);
+    const opsInFlight = useRef(0);
+    const overlayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    /**
+     * Envolve uma operação async (pause/resume/remove) com o overlay de loading.
+     * Mostra o overlay imediatamente e garante que ele fique visível por pelo
+     * menos MIN_OVERLAY_MS para evitar flash.
+     */
+    const withBusy = useCallback(<T,>(op: Promise<T>): Promise<T> => {
+        opsInFlight.current++;
+        setIsBusy(true);
+        if (overlayTimer.current) {
+            clearTimeout(overlayTimer.current);
+            overlayTimer.current = null;
+        }
+        const start = Date.now();
+        return op.finally(() => {
+            opsInFlight.current--;
+            if (opsInFlight.current <= 0) {
+                opsInFlight.current = 0;
+                const elapsed = Date.now() - start;
+                const remaining = Math.max(0, MIN_OVERLAY_MS - elapsed);
+                overlayTimer.current = setTimeout(() => {
+                    setIsBusy(false);
+                    overlayTimer.current = null;
+                }, remaining);
+            }
+        });
+    }, []);
+
+    // Wrappers que ativam o overlay
+    const handlePause = useCallback(
+        (infoHash: string) => withBusy(pause(infoHash)),
+        [pause, withBusy],
+    );
+    const handleResume = useCallback(
+        (infoHash: string) => withBusy(resume(infoHash)),
+        [resume, withBusy],
+    );
+    const handleRemove = useCallback(
+        (infoHash: string, deleteFiles: boolean) => withBusy(remove(infoHash, deleteFiles)),
+        [remove, withBusy],
+    );
 
     // ── Estado de drag-and-drop (Task 8.2) ───────────────────────────────────
     const [draggedInfoHash, setDraggedInfoHash] = useState<string | null>(null);
@@ -149,9 +200,10 @@ export function DownloadList(): React.JSX.Element {
     const handleClearCompleted = useCallback(
         (deleteFiles: boolean) => {
             const completedItems = items.filter((i) => i.status === 'completed');
-            completedItems.forEach((i) => remove(i.infoHash, deleteFiles));
+            const ops = completedItems.map((i) => remove(i.infoHash, deleteFiles));
+            withBusy(Promise.all(ops));
         },
-        [items, remove],
+        [items, remove, withBusy],
     );
 
     // Estado vazio absoluto: nenhum download no store
@@ -184,6 +236,15 @@ export function DownloadList(): React.JSX.Element {
 
     return (
         <div className={styles.container}>
+            {/* Overlay de loading durante operações de pause/resume/remove */}
+            {isBusy && (
+                <div className={styles.busyOverlay} aria-live="assertive" role="status">
+                    <div className={styles.busySpinner} />
+                    <span className={styles.busyText}>
+                        {intl.formatMessage({ id: 'downloads.processing' })}
+                    </span>
+                </div>
+            )}
             {/* Barra de ações inline (limpar concluídos) */}
             {completedCount > 0 && (
                 <div className={styles.actionsBar}>
@@ -290,11 +351,9 @@ export function DownloadList(): React.JSX.Element {
                                                 <DownloadItem
                                                     item={item}
                                                     queueSize={queueSize}
-                                                    onPause={pause}
-                                                    onResume={resume}
-                                                    onRemove={(infoHash, deleteFiles) =>
-                                                        remove(infoHash, deleteFiles)
-                                                    }
+                                                    onPause={handlePause}
+                                                    onResume={handleResume}
+                                                    onRemove={handleRemove}
                                                     onMoveUp={handleMoveUp}
                                                     onMoveDown={handleMoveDown}
                                                     onDragStart={handleDragStart}

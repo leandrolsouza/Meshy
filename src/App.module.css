@@ -29,7 +29,6 @@
     font-size: var(--font-size-xs);
     color: var(--color-text);
     font-weight: 400;
-    user-select: none;
 }
 
 /* ─── Activity Bar ────────────────────────────────────────────────────────── */
@@ -113,6 +112,5 @@
     padding: 0 var(--space-lg);
     height: 24px;
     font-size: var(--font-size-xs);
-    user-select: none;
     gap: var(--space-lg);
 }

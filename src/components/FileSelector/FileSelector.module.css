@@ -43,6 +43,7 @@
     padding: var(--space-sm) var(--space-md);
     font-size: var(--font-size-sm);
     color: var(--color-danger);
+    user-select: text;
 }
 
 /* ─── File List ───────────────────────────────────────────────────────────── */
@@ -111,6 +112,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    user-select: text;
 }
 
 .fileSize {

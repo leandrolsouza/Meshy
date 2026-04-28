@@ -39,6 +39,7 @@
     "downloads.filteredEmpty.title": "No downloads match the applied filters.",
     "downloads.clearCompleted": "Clear completed ({count})",
     "downloads.clearCompletedAriaLabel": "Clear completed downloads",
+    "downloads.processing": "Processing…",
     "downloads.confirmClearCompleted.title": "Clear completed downloads",
     "downloads.confirmClearCompleted.message": "{count, plural, one {Do you want to remove 1 completed download from the list? Downloaded files can be kept or deleted from disk.} other {Do you want to remove # completed downloads from the list? Downloaded files can be kept or deleted from disk.}}",
     "downloads.confirmRemove.title": "Remove download",

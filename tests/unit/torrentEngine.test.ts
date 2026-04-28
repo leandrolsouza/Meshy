@@ -189,13 +189,13 @@ describe('TorrentEngine.pause() — timeout (Requirement 4.6)', () => {
         expect(caughtError!.message).toMatch(/timeout|simulated hang/i);
     });
 
-    it('rejects immediately when the torrent is not found', async () => {
+    it('resolves silently when the torrent is not found (already stopped)', async () => {
+        // Pausar um torrent que não está no engine deve ser tratado como sucesso:
+        // se não está no engine, já está efetivamente parado.
         const mockClient = makeMockClient();
         const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
 
-        await expect(engine.pause('nonexistent'.padEnd(40, '0'))).rejects.toThrow(
-            /Torrent não encontrado/,
-        );
+        await expect(engine.pause('nonexistent'.padEnd(40, '0'))).resolves.toBeUndefined();
     });
 });
 

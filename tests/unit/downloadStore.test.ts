@@ -157,8 +157,6 @@ describe('downloadStore', () => {
         });
 
         it('preserva status local "error" quando o remoto ainda mostra "downloading"', () => {
-            // Simula: renderer marcou como error via onError, mas o main process
-            // ainda não refletiu a mudança no próximo snapshot de progresso.
             useDownloadStore.getState().setItems([makeItem({ infoHash: 'a', status: 'error' })]);
 
             useDownloadStore
@@ -167,7 +165,6 @@ describe('downloadStore', () => {
 
             const item = useDownloadStore.getState().items[0];
             expect(item.status).toBe('error');
-            // Outros campos devem ser atualizados pelo remoto
             expect(item.progress).toBe(0.5);
         });
 
@@ -208,7 +205,6 @@ describe('downloadStore', () => {
                 .getState()
                 .setItems([makeItem({ infoHash: 'a' }), makeItem({ infoHash: 'b' })]);
 
-            // Snapshot remoto só tem 'a'
             useDownloadStore.getState().mergeItems([makeItem({ infoHash: 'a' })]);
 
             expect(useDownloadStore.getState().items).toHaveLength(1);

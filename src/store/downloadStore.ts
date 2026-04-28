@@ -6,7 +6,7 @@ import type { DownloadItem } from '../../shared/types';
 interface DownloadStore {
     items: DownloadItem[];
     setItems(items: DownloadItem[]): void;
-    mergeItems(items: DownloadItem[]): void;
+    mergeItems(incoming: DownloadItem[]): void;
     updateItem(item: DownloadItem): void;
     removeItem(infoHash: string): void;
 }
@@ -25,21 +25,17 @@ export const useDownloadStore = create<DownloadStore>((set) => ({
     },
 
     /**
-     * Merge inteligente: atualiza a lista com o snapshot do main process,
-     * mas preserva mudanças locais de status feitas via updateItem (ex: onError)
-     * que o main process ainda não refletiu.
+     * Merge inteligente: atualiza a lista com o snapshot do main process.
      *
-     * O main process é a fonte de verdade para dados dinâmicos (progress, speed, peers),
-     * mas o renderer pode ter aplicado uma transição de status (ex: 'error' via onError)
-     * que o próximo snapshot de progresso ainda não contém.
+     * O main process é a fonte de verdade absoluta. O status no main process
+     * é atualizado sincronamente ANTES das operações assíncronas do engine,
+     * então o snapshot sempre reflete o estado correto.
      *
-     * Estratégia: se o item local tem status 'error' e o snapshot do main ainda
-     * mostra 'downloading', preserva o status local. Para todos os outros campos,
-     * o snapshot do main prevalece.
+     * A única exceção é o status 'error' definido localmente via onError,
+     * que pode chegar antes do próximo snapshot de progresso.
      */
     mergeItems(incoming: DownloadItem[]): void {
         set((state) => {
-            // Indexar itens locais por infoHash para lookup O(1)
             const localMap = new Map<string, DownloadItem>();
             for (const item of state.items) {
                 localMap.set(item.infoHash, item);
@@ -50,8 +46,7 @@ export const useDownloadStore = create<DownloadStore>((set) => ({
                 if (!local) return remote;
 
                 // Preservar status local 'error' quando o main ainda reporta 'downloading'.
-                // O main process eventualmente também transicionará para 'error',
-                // momento em que ambos estarão sincronizados.
+                // O onError do renderer pode marcar como error antes do próximo snapshot.
                 if (local.status === 'error' && remote.status === 'downloading') {
                     return { ...remote, status: local.status } as DownloadItem;
                 }

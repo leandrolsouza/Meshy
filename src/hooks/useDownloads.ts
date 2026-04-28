@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import type { DownloadItem, IPCResponse, TorrentFileInfo } from '../../shared/types';
 import { useDownloadStore } from '../store/downloadStore';
 
@@ -15,12 +15,14 @@ import { useDownloadStore } from '../store/downloadStore';
 export function useDownloads() {
     const { mergeItems, updateItem, removeItem } = useDownloadStore();
 
+    // Rastreia operações de pause/resume em andamento por infoHash
+    // para evitar chamadas duplicadas quando o usuário clica rapidamente.
+    const pendingOps = useRef(new Set<string>());
+
     // ── Register IPC event listeners ──────────────────────────────────────────
 
     useEffect(() => {
         // onProgress: main process emits the full list of active items every second.
-        // Usa mergeItems em vez de setItems para preservar mudanças locais de status
-        // (ex: 'error' via onError) que o main process ainda não refletiu.
         const removeProgressListener = window.meshy.onProgress((items: DownloadItem[]) => {
             mergeItems(items);
         });
@@ -73,31 +75,55 @@ export function useDownloads() {
 
     /**
      * Pauses the torrent with the given infoHash.
+     * Ignora chamadas duplicadas enquanto uma operação está em andamento.
      */
-    async function pause(infoHash: string): Promise<IPCResponse<void>> {
-        const response = await window.meshy.pause(infoHash);
-        if (response.success) {
-            const item = useDownloadStore.getState().items.find((i) => i.infoHash === infoHash);
-            if (item) {
-                updateItem({ ...item, status: 'paused' });
-            }
+    const pause = useCallback(async (infoHash: string): Promise<IPCResponse<void>> => {
+        const opKey = `pause:${infoHash}`;
+        if (pendingOps.current.has(opKey)) {
+            return { success: true, data: undefined };
         }
-        return response;
-    }
+        pendingOps.current.add(opKey);
+        try {
+            const response = await window.meshy.pause(infoHash);
+            if (response.success) {
+                const item = useDownloadStore
+                    .getState()
+                    .items.find((i) => i.infoHash === infoHash);
+                if (item) {
+                    updateItem({ ...item, status: 'paused' });
+                }
+            }
+            return response;
+        } finally {
+            pendingOps.current.delete(opKey);
+        }
+    }, [updateItem]);
 
     /**
      * Resumes the torrent with the given infoHash.
+     * Ignora chamadas duplicadas enquanto uma operação está em andamento.
      */
-    async function resume(infoHash: string): Promise<IPCResponse<void>> {
-        const response = await window.meshy.resume(infoHash);
-        if (response.success) {
-            const item = useDownloadStore.getState().items.find((i) => i.infoHash === infoHash);
-            if (item) {
-                updateItem({ ...item, status: 'downloading' });
-            }
+    const resume = useCallback(async (infoHash: string): Promise<IPCResponse<void>> => {
+        const opKey = `resume:${infoHash}`;
+        if (pendingOps.current.has(opKey)) {
+            return { success: true, data: undefined };
         }
-        return response;
-    }
+        pendingOps.current.add(opKey);
+        try {
+            const response = await window.meshy.resume(infoHash);
+            if (response.success) {
+                const item = useDownloadStore
+                    .getState()
+                    .items.find((i) => i.infoHash === infoHash);
+                if (item) {
+                    updateItem({ ...item, status: 'downloading' });
+                }
+            }
+            return response;
+        } finally {
+            pendingOps.current.delete(opKey);
+        }
+    }, [updateItem]);
 
     /**
      * Removes the torrent with the given infoHash.

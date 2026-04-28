@@ -126,6 +126,12 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
     private readonly log: Logger;
     /** Timer de limpeza periódica de recursos órfãos */
     private readonly cleanupTimer: ReturnType<typeof setInterval> | null;
+    /**
+     * Lock por torrent para serializar operações de pause/resume.
+     * Cada Promise representa a operação em andamento; a próxima operação
+     * encadeia-se na anterior para evitar race conditions.
+     */
+    private readonly opLocks = new Map<string, Promise<void>>();
 
     constructor(
         engine: TorrentEngine,
@@ -169,6 +175,12 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             // terminado). Sem este guard, a detecção de conclusão por arquivos
             // selecionados dispara repetidamente.
             if (existing.status === 'completed') return;
+
+            // Ignorar eventos de progresso para downloads pausados.
+            // Após engine.pause() + destroyAllWires(), o WebTorrent pode
+            // ainda emitir eventos residuais de 'download'/'upload'.
+            // Sem este guard, o status 'paused' seria sobrescrito por 'downloading'.
+            if (existing.status === 'paused') return;
 
             // Detect metadata resolution: resolving-metadata → downloading
             // When this transition happens, clear the 60s timeout and update
@@ -494,103 +506,163 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
     // ── pause ───────────────────────────────────────────────────────────────────
 
     async pause(infoHash: string): Promise<void> {
-        const existing = this.items.get(infoHash);
+        return this._withLock(infoHash, async () => {
+            const existing = this.items.get(infoHash);
 
-        // Se o item está na fila, apenas removê-lo da fila (não está no engine)
-        if (existing && existing.status === 'queued') {
-            const queueIdx = this.queue.indexOf(infoHash);
-            if (queueIdx !== -1) {
-                this.queue.splice(queueIdx, 1);
-            }
-
-            // Se o item está no engine (foi pausado ao enfileirar), pausar lá também
-            // Se é um magnet enfileirado sem engine, apenas atualizar o status
-            if (!this.queuedMagnetUris.has(infoHash)) {
-                try {
-                    await this.engine.pause(infoHash);
-                } catch (pauseErr) {
-                    this.log.warn(
-                        '[DownloadManager] Falha ao pausar item enfileirado:',
-                        infoHash,
-                        (pauseErr as Error).message,
-                    );
+            // Se o item está na fila, apenas removê-lo da fila (não está no engine)
+            if (existing && existing.status === 'queued') {
+                const queueIdx = this.queue.indexOf(infoHash);
+                if (queueIdx !== -1) {
+                    this.queue.splice(queueIdx, 1);
                 }
+
+                // Se o item está no engine (foi pausado ao enfileirar), pausar lá também
+                // Se é um magnet enfileirado sem engine, apenas atualizar o status
+                if (!this.queuedMagnetUris.has(infoHash)) {
+                    try {
+                        await this.engine.pause(infoHash);
+                    } catch (pauseErr) {
+                        this.log.warn(
+                            '[DownloadManager] Falha ao pausar item enfileirado:',
+                            infoHash,
+                            (pauseErr as Error).message,
+                        );
+                    }
+                }
+
+                const updated: DownloadItem = { ...existing, status: 'paused' };
+                this.items.set(infoHash, updated);
+                this.emit('update', updated);
+                return;
             }
 
-            const updated: DownloadItem = { ...existing, status: 'paused' };
-            this.items.set(infoHash, updated);
-            this.emit('update', updated);
-            return;
-        }
+            // Atualizar status ANTES do await para que:
+            // 1. O progress handler ignore eventos residuais do engine
+            // 2. O _activeCount() reflita o slot liberado imediatamente
+            if (existing) {
+                const updated: DownloadItem = { ...existing, status: 'paused' };
+                this.items.set(infoHash, updated);
+                this.emit('update', updated);
+            }
 
-        await this.engine.pause(infoHash);
+            try {
+                await this.engine.pause(infoHash);
+            } catch (err) {
+                // Se o engine falhou ao pausar, reverter o status
+                if (existing) {
+                    this.items.set(infoHash, existing);
+                    this.emit('update', existing);
+                }
+                throw err;
+            }
 
-        if (existing) {
-            const updated: DownloadItem = { ...existing, status: 'paused' };
-            this.items.set(infoHash, updated);
-            this.emit('update', updated);
-        }
-
-        // Um slot foi liberado — processar a fila
-        this._processQueue();
+            // Um slot foi liberado — processar a fila
+            this._processQueue();
+        });
     }
 
     // ── resume ──────────────────────────────────────────────────────────────────
 
     async resume(infoHash: string): Promise<void> {
-        const existing = this.items.get(infoHash);
-        if (!existing) {
-            throw new Error(`Torrent não encontrado: ${infoHash}`);
-        }
-
-        // Se não há slots disponíveis, enfileirar em vez de retomar
-        if (this._activeCount() >= this.maxConcurrent) {
-            // Já está na fila? Não fazer nada
-            if (existing.status === 'queued') return;
-
-            const updated: DownloadItem = { ...existing, status: 'queued' };
-            this.items.set(infoHash, updated);
-            if (!this.queue.includes(infoHash)) {
-                this.queue.push(infoHash);
+        return this._withLock(infoHash, async () => {
+            const existing = this.items.get(infoHash);
+            if (!existing) {
+                throw new Error(`Torrent não encontrado: ${infoHash}`);
             }
-            this.emit('update', updated);
-            return;
-        }
 
-        // Se é um magnet enfileirado que nunca foi adicionado ao engine
-        if (this.queuedMagnetUris.has(infoHash)) {
-            const magnetUri = this.queuedMagnetUris.get(infoHash)!;
-            this.queuedMagnetUris.delete(infoHash);
+            // Se não há slots disponíveis, enfileirar em vez de retomar
+            if (this._activeCount() >= this.maxConcurrent) {
+                // Já está na fila? Não fazer nada
+                if (existing.status === 'queued') return;
 
-            // Remover da fila
+                const updated: DownloadItem = { ...existing, status: 'queued' };
+                this.items.set(infoHash, updated);
+                if (!this.queue.includes(infoHash)) {
+                    this.queue.push(infoHash);
+                }
+                this.emit('update', updated);
+                return;
+            }
+
+            // Se é um magnet enfileirado que nunca foi adicionado ao engine
+            if (this.queuedMagnetUris.has(infoHash)) {
+                const magnetUri = this.queuedMagnetUris.get(infoHash)!;
+                this.queuedMagnetUris.delete(infoHash);
+
+                // Remover da fila
+                const queueIdx = this.queue.indexOf(infoHash);
+                if (queueIdx !== -1) this.queue.splice(queueIdx, 1);
+
+                // Atualizar status ANTES do await para ocupar o slot
+                const starting: DownloadItem = {
+                    ...existing,
+                    status: 'resolving-metadata',
+                };
+                this.items.set(infoHash, starting);
+                this.emit('update', starting);
+
+                try {
+                    const info = await this.engine.addMagnetLink(magnetUri);
+
+                    const current = this.items.get(infoHash);
+                    if (!current) return;
+
+                    const updated: DownloadItem = {
+                        ...current,
+                        name: info.name || current.name,
+                        totalSize: info.totalSize || current.totalSize,
+                        status: 'resolving-metadata',
+                    };
+                    this.items.set(infoHash, updated);
+                    this.emit('update', updated);
+
+                    this._startMetadataTimer(infoHash);
+                } catch (err) {
+                    // Se falhou, reverter para o status anterior
+                    const current = this.items.get(infoHash);
+                    if (current) {
+                        const errItem: DownloadItem = {
+                            ...current,
+                            status: 'error',
+                            errorMessage: (err as Error).message,
+                        };
+                        this.items.set(infoHash, errItem);
+                        this.emit('update', errItem);
+                    }
+                    this._processQueue();
+                }
+                return;
+            }
+
+            // Remover da fila se estava lá
             const queueIdx = this.queue.indexOf(infoHash);
             if (queueIdx !== -1) this.queue.splice(queueIdx, 1);
 
-            const info = await this.engine.addMagnetLink(magnetUri);
-
-            const updated: DownloadItem = {
-                ...existing,
-                name: info.name || existing.name,
-                totalSize: info.totalSize || existing.totalSize,
-                status: 'resolving-metadata',
-            };
+            // Atualizar status ANTES do await para que:
+            // 1. O _activeCount() reflita o slot ocupado imediatamente
+            // 2. O progress handler aceite eventos do engine
+            const updated: DownloadItem = { ...existing, status: 'downloading' };
             this.items.set(infoHash, updated);
             this.emit('update', updated);
 
-            // Start metadata timeout
-            this._startMetadataTimer(infoHash);
-            return;
-        }
-
-        // Remover da fila se estava lá
-        const queueIdx = this.queue.indexOf(infoHash);
-        if (queueIdx !== -1) this.queue.splice(queueIdx, 1);
-
-        await this.engine.resume(infoHash);
-
-        const updated: DownloadItem = { ...existing, status: 'downloading' };
-        this.items.set(infoHash, updated);
-        this.emit('update', updated);
+            try {
+                await this.engine.resume(infoHash);
+            } catch (err) {
+                // Se o engine falhou ao retomar, marcar como erro
+                const current = this.items.get(infoHash);
+                if (current) {
+                    const errItem: DownloadItem = {
+                        ...current,
+                        status: 'error',
+                        errorMessage: (err as Error).message,
+                    };
+                    this.items.set(infoHash, errItem);
+                    this.emit('update', errItem);
+                }
+                this._processQueue();
+                throw err;
+            }
+        });
     }
 
     // ── setFileSelection ───────────────────────────────────────────────────────
@@ -774,39 +846,44 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
     // ── remove ──────────────────────────────────────────────────────────────────
 
     async remove(infoHash: string, deleteFiles: boolean): Promise<void> {
-        const wasActive = this._isActiveStatus(this.items.get(infoHash)?.status);
-        const wasQueued = this.items.get(infoHash)?.status === 'queued';
-        const hadQueuedMagnet = this.queuedMagnetUris.has(infoHash);
+        return this._withLock(infoHash, async () => {
+            const existing = this.items.get(infoHash);
+            const wasActive = this._isActiveStatus(existing?.status);
+            const wasQueued = existing?.status === 'queued';
+            const hadQueuedMagnet = this.queuedMagnetUris.has(infoHash);
 
-        // Remover da fila se estava lá
-        const queueIdx = this.queue.indexOf(infoHash);
-        if (queueIdx !== -1) this.queue.splice(queueIdx, 1);
+            // Remover da fila se estava lá
+            const queueIdx = this.queue.indexOf(infoHash);
+            if (queueIdx !== -1) this.queue.splice(queueIdx, 1);
 
-        // Limpar referências de magnet enfileirados
-        this.queuedMagnetUris.delete(infoHash);
+            // Limpar referências de magnet enfileirados
+            this.queuedMagnetUris.delete(infoHash);
 
-        // Se era um magnet enfileirado que nunca foi adicionado ao engine, não chamar engine.remove
-        if (!(wasQueued && hadQueuedMagnet)) {
-            try {
-                await this.engine.remove(infoHash, deleteFiles);
-            } catch (removeErr) {
-                this.log.warn(
-                    '[DownloadManager] Falha ao remover do engine:',
-                    infoHash,
-                    (removeErr as Error).message,
-                );
+            // Remover do mapa ANTES de chamar engine.remove para que
+            // o progress handler ignore eventos residuais imediatamente.
+            this._clearMetadataTimer(infoHash);
+            this.selectedFileIndicesMap.delete(infoHash);
+            this.items.delete(infoHash);
+            this.emit('remove', infoHash);
+
+            // Se era um magnet enfileirado que nunca foi adicionado ao engine, não chamar engine.remove
+            if (!(wasQueued && hadQueuedMagnet)) {
+                try {
+                    await this.engine.remove(infoHash, deleteFiles);
+                } catch (removeErr) {
+                    this.log.warn(
+                        '[DownloadManager] Falha ao remover do engine:',
+                        infoHash,
+                        (removeErr as Error).message,
+                    );
+                }
             }
-        }
 
-        this._clearMetadataTimer(infoHash);
-        this.selectedFileIndicesMap.delete(infoHash);
-        this.items.delete(infoHash);
-        this.emit('remove', infoHash);
-
-        // Se um download ativo foi removido, processar a fila
-        if (wasActive) {
-            this._processQueue();
-        }
+            // Se um download ativo foi removido, processar a fila
+            if (wasActive) {
+                this._processQueue();
+            }
+        });
     }
 
     // ── getAll ──────────────────────────────────────────────────────────────────
@@ -1101,6 +1178,24 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
     }
 
     // ── Private helpers ─────────────────────────────────────────────────────────
+
+    /**
+     * Serializa operações por torrent: encadeia a próxima operação na Promise
+     * anterior para o mesmo infoHash, garantindo que pause/resume não se
+     * sobreponham. Se a operação anterior falhou, a próxima ainda executa.
+     */
+    private _withLock(infoHash: string, fn: () => Promise<void>): Promise<void> {
+        const prev = this.opLocks.get(infoHash) ?? Promise.resolve();
+        const next = prev.catch(() => { }).then(fn);
+        this.opLocks.set(infoHash, next);
+        // Limpar o lock quando a cadeia terminar para não acumular memória
+        next.catch(() => { }).then(() => {
+            if (this.opLocks.get(infoHash) === next) {
+                this.opLocks.delete(infoHash);
+            }
+        });
+        return next;
+    }
 
     /**
      * Limpa recursos órfãos: entries em metadataTimers,

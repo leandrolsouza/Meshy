@@ -294,7 +294,10 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
         return new Promise((resolve, reject) => {
             const torrent = this._getTorrent(infoHash);
             if (!torrent) {
-                return reject(new Error(`Torrent não encontrado: ${infoHash}`));
+                // Torrent não está no engine — já está efetivamente parado.
+                // Atualizar o statusMap e resolver como sucesso (consistente com remove()).
+                this.statusMap.set(infoHash, 'paused');
+                return resolve();
             }
 
             const timer = setTimeout(() => {

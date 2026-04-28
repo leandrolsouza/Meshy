@@ -25,6 +25,7 @@
     padding: var(--space-xs) 0;
     font-size: var(--font-size-sm);
     color: var(--color-danger);
+    user-select: text;
 }
 
 .success {
@@ -95,6 +96,7 @@
     white-space: nowrap;
     font-size: var(--font-size-sm);
     color: var(--color-text);
+    user-select: text;
 }
 
 .trackerMessage {

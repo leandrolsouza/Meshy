@@ -51,6 +51,7 @@
     resize: vertical;
     box-sizing: border-box;
     transition: border-color var(--transition-fast);
+    user-select: text;
 }
 
 .magnetTextarea::placeholder {
@@ -79,6 +80,7 @@
     font-size: var(--font-size-sm);
     margin-top: var(--space-xs);
     white-space: pre-line;
+    user-select: text;
 }
 
 .submitResult {

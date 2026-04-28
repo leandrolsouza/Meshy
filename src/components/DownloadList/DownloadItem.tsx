@@ -65,9 +65,9 @@ const STATUS_LABEL_KEYS: Record<DownloadItemType['status'], string> = {
 interface DownloadItemProps {
     item: DownloadItemType;
     queueSize: number; // Tamanho total da fila (para desabilitar "mover para baixo")
-    onPause: (infoHash: string) => void;
-    onResume: (infoHash: string) => void;
-    onRemove: (infoHash: string, deleteFiles: boolean) => void;
+    onPause: (infoHash: string) => Promise<unknown>;
+    onResume: (infoHash: string) => Promise<unknown>;
+    onRemove: (infoHash: string, deleteFiles: boolean) => Promise<unknown>;
     onMoveUp: (infoHash: string) => void;
     onMoveDown: (infoHash: string) => void;
     // Drag-and-drop (Task 8.1)
@@ -98,6 +98,14 @@ export function DownloadItem({
         item.status === 'queued' || item.status === 'resolving-metadata';
     const isQueued = item.status === 'queued';
     const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+
+    // ── Estado de operação em andamento (desabilita botões durante IPC) ──────
+    const [isBusy, setIsBusy] = useState(false);
+
+    // Resetar busy quando o status muda (o main process confirmou a operação)
+    useEffect(() => {
+        setIsBusy(false);
+    }, [item.status]);
 
     // ── Ref para rastrear mudança de posição na fila (aria-live) ─────────────
     const prevQueuePositionRef = useRef<number | undefined>(item.queuePosition);
@@ -516,7 +524,12 @@ export function DownloadItem({
                 {item.status === 'downloading' && (
                     <button
                         className="btn"
-                        onClick={() => onPause(item.infoHash)}
+                        onClick={() => {
+                            if (isBusy) return;
+                            setIsBusy(true);
+                            onPause(item.infoHash).finally(() => setIsBusy(false));
+                        }}
+                        disabled={isBusy}
                         aria-label={intl.formatMessage(
                             { id: 'downloads.actions.pauseAriaLabel' },
                             { name: item.name },
@@ -528,7 +541,12 @@ export function DownloadItem({
                 {item.status === 'paused' && (
                     <button
                         className="btn"
-                        onClick={() => onResume(item.infoHash)}
+                        onClick={() => {
+                            if (isBusy) return;
+                            setIsBusy(true);
+                            onResume(item.infoHash).finally(() => setIsBusy(false));
+                        }}
+                        disabled={isBusy}
                         aria-label={intl.formatMessage(
                             { id: 'downloads.actions.resumeAriaLabel' },
                             { name: item.name },
