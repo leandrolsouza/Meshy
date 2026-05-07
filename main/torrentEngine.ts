@@ -5,7 +5,7 @@ import WebTorrent from 'webtorrent';
 import type { Torrent } from 'webtorrent';
 import { isValidMagnetUri, hasTorrentMagicBytes } from './validators';
 import { isValidTrackerUrl, normalizeTrackerUrl } from '../shared/validators';
-import type { TorrentStatus, TorrentFileInfo, TrackerInfo, TrackerStatus } from '../shared/types';
+import type { TorrentStatus, TorrentFileInfo, TrackerInfo, TrackerStatus, TorrentMetadata, PeerInfo, PieceStatus } from '../shared/types';
 import {
     getAnnounceList,
     setAnnounceList,
@@ -14,6 +14,10 @@ import {
     addTrackerToTorrent,
     destroyAllWires,
     getNumSeeders,
+    getBitfield,
+    getPiecesCount,
+    getTorrentCreatedInfo,
+    getWiresWithPeerInfo,
 } from './webtorrentInternals';
 import type { WireWithPex } from './webtorrentInternals';
 
@@ -71,6 +75,12 @@ export interface TorrentEngine {
     addTracker(infoHash: string, trackerUrl: string): void;
     /** Remove um tracker de um torrent e encerra a conexão */
     removeTracker(infoHash: string, trackerUrl: string): void;
+    /** Retorna metadados detalhados do torrent (creator, comment, creationDate) */
+    getMetadata(infoHash: string): TorrentMetadata;
+    /** Retorna a lista de peers conectados ao torrent */
+    getPeers(infoHash: string): PeerInfo[];
+    /** Retorna o status de cada peça do torrent (true = completa, false = pendente) */
+    getPieces(infoHash: string): PieceStatus;
     /** Reinicia o motor com novas opções, re-adicionando torrents ativos */
     restart(options: TorrentEngineOptions): Promise<void>;
     /** Indica se o motor está em processo de reinício */
@@ -171,7 +181,11 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
         try {
             buffer = await readFile(filePath);
         } catch (err) {
-            throw new Error(`Não foi possível ler o arquivo: ${(err as Error).message}`);
+            const wrapped = new Error(
+                `Não foi possível ler o arquivo: ${(err as Error).message}`,
+            );
+            (wrapped as unknown as { cause: unknown }).cause = err;
+            throw wrapped;
         }
 
         return this.addTorrentBuffer(buffer);
@@ -547,6 +561,83 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
 
         // Destrói a conexão com o tracker, se existir
         destroyInternalTracker(torrent, normalized, normalizeTrackerUrl);
+    }
+
+    // ── getMetadata ─────────────────────────────────────────────────────────────
+
+    getMetadata(infoHash: string): TorrentMetadata {
+        const torrent = this._getTorrent(infoHash);
+        if (!torrent) {
+            throw new Error(`Torrent não encontrado: ${infoHash}`);
+        }
+
+        const { createdBy, comment, creationDate } = getTorrentCreatedInfo(torrent);
+
+        return {
+            infoHash: torrent.infoHash,
+            creator: createdBy ?? null,
+            comment: comment ?? null,
+            creationDate: creationDate ? new Date(creationDate).getTime() : null,
+        };
+    }
+
+    // ── getPeers ────────────────────────────────────────────────────────────────
+
+    getPeers(infoHash: string): PeerInfo[] {
+        const torrent = this._getTorrent(infoHash);
+        if (!torrent) {
+            throw new Error(`Torrent não encontrado: ${infoHash}`);
+        }
+
+        const wires = getWiresWithPeerInfo(torrent);
+        const totalPieces = getPiecesCount(torrent);
+
+        return wires.map((wire) => {
+            // Calcular progresso do peer a partir do peerPieces bitfield
+            let progress = 0;
+            if (wire.peerPieces && totalPieces > 0) {
+                let completedCount = 0;
+                for (let i = 0; i < totalPieces; i++) {
+                    if (wire.peerPieces.get(i)) {
+                        completedCount++;
+                    }
+                }
+                progress = completedCount / totalPieces;
+            }
+
+            // Extrair nome do cliente do peer extended handshake
+            let client = 'Desconhecido';
+            if (wire.peerExtendedHandshake?.v) {
+                const v = wire.peerExtendedHandshake.v;
+                client = Buffer.from(v).toString('utf8') || 'Desconhecido';
+            }
+
+            return {
+                address: `${wire.remoteAddress ?? '0.0.0.0'}:${wire.remotePort ?? 0}`,
+                client,
+                downloadSpeed: typeof wire.downloadSpeed === 'function' ? wire.downloadSpeed() : 0,
+                progress,
+            };
+        });
+    }
+
+    // ── getPieces ───────────────────────────────────────────────────────────────
+
+    getPieces(infoHash: string): PieceStatus {
+        const torrent = this._getTorrent(infoHash);
+        if (!torrent) {
+            throw new Error(`Torrent não encontrado: ${infoHash}`);
+        }
+
+        const bitfield = getBitfield(torrent);
+        const totalPieces = getPiecesCount(torrent);
+        const result: boolean[] = new Array(totalPieces);
+
+        for (let i = 0; i < totalPieces; i++) {
+            result[i] = bitfield ? bitfield.get(i) : false;
+        }
+
+        return result;
     }
 
     // ── Private helpers ─────────────────────────────────────────────────────────

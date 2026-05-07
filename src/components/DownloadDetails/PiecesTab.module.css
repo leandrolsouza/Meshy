@@ -1,0 +1,46 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.summary {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    padding: 0 var(--space-sm);
+}
+
+.emptyState {
+    text-align: center;
+    padding: var(--space-lg);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.errorContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-lg);
+}
+
+.errorMessage {
+    text-align: center;
+    color: var(--color-error, #f44336);
+    font-size: var(--font-size-sm);
+}
+
+.retryButton {
+    padding: var(--space-xs) var(--space-sm);
+    background-color: var(--color-primary);
+    color: var(--color-text);
+    border: none;
+    border-radius: 4px;
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+}
+
+.retryButton:hover {
+    opacity: 0.9;
+}

@@ -34,6 +34,7 @@ jest.mock('react-icons/vsc', () => ({
     VscChevronRight: () => <span data-testid="icon-chevron-right" />,
     VscFolderOpened: () => <span data-testid="icon-folder-opened" />,
     VscGoToFile: () => <span data-testid="icon-go-to-file" />,
+    VscInfo: () => <span data-testid="icon-info" />,
 }));
 
 jest.mock('../../src/components/FileSelector/FileSelector', () => ({
@@ -42,6 +43,11 @@ jest.mock('../../src/components/FileSelector/FileSelector', () => ({
 
 jest.mock('../../src/components/TrackerPanel/TrackerPanel', () => ({
     TrackerPanel: () => <div data-testid="tracker-panel" />,
+}));
+
+jest.mock('../../src/components/DownloadDetails/DetailsPanel', () => ({
+    DetailsPanel: () => <div data-testid="details-panel" />,
+    isExpandable: (status: string) => status !== 'resolving-metadata' && status !== 'queued',
 }));
 
 jest.mock('../../src/components/common/ConfirmDialog', () => ({

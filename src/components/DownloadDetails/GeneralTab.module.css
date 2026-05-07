@@ -1,0 +1,116 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+}
+
+.fieldLabel {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.fieldValue {
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    word-break: break-all;
+}
+
+.fieldValueNull {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    font-style: italic;
+}
+
+.infoHashRow {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.infoHashValue {
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    font-family: monospace;
+    word-break: break-all;
+    flex: 1;
+}
+
+.copyButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-xs) var(--space-sm);
+    border: 1px solid var(--color-border-light);
+    border-radius: 4px;
+    background: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+    white-space: nowrap;
+    transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.copyButton:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+.copyButton:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.copyButtonSuccess {
+    color: var(--color-success, #81c784);
+    border-color: var(--color-success, #81c784);
+}
+
+.loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-lg);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+}
+
+.loadingIndicator {
+    display: inline-block;
+    width: 80px;
+    height: 14px;
+    background: linear-gradient(90deg,
+            var(--color-border-light) 25%,
+            var(--color-surface) 50%,
+            var(--color-border-light) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 4px;
+}
+
+.error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-lg);
+    color: var(--color-error, #ef5350);
+    font-size: var(--font-size-sm);
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
+}

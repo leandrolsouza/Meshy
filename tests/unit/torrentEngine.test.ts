@@ -762,7 +762,7 @@ describe('Propriedade 5: adicionar tracker duplicado não altera o tamanho da li
 
 describe('TorrentEngine — opções de rede DHT/PEX/uTP (Requisito 3)', () => {
     // Referência ao mock do construtor WebTorrent para verificar argumentos
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const MockWebTorrent = require('webtorrent').default as jest.Mock;
 
     beforeEach(() => {
@@ -945,7 +945,7 @@ describe('TorrentEngine — opções de rede DHT/PEX/uTP (Requisito 3)', () => {
 // Feature: dht-pex-settings, Property 4: Mapeamento correto de opções para o construtor WebTorrent
 // **Validates: Requirements 3.1, 3.2, 3.4, 3.5**
 describe('Propriedade 4: Mapeamento correto de opções para o construtor WebTorrent', () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const MockWebTorrent = require('webtorrent').default as jest.Mock;
 
     beforeEach(() => {
@@ -1083,7 +1083,7 @@ function setupMockWebTorrentForRestart(
 }
 
 describe('TorrentEngine.restart() — fluxo completo', () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const MockWebTorrent = require('webtorrent').default as jest.Mock;
 
     beforeEach(() => {
@@ -1299,7 +1299,7 @@ describe('TorrentEngine.restart() — fluxo completo', () => {
 });
 
 describe('TorrentEngine.restart() — tratamento de erro ao re-adicionar (Task 4.4)', () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const MockWebTorrent = require('webtorrent').default as jest.Mock;
 
     beforeEach(() => {
@@ -1385,7 +1385,7 @@ describe('TorrentEngine.isRestarting() — flag de reinício (Task 4.2)', () => 
 
         let wasRestartingDuringRestart = false;
 
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+         
         const MockWebTorrent = require('webtorrent').default as jest.Mock;
         MockWebTorrent.mockImplementation(() => {
             // Capturar o estado de isRestarting durante a criação do novo client

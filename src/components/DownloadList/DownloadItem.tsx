@@ -10,6 +10,7 @@ import {
     VscChevronRight,
     VscFolderOpened,
     VscGoToFile,
+    VscInfo,
 } from 'react-icons/vsc';
 import type { DownloadItem as DownloadItemType, TorrentFileInfo } from '../../../shared/types';
 import { ProgressBar } from '../common/ProgressBar';
@@ -19,6 +20,7 @@ import { resolveErrorMessage } from '../../utils/resolveErrorMessage';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { FileSelector } from '../FileSelector/FileSelector';
 import { TrackerPanel } from '../TrackerPanel/TrackerPanel';
+import { DetailsPanel, isExpandable } from '../DownloadDetails/DetailsPanel';
 import styles from './DownloadItem.module.css';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -102,9 +104,17 @@ export function DownloadItem({
     // ── Estado de operação em andamento (desabilita botões durante IPC) ──────
     const [isBusy, setIsBusy] = useState(false);
 
-    // Resetar busy quando o status muda (o main process confirmou a operação)
+    // Resetar busy quando o status muda (o main process confirmou a operação).
+    // O setState condicional aqui é intencional: só dispara quando o status realmente muda,
+    // evitando loops infinitos. A regra é suprimida pois este é um padrão válido de
+    // sincronização de estado derivado.
+    const prevStatusRef = useRef(item.status);
     useEffect(() => {
-        setIsBusy(false);
+        if (prevStatusRef.current !== item.status) {
+            prevStatusRef.current = item.status;
+            setIsBusy(false);
+        }
+         
     }, [item.status]);
 
     // ── Ref para rastrear mudança de posição na fila (aria-live) ─────────────
@@ -116,6 +126,9 @@ export function DownloadItem({
 
     // ── Tracker panel expansion state (Task 8.5) ─────────────────────────────
     const [trackersExpanded, setTrackersExpanded] = useState(false);
+
+    // ── Details panel expansion state (Task 15.1) ────────────────────────────
+    const [detailsExpanded, setDetailsExpanded] = useState(false);
 
     const [files, setFiles] = useState<TorrentFileInfo[]>([]);
     const [filesLoading, setFilesLoading] = useState(false);
@@ -257,6 +270,11 @@ export function DownloadItem({
     // ── Toggle tracker panel ─────────────────────────────────────────────────
     const handleToggleTrackers = useCallback(() => {
         setTrackersExpanded((prev) => !prev);
+    }, []);
+
+    // ── Toggle details panel (Task 15.1) ─────────────────────────────────────
+    const handleToggleDetails = useCallback(() => {
+        setDetailsExpanded((prev) => !prev);
     }, []);
 
     // ── Auto-dismiss action error after 5 seconds (Task 5.3) ────────────────
@@ -495,6 +513,25 @@ export function DownloadItem({
                         {intl.formatMessage({ id: 'downloads.actions.expandTrackers' })}
                     </button>
                 )}
+                {/* Botão de expansão do painel de detalhes (Task 15.1) */}
+                <button
+                    className="btn"
+                    onClick={handleToggleDetails}
+                    aria-label={
+                        detailsExpanded
+                            ? intl.formatMessage({
+                                id: 'downloads.actions.collapseDetailsAriaLabel',
+                            })
+                            : intl.formatMessage({
+                                id: 'downloads.actions.expandDetailsAriaLabel',
+                            })
+                    }
+                    aria-expanded={detailsExpanded}
+                    disabled={!isExpandable(item.status)}
+                >
+                    <VscInfo />{' '}
+                    {intl.formatMessage({ id: 'downloads.actions.expandDetails' })}
+                </button>
                 {isCompleted && (
                     <button
                         className="btn"
@@ -608,6 +645,16 @@ export function DownloadItem({
                     <TrackerPanel infoHash={item.infoHash} />
                 </div>
             )}
+
+            {/* Details panel section (Task 15.1) */}
+            <div className={styles.detailsPanelSection}>
+                <DetailsPanel
+                    infoHash={item.infoHash}
+                    status={item.status}
+                    isExpanded={detailsExpanded}
+                    onToggle={handleToggleDetails}
+                />
+            </div>
 
             <ConfirmDialog
                 isOpen={isConfirmDialogOpen}

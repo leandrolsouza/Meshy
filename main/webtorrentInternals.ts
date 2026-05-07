@@ -26,6 +26,15 @@ export interface WireWithPex {
     };
 }
 
+/** Wire com propriedades de peer para mapeamento de PeerInfo */
+export interface WireWithPeerInfo {
+    remoteAddress?: string;
+    remotePort?: number;
+    peerExtendedHandshake?: { v?: Buffer | Uint8Array };
+    downloadSpeed?: () => number;
+    peerPieces?: { get(index: number): boolean; buffer?: Uint8Array };
+}
+
 // ─── Helper para cast seguro ──────────────────────────────────────────────────
 
 /**
@@ -142,6 +151,65 @@ export function destroyAllWires(torrent: Torrent): number {
         wire.destroy();
     }
     return wiresCopy.length;
+}
+
+// ─── Bitfield (progresso de peças) ────────────────────────────────────────────
+
+/** Interface para o bitfield do torrent */
+export interface TorrentBitfield {
+    get(index: number): boolean;
+}
+
+/**
+ * Retorna o bitfield do torrent (mapa de peças completas/pendentes).
+ * Retorna null se a propriedade não existir.
+ */
+export function getBitfield(torrent: Torrent): TorrentBitfield | null {
+    const t = asRecord(torrent);
+    if (t.bitfield && typeof (t.bitfield as TorrentBitfield).get === 'function') {
+        return t.bitfield as TorrentBitfield;
+    }
+    return null;
+}
+
+/**
+ * Retorna o número total de peças do torrent.
+ * Retorna 0 se a propriedade não existir.
+ */
+export function getPiecesCount(torrent: Torrent): number {
+    const t = asRecord(torrent);
+    if (Array.isArray(t.pieces)) {
+        return (t.pieces as unknown[]).length;
+    }
+    return 0;
+}
+
+/**
+ * Retorna os metadados de criação do torrent (created.by, comment, created.date).
+ */
+export function getTorrentCreatedInfo(torrent: Torrent): {
+    createdBy: string | undefined;
+    comment: string | undefined;
+    creationDate: string | number | Date | undefined;
+} {
+    const t = asRecord(torrent);
+    const created = t.created as { by?: string; date?: string | number | Date } | undefined;
+    return {
+        createdBy: created?.by ?? (t.createdBy as string | undefined),
+        comment: t.comment as string | undefined,
+        creationDate: created?.date ?? (t.creationDate as string | number | Date | undefined),
+    };
+}
+
+/**
+ * Retorna os wires com informações de peer (remoteAddress, remotePort, etc.).
+ */
+export function getWiresWithPeerInfo(torrent: Torrent): WireWithPeerInfo[] {
+    const t = asRecord(torrent);
+    if (Array.isArray(t.wires)) {
+        return t.wires as WireWithPeerInfo[];
+    }
+    return [];
 }
 
 // ─── numSeeders ───────────────────────────────────────────────────────────────

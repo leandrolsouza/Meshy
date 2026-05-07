@@ -1,0 +1,15 @@
+.grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: var(--space-sm);
+}
+
+.block {
+    min-width: 8px;
+    min-height: 8px;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    border: 1px solid var(--color-border-light);
+}

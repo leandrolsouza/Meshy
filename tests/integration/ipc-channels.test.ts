@@ -66,6 +66,9 @@ const EXPECTED_CHANNELS = [
     'torrent:open-file',
     'queue:reorder',
     'queue:get-order',
+    'torrent:get-metadata',
+    'torrent:get-peers',
+    'torrent:get-pieces',
 ] as const;
 
 function makeSampleDownloadItem(overrides: Partial<DownloadItem> = {}): DownloadItem {
@@ -142,6 +145,9 @@ function makeMockTorrentEngine() {
         restart: jest.fn().mockResolvedValue(undefined),
         isRestarting: jest.fn().mockReturnValue(false),
         healthCheck: jest.fn().mockReturnValue({ healthy: true, restarting: false, activeTorrents: 0, totalPeers: 0, uptimeMs: 0 }),
+        getMetadata: jest.fn().mockReturnValue({ infoHash: 'a'.repeat(40), creator: null, comment: null, creationDate: null }),
+        getPeers: jest.fn().mockReturnValue([]),
+        getPieces: jest.fn().mockReturnValue([]),
         on: jest.fn(),
         removeListener: jest.fn(),
     };
@@ -174,9 +180,9 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
 
     // ── Smoke tests: all channels registered ─────────────────────────────────
 
-    describe('Smoke: all 27 IPC channels are registered and respond', () => {
-        it('registers exactly 27 IPC channels', () => {
-            expect(mockIpcMain.handle).toHaveBeenCalledTimes(27);
+    describe('Smoke: all 30 IPC channels are registered and respond', () => {
+        it('registers exactly 30 IPC channels', () => {
+            expect(mockIpcMain.handle).toHaveBeenCalledTimes(30);
         });
 
         it.each(EXPECTED_CHANNELS)('channel "%s" is registered', (channel) => {

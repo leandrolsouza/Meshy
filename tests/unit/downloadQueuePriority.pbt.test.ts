@@ -79,6 +79,9 @@ function makeMockEngine(): TorrentEngine & EventEmitter {
             totalPeers: 0,
             uptimeMs: 0,
         }),
+        getMetadata: jest.fn().mockReturnValue({ infoHash: 'a'.repeat(40), creator: null, comment: null, creationDate: null }),
+        getPeers: jest.fn().mockReturnValue([]),
+        getPieces: jest.fn().mockReturnValue([]),
     });
 }
 

@@ -235,7 +235,7 @@ describe('Property 10: Error code resolution', () => {
                 const intl = makeIntl('en-US', enUSMessages);
                 const result = resolveErrorMessage(intl, code);
 
-                if (code in enUSMessages) {
+                if (Object.prototype.hasOwnProperty.call(enUSMessages, code)) {
                     // Known key: should resolve to the translation
                     expect(result).toBe(enUSMessages[code]);
                 } else {

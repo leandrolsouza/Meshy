@@ -100,6 +100,35 @@ export interface AppSettings {
     utpEnabled: boolean; // uTP — Micro Transport Protocol (padrão: true)
 }
 
+// ─── TorrentMetadata ──────────────────────────────────────────────────────────
+
+/** Metadados detalhados de um torrent */
+export interface TorrentMetadata {
+    infoHash: string; // hash de 40 caracteres hex
+    creator: string | null; // criador do torrent (null se ausente)
+    comment: string | null; // comentário do torrent (null se ausente)
+    creationDate: number | null; // timestamp Unix em milissegundos (null se ausente)
+}
+
+// ─── PeerInfo ─────────────────────────────────────────────────────────────────
+
+/** Informações de um peer conectado ao torrent */
+export interface PeerInfo {
+    address: string; // endereço no formato "ip:port"
+    client: string; // identificador do cliente BitTorrent do peer
+    downloadSpeed: number; // velocidade de download em bytes/s (>= 0)
+    progress: number; // progresso do peer (0.0 a 1.0)
+}
+
+// ─── PieceStatus ──────────────────────────────────────────────────────────────
+
+/**
+ * Status de cada peça do torrent.
+ * true = peça completa, false = peça pendente.
+ * Comprimento = número total de peças do torrent.
+ */
+export type PieceStatus = boolean[];
+
 // ─── IPCResponse ──────────────────────────────────────────────────────────────
 
 export type IPCResponse<T> = { success: true; data: T } | { success: false; error: string };
@@ -142,6 +171,10 @@ export interface MeshyAPI {
     // Fila de downloads — reordenação e consulta
     reorderQueue(infoHash: string, newIndex: number): Promise<IPCResponse<string[]>>;
     getQueueOrder(): Promise<IPCResponse<string[]>>;
+    // Detalhes do torrent (painel de detalhes)
+    getMetadata(infoHash: string): Promise<IPCResponse<TorrentMetadata>>;
+    getPeers(infoHash: string): Promise<IPCResponse<PeerInfo[]>>;
+    getPieces(infoHash: string): Promise<IPCResponse<PieceStatus>>;
     // Events
     onProgress(callback: (items: DownloadItem[]) => void): () => void;
     onError(callback: (data: { infoHash: string; message: string }) => void): () => void;

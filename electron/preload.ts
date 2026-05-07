@@ -5,6 +5,9 @@ import type {
     IPCResponse,
     TorrentFileInfo,
     TrackerInfo,
+    TorrentMetadata,
+    PeerInfo,
+    PieceStatus,
     MeshyAPI,
 } from '../shared/types';
 
@@ -126,6 +129,20 @@ const meshyAPI: MeshyAPI = {
 
     getQueueOrder(): Promise<IPCResponse<string[]>> {
         return ipcRenderer.invoke('queue:get-order');
+    },
+
+    // ── Detalhes do torrent (painel de detalhes) ──────────────────────────────────
+
+    getMetadata(infoHash: string): Promise<IPCResponse<TorrentMetadata>> {
+        return ipcRenderer.invoke('torrent:get-metadata', { infoHash });
+    },
+
+    getPeers(infoHash: string): Promise<IPCResponse<PeerInfo[]>> {
+        return ipcRenderer.invoke('torrent:get-peers', { infoHash });
+    },
+
+    getPieces(infoHash: string): Promise<IPCResponse<PieceStatus>> {
+        return ipcRenderer.invoke('torrent:get-pieces', { infoHash });
     },
 
     // ── Events ──────────────────────────────────────────────────────────────────

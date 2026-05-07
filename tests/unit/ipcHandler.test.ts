@@ -131,13 +131,16 @@ describe('registerIpcHandlers — IPC channel registration (Requirement 8.1)', (
         'torrent:open-file',
         'queue:reorder',
         'queue:get-order',
+        'torrent:get-metadata',
+        'torrent:get-peers',
+        'torrent:get-pieces',
     ];
 
     beforeEach(() => {
         jest.clearAllMocks();
     });
 
-    it('registers all 27 expected IPC channels', () => {
+    it('registers all 30 expected IPC channels', () => {
         const downloadManager = makeMockDownloadManager();
         const settingsManager = makeMockSettingsManager();
         const torrentEngine = makeMockTorrentEngine();
@@ -153,7 +156,7 @@ describe('registerIpcHandlers — IPC channel registration (Requirement 8.1)', (
         }
     });
 
-    it('registers exactly 27 IPC channels (no extra channels)', () => {
+    it('registers exactly 30 IPC channels (no extra channels)', () => {
         const downloadManager = makeMockDownloadManager();
         const settingsManager = makeMockSettingsManager();
         const torrentEngine = makeMockTorrentEngine();

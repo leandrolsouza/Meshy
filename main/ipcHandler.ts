@@ -10,6 +10,9 @@ import type {
     IPCResponse,
     TorrentFileInfo,
     TrackerInfo,
+    TorrentMetadata,
+    PeerInfo,
+    PieceStatus,
 } from '../shared/types';
 import { isValidTorrentFile } from './validators';
 import { isValidTrackerUrl } from '../shared/validators';
@@ -18,7 +21,7 @@ import { logger, createScopedLogger } from './logger';
 import type { ScopedLogger } from './logger';
 import { metrics } from './metrics';
 import type { MetricsSnapshot } from './metrics';
-import { validatePayload, infoHashSchema, infoHashUrlSchema, urlSchema } from './payloadValidator';
+import { validatePayload, infoHashSchema, infoHashHexSchema, infoHashUrlSchema, urlSchema } from './payloadValidator';
 import { validateSettingsPayload } from './settingsValidator';
 import { randomBytes } from 'crypto';
 
@@ -1014,4 +1017,82 @@ export function registerIpcHandlers(
             return failWithLog('app:get-metrics', err);
         }
     });
+
+    // ── torrent:get-metadata ──────────────────────────────────────────────────
+    // Retorna metadados detalhados do torrent (creator, comment, creationDate).
+    trackedHandle(
+        'torrent:get-metadata',
+        async (_event, payload: unknown): Promise<IPCResponse<TorrentMetadata>> => {
+            try {
+                const result = validatePayload<{ infoHash: string }>(payload, infoHashHexSchema);
+                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
+
+                const { infoHash } = result.data;
+                const item = downloadManager.getAll().find((i) => i.infoHash === infoHash);
+                if (!item) return fail(ErrorCodes.TORRENT_NOT_FOUND);
+
+                if (!torrentEngine) return fail(ErrorCodes.ENGINE_NOT_AVAILABLE);
+                if (torrentEngine.isRestarting()) return fail(ErrorCodes.ENGINE_RESTARTING);
+
+                const metadata = torrentEngine.getMetadata(infoHash);
+                return ok(metadata);
+            } catch (err) {
+                return failWithLog('torrent:get-metadata', err);
+            }
+        },
+    );
+
+    // ── torrent:get-peers ─────────────────────────────────────────────────────
+    // Retorna a lista de peers conectados ao torrent.
+    trackedHandle(
+        'torrent:get-peers',
+        async (_event, payload: unknown): Promise<IPCResponse<PeerInfo[]>> => {
+            try {
+                const result = validatePayload<{ infoHash: string }>(payload, infoHashHexSchema);
+                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
+
+                const { infoHash } = result.data;
+                const item = downloadManager.getAll().find((i) => i.infoHash === infoHash);
+                if (!item) return fail(ErrorCodes.TORRENT_NOT_FOUND);
+
+                if (!torrentEngine) return fail(ErrorCodes.ENGINE_NOT_AVAILABLE);
+                if (torrentEngine.isRestarting()) return fail(ErrorCodes.ENGINE_RESTARTING);
+
+                // Torrent em resolving-metadata retorna array vazio
+                if (item.status === 'resolving-metadata') return ok([]);
+
+                const peers = torrentEngine.getPeers(infoHash);
+                return ok(peers);
+            } catch (err) {
+                return failWithLog('torrent:get-peers', err);
+            }
+        },
+    );
+
+    // ── torrent:get-pieces ────────────────────────────────────────────────────
+    // Retorna o status de cada peça do torrent (true = completa, false = pendente).
+    trackedHandle(
+        'torrent:get-pieces',
+        async (_event, payload: unknown): Promise<IPCResponse<PieceStatus>> => {
+            try {
+                const result = validatePayload<{ infoHash: string }>(payload, infoHashHexSchema);
+                if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
+
+                const { infoHash } = result.data;
+                const item = downloadManager.getAll().find((i) => i.infoHash === infoHash);
+                if (!item) return fail(ErrorCodes.TORRENT_NOT_FOUND);
+
+                if (!torrentEngine) return fail(ErrorCodes.ENGINE_NOT_AVAILABLE);
+                if (torrentEngine.isRestarting()) return fail(ErrorCodes.ENGINE_RESTARTING);
+
+                // Torrent em resolving-metadata retorna array vazio
+                if (item.status === 'resolving-metadata') return ok([]);
+
+                const pieces = torrentEngine.getPieces(infoHash);
+                return ok(pieces);
+            } catch (err) {
+                return failWithLog('torrent:get-pieces', err);
+            }
+        },
+    );
 }

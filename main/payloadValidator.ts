@@ -78,6 +78,14 @@ export const infoHashSchema: PayloadSchema = {
     infoHash: { type: 'string', nonEmpty: true },
 };
 
+/** Regex para validar infoHash: exatamente 40 caracteres hexadecimais */
+const INFO_HASH_HEX_REGEX = /^[0-9a-fA-F]{40}$/;
+
+/** Schema para payloads que contêm { infoHash: string } com validação de 40 hex chars */
+export const infoHashHexSchema: PayloadSchema = {
+    infoHash: { type: 'string', nonEmpty: true, validate: (v) => INFO_HASH_HEX_REGEX.test(v as string) },
+};
+
 /** Schema para payloads que contêm { infoHash: string, url: string } */
 export const infoHashUrlSchema: PayloadSchema = {
     infoHash: { type: 'string', nonEmpty: true },

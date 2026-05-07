@@ -120,6 +120,8 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
     private maxConcurrent: number;
     /** Tracks magnet URIs for queued items that need to be added to the engine later */
     private readonly queuedMagnetUris = new Map<string, string>();
+    /** Armazena o magnetUri original de todos os torrents adicionados via magnet link (para persistência) */
+    private readonly originalMagnetUris = new Map<string, string>();
     private readonly engine: TorrentEngine;
     private readonly settings: SettingsManager;
     private readonly store: PersistedStore | undefined;
@@ -447,6 +449,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
 
             this.items.set(item.infoHash, item);
             this.queuedMagnetUris.set(item.infoHash, magnetUri);
+            this.originalMagnetUris.set(item.infoHash, magnetUri);
             this.queue.push(item.infoHash);
             this.emit('update', item);
 
@@ -454,6 +457,9 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
         }
 
         const info = await this.engine.addMagnetLink(magnetUri);
+
+        // Armazenar magnetUri original para persistência de sessão
+        this.originalMagnetUris.set(info.infoHash, magnetUri);
 
         // Post-add duplicate check (in case infoHash wasn't extractable before)
         const existing = this.items.get(info.infoHash);
@@ -646,7 +652,57 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             this.emit('update', updated);
 
             try {
-                await this.engine.resume(infoHash);
+                // Se o torrent não está no engine (ex: restaurado de sessão como pausado),
+                // re-adicionar usando o magnetUri original antes de tentar resume.
+                const magnetUri = this.originalMagnetUris.get(infoHash);
+                if (magnetUri) {
+                    try {
+                        await this.engine.resume(infoHash);
+                    } catch {
+                        // engine.resume falhou — torrent não existe no engine.
+                        // Re-adicionar via magnetUri.
+                        const reAdded: DownloadItem = {
+                            ...updated,
+                            status: 'resolving-metadata',
+                        };
+                        this.items.set(infoHash, reAdded);
+                        this.emit('update', reAdded);
+
+                        await this.engine.addMagnetLink(magnetUri);
+
+                        // Reaplicar seleção de arquivos se existir
+                        const selectedIndices =
+                            this.selectedFileIndicesMap.get(infoHash);
+                        if (selectedIndices && selectedIndices.length > 0) {
+                            try {
+                                const files = this.engine.getFiles(infoHash);
+                                const maxIndex = files.length;
+                                const validIndices = selectedIndices.filter(
+                                    (idx) => idx >= 0 && idx < maxIndex,
+                                );
+                                if (validIndices.length > 0) {
+                                    this.engine.setFileSelection(
+                                        infoHash,
+                                        validIndices,
+                                    );
+                                }
+                            } catch {
+                                // Seleção pode falhar se metadados ainda não resolveram
+                            }
+                        }
+
+                        // Atualizar status para downloading
+                        const downloading: DownloadItem = {
+                            ...this.items.get(infoHash)!,
+                            status: 'downloading',
+                        };
+                        this.items.set(infoHash, downloading);
+                        this.emit('update', downloading);
+                        return;
+                    }
+                } else {
+                    await this.engine.resume(infoHash);
+                }
             } catch (err) {
                 // Se o engine falhou ao retomar, marcar como erro
                 const current = this.items.get(infoHash);
@@ -858,6 +914,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
 
             // Limpar referências de magnet enfileirados
             this.queuedMagnetUris.delete(infoHash);
+            this.originalMagnetUris.delete(infoHash);
 
             // Remover do mapa ANTES de chamar engine.remove para que
             // o progress handler ignore eventos residuais imediatamente.
@@ -1027,6 +1084,11 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             this.items.set(item.infoHash, item);
             this.emit('update', item);
 
+            // Restaurar magnetUri original para persistência futura e re-add ao engine
+            if (persistedItem.magnetUri) {
+                this.originalMagnetUris.set(item.infoHash, persistedItem.magnetUri);
+            }
+
             // Restore selected file indices into the map for later persistence
             if (persistedItem.selectedFileIndices) {
                 this.selectedFileIndicesMap.set(item.infoHash, [
@@ -1042,6 +1104,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
 
                 if (persistedItem.magnetUri) {
                     this.queuedMagnetUris.set(item.infoHash, persistedItem.magnetUri);
+                    this.originalMagnetUris.set(item.infoHash, persistedItem.magnetUri);
                 }
 
                 this.queue.push(item.infoHash);
@@ -1064,6 +1127,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                     // Guardar a referência para retomar depois
                     if (persistedItem.magnetUri) {
                         this.queuedMagnetUris.set(item.infoHash, persistedItem.magnetUri);
+                        this.originalMagnetUris.set(item.infoHash, persistedItem.magnetUri);
                     }
 
                     this.queue.push(item.infoHash);
@@ -1146,7 +1210,9 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                 completedAt: item.completedAt,
                 elapsedMs: item.elapsedMs,
                 selectedFileIndices: this.selectedFileIndicesMap.get(item.infoHash),
-                magnetUri: this.queuedMagnetUris.get(item.infoHash),
+                magnetUri:
+                    this.originalMagnetUris.get(item.infoHash) ??
+                    this.queuedMagnetUris.get(item.infoHash),
                 errorMessage: item.errorMessage,
             };
         });
