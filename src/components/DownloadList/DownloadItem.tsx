@@ -80,7 +80,7 @@ interface DownloadItemProps {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function DownloadItem({
+export const DownloadItem = React.memo(function DownloadItem({
     item,
     queueSize,
     onPause,
@@ -114,7 +114,7 @@ export function DownloadItem({
             prevStatusRef.current = item.status;
             setIsBusy(false);
         }
-         
+
     }, [item.status]);
 
     // ── Ref para rastrear mudança de posição na fila (aria-live) ─────────────
@@ -194,7 +194,6 @@ export function DownloadItem({
             }
         };
 
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setFilesLoading(true);
         setFilesError(null);
         fetchFiles();
@@ -352,6 +351,7 @@ export function DownloadItem({
     return (
         <div
             className={cardClassName}
+            role="listitem"
             onContextMenu={handleContextMenu}
             draggable={item.status === 'queued'}
             onDragStart={handleDragStart}
@@ -718,4 +718,4 @@ export function DownloadItem({
             </div>
         </div>
     );
-}
+});

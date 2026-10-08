@@ -36,8 +36,8 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             window.meshy?.reportError({
                 message: error.message,
                 source: 'ErrorBoundary',
-                stack: error.stack,
-                componentStack: info.componentStack ?? undefined,
+                ...(error.stack !== undefined ? { stack: error.stack } : {}),
+                ...(info.componentStack != null ? { componentStack: info.componentStack } : {}),
             });
         } catch {
             // Silenciar falhas no report — não queremos erros ao reportar erros

@@ -23,11 +23,14 @@ const MIN_OVERLAY_MS = 400;
  * ficam no FilterSidebar (painel lateral). Aqui ficam apenas o botão de limpar
  * concluídos, a mensagem de estado vazio filtrado e a região aria-live.
  */
-export function DownloadList(): React.JSX.Element {
+export const DownloadList = React.memo(function DownloadList(): React.JSX.Element {
     const intl = useIntl();
     const { items, pause, resume, remove, reorderQueue } = useDownloads();
-    const { searchTerm, selectedStatuses, sortField, sortDirection, resetFilters } =
-        useFilterStore();
+    const searchTerm = useFilterStore((s) => s.searchTerm);
+    const selectedStatuses = useFilterStore((s) => s.selectedStatuses);
+    const sortField = useFilterStore((s) => s.sortField);
+    const sortDirection = useFilterStore((s) => s.sortDirection);
+    const resetFilters = useFilterStore((s) => s.resetFilters);
 
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const [collapsedGroups, setCollapsedGroups] = useState<Set<StatusGroup>>(new Set());
@@ -151,7 +154,9 @@ export function DownloadList(): React.JSX.Element {
             let targetIndex = groupItems.length; // padrão: final da lista
 
             for (let i = 0; i < children.length; i++) {
-                const rect = children[i].getBoundingClientRect();
+                const child = children[i];
+                if (!child) continue;
+                const rect = child.getBoundingClientRect();
                 const midY = rect.top + rect.height / 2;
                 if (e.clientY < midY) {
                     targetIndex = i;
@@ -331,6 +336,7 @@ export function DownloadList(): React.JSX.Element {
                                 {!isCollapsed && (
                                     <div
                                         className={styles.groupItems}
+                                        role="list"
                                         {...(group.id === 'waiting'
                                             ? {
                                                 onDragOver: (e: React.DragEvent<HTMLDivElement>) =>
@@ -397,4 +403,4 @@ export function DownloadList(): React.JSX.Element {
             />
         </div>
     );
-}
+});

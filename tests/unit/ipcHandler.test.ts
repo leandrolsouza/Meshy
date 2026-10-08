@@ -466,7 +466,8 @@ describe('registerIpcHandlers — tracker handlers', () => {
             const response = (await handler(null, { infoHash: 'a'.repeat(40) })) as any;
 
             expect(response.success).toBe(false);
-            expect(response.error).toContain('Torrent não encontrado');
+            // failWithLog retorna ErrorCodes.OPERATION_FAILED para não vazar err.message ao renderer
+            expect(response.error).toBe('error.operation.failed');
         });
     });
 
@@ -559,7 +560,8 @@ describe('registerIpcHandlers — tracker handlers', () => {
             })) as any;
 
             expect(response.success).toBe(false);
-            expect(response.error).toContain('Tracker não encontrado');
+            // failWithLog retorna ErrorCodes.OPERATION_FAILED para não vazar err.message ao renderer
+            expect(response.error).toBe('error.operation.failed');
         });
     });
 
@@ -686,7 +688,8 @@ describe('registerIpcHandlers — tracker handlers', () => {
             })) as any;
 
             expect(response.success).toBe(false);
-            expect(response.error).toContain('Tracker já existe na lista global');
+            // failWithLog retorna ErrorCodes.OPERATION_FAILED para não vazar err.message ao renderer
+            expect(response.error).toBe('error.operation.failed');
         });
     });
 
@@ -1702,5 +1705,1073 @@ describe('Property 2: Reinício acionado somente quando valores de rede mudam', 
             }),
             { numRuns: 200 },
         );
+    });
+});
+
+// ─── Tests: renderer:report-error handler (Task 4.3) ─────────────────────────
+
+describe('registerIpcHandlers — renderer:report-error handler (Task 4.3)', () => {
+    function getHandler(
+        channel: string,
+    ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
+        const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
+        return call
+            ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
+            : undefined;
+    }
+
+    function setup() {
+        jest.clearAllMocks();
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        registerIpcHandlers(dm, sm);
+        return { dm, sm };
+    }
+
+    it('retorna sucesso para payload válido com message e source', async () => {
+        setup();
+        const handler = getHandler('renderer:report-error')!;
+        const response = (await handler(null, {
+            message: 'Uncaught TypeError: x is not a function',
+            source: 'ErrorBoundary',
+        })) as any;
+
+        expect(response.success).toBe(true);
+    });
+
+    it('retorna sucesso com stack e componentStack opcionais presentes', async () => {
+        setup();
+        const handler = getHandler('renderer:report-error')!;
+        const response = (await handler(null, {
+            message: 'React render error',
+            source: 'App',
+            stack: 'Error: React render error\n  at App.tsx:10',
+            componentStack: '\n    in App\n    in div',
+        })) as any;
+
+        expect(response.success).toBe(true);
+    });
+
+    it('retorna sucesso mesmo sem stack e componentStack', async () => {
+        setup();
+        const handler = getHandler('renderer:report-error')!;
+        const response = (await handler(null, {
+            message: 'Minimal error',
+            source: 'DownloadList',
+        })) as any;
+
+        expect(response.success).toBe(true);
+    });
+
+    it('retorna erro para payload null', async () => {
+        setup();
+        const handler = getHandler('renderer:report-error')!;
+        const response = (await handler(null, null)) as any;
+
+        expect(response.success).toBe(false);
+        expect(typeof response.error).toBe('string');
+        expect(response.error.length).toBeGreaterThan(0);
+    });
+
+    it('retorna erro para message vazia', async () => {
+        setup();
+        const handler = getHandler('renderer:report-error')!;
+        const response = (await handler(null, { message: '', source: 'App' })) as any;
+
+        expect(response.success).toBe(false);
+        expect(typeof response.error).toBe('string');
+    });
+
+    it('retorna erro para source ausente no payload', async () => {
+        setup();
+        const handler = getHandler('renderer:report-error')!;
+        const response = (await handler(null, { message: 'Some error' })) as any;
+
+        expect(response.success).toBe(false);
+        expect(typeof response.error).toBe('string');
+    });
+
+    it('retorna erro para source vazia', async () => {
+        setup();
+        const handler = getHandler('renderer:report-error')!;
+        const response = (await handler(null, { message: 'Some error', source: '' })) as any;
+
+        expect(response.success).toBe(false);
+        expect(typeof response.error).toBe('string');
+    });
+
+    it('retorna erro para payload sem nenhum campo', async () => {
+        setup();
+        const handler = getHandler('renderer:report-error')!;
+        const response = (await handler(null, {})) as any;
+
+        expect(response.success).toBe(false);
+        expect(typeof response.error).toBe('string');
+    });
+
+    it('retorna erro para payload primitivo (número)', async () => {
+        setup();
+        const handler = getHandler('renderer:report-error')!;
+        const response = (await handler(null, 42)) as any;
+
+        expect(response.success).toBe(false);
+        expect(typeof response.error).toBe('string');
+    });
+});
+
+// ─── Tests: app:get-metrics handler (Task 4.3) ────────────────────────────────
+
+describe('registerIpcHandlers — app:get-metrics handler (Task 4.3)', () => {
+    function getHandler(
+        channel: string,
+    ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
+        const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
+        return call
+            ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
+            : undefined;
+    }
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        registerIpcHandlers(dm, sm);
+    });
+
+    it('retorna MetricsSnapshot com success: true', async () => {
+        const handler = getHandler('app:get-metrics')!;
+        const response = (await handler(null, undefined)) as any;
+
+        expect(response.success).toBe(true);
+        expect(response.data).toBeDefined();
+    });
+
+    it('snapshot contém todos os campos numéricos obrigatórios', async () => {
+        const handler = getHandler('app:get-metrics')!;
+        const response = (await handler(null, undefined)) as any;
+
+        expect(response.success).toBe(true);
+        const snap = response.data;
+        expect(typeof snap.ipcCallCount).toBe('number');
+        expect(typeof snap.ipcErrorCount).toBe('number');
+        expect(typeof snap.engineErrorCount).toBe('number');
+        expect(typeof snap.rendererCrashCount).toBe('number');
+        expect(typeof snap.rendererErrorCount).toBe('number');
+        expect(typeof snap.uptimeMs).toBe('number');
+        expect(typeof snap.startedAt).toBe('number');
+    });
+
+    it('snapshot contém objeto memoryUsage com campos de heap', async () => {
+        const handler = getHandler('app:get-metrics')!;
+        const response = (await handler(null, undefined)) as any;
+
+        expect(response.success).toBe(true);
+        const snap = response.data;
+        expect(typeof snap.memoryUsage).toBe('object');
+        expect(typeof snap.memoryUsage.heapUsed).toBe('number');
+        expect(typeof snap.memoryUsage.heapTotal).toBe('number');
+        expect(typeof snap.memoryUsage.rss).toBe('number');
+    });
+
+    it('snapshot contém mapas de chamadas e erros por canal', async () => {
+        const handler = getHandler('app:get-metrics')!;
+        const response = (await handler(null, undefined)) as any;
+
+        expect(response.success).toBe(true);
+        const snap = response.data;
+        expect(typeof snap.errorsByChannel).toBe('object');
+        expect(typeof snap.callsByChannel).toBe('object');
+        expect(typeof snap.avgLatencyByChannel).toBe('object');
+    });
+
+    it('handler ignora o payload (sempre retorna snapshot)', async () => {
+        const handler = getHandler('app:get-metrics')!;
+        const response1 = (await handler(null, null)) as any;
+        const response2 = (await handler(null, { unexpected: true })) as any;
+
+        expect(response1.success).toBe(true);
+        expect(response2.success).toBe(true);
+    });
+});
+
+// ─── Tests: torrent:retry handler (Task 4.3) ──────────────────────────────────
+
+describe('registerIpcHandlers — torrent:retry handler (Task 4.3)', () => {
+    function getHandler(
+        channel: string,
+    ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
+        const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
+        return call
+            ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
+            : undefined;
+    }
+
+    const RETRIED_ITEM = {
+        infoHash: 'a'.repeat(40),
+        name: 'test.torrent',
+        status: 'downloading',
+        destinationFolder: '/downloads',
+        totalSize: 0,
+        downloadedSize: 0,
+        progress: 0,
+        downloadSpeed: 0,
+        uploadSpeed: 0,
+        numPeers: 0,
+        numSeeders: 0,
+        timeRemaining: 0,
+        addedAt: 0,
+    };
+
+    it('retorna o item re-tentado com sucesso', async () => {
+        jest.clearAllMocks();
+        const dm = {
+            ...makeMockDownloadManager(),
+            retryDownload: jest.fn().mockResolvedValue(RETRIED_ITEM),
+        } as unknown as DownloadManager;
+        const sm = makeMockSettingsManager();
+        const te = makeMockTorrentEngine();
+        (te as any).isRestarting = jest.fn().mockReturnValue(false);
+        registerIpcHandlers(dm, sm, te as any);
+
+        const handler = getHandler('torrent:retry')!;
+        const response = (await handler(null, { infoHash: 'a'.repeat(40) })) as any;
+
+        expect(response.success).toBe(true);
+        expect(response.data).toEqual(RETRIED_ITEM);
+        expect(dm.retryDownload).toHaveBeenCalledWith('a'.repeat(40));
+    });
+
+    it('retorna ENGINE_RESTARTING quando motor está reiniciando', async () => {
+        jest.clearAllMocks();
+        const dm = {
+            ...makeMockDownloadManager(),
+            retryDownload: jest.fn(),
+        } as unknown as DownloadManager;
+        const sm = makeMockSettingsManager();
+        const te = makeMockTorrentEngine();
+        (te as any).isRestarting = jest.fn().mockReturnValue(true);
+        registerIpcHandlers(dm, sm, te as any);
+
+        const handler = getHandler('torrent:retry')!;
+        const response = (await handler(null, { infoHash: 'a'.repeat(40) })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.ENGINE_RESTARTING);
+        expect(dm.retryDownload).not.toHaveBeenCalled();
+    });
+
+    it('retorna erro para payload null', async () => {
+        jest.clearAllMocks();
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        registerIpcHandlers(dm, sm);
+
+        const handler = getHandler('torrent:retry')!;
+        const response = (await handler(null, null)) as any;
+
+        expect(response.success).toBe(false);
+        expect(typeof response.error).toBe('string');
+        expect(response.error.length).toBeGreaterThan(0);
+    });
+
+    it('retorna erro para infoHash vazio', async () => {
+        jest.clearAllMocks();
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        registerIpcHandlers(dm, sm);
+
+        const handler = getHandler('torrent:retry')!;
+        const response = (await handler(null, { infoHash: '' })) as any;
+
+        expect(response.success).toBe(false);
+        expect(typeof response.error).toBe('string');
+    });
+
+    it('retorna erro quando retryDownload lança exceção', async () => {
+        jest.clearAllMocks();
+        const dm = {
+            ...makeMockDownloadManager(),
+            retryDownload: jest
+                .fn()
+                .mockRejectedValue(new Error('Torrent não está em estado de erro')),
+        } as unknown as DownloadManager;
+        const sm = makeMockSettingsManager();
+        const te = makeMockTorrentEngine();
+        (te as any).isRestarting = jest.fn().mockReturnValue(false);
+        registerIpcHandlers(dm, sm, te as any);
+
+        const handler = getHandler('torrent:retry')!;
+        const response = (await handler(null, { infoHash: 'a'.repeat(40) })) as any;
+
+        expect(response.success).toBe(false);
+        // failWithLog retorna ErrorCodes.OPERATION_FAILED para não vazar err.message ao renderer
+        expect(response.error).toBe('error.operation.failed');
+    });
+
+    it('retorna erro para payload sem infoHash', async () => {
+        jest.clearAllMocks();
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        registerIpcHandlers(dm, sm);
+
+        const handler = getHandler('torrent:retry')!;
+        const response = (await handler(null, { wrongKey: 'value' })) as any;
+
+        expect(response.success).toBe(false);
+        expect(typeof response.error).toBe('string');
+    });
+});
+
+// ─── Tests: ENGINE_NOT_AVAILABLE branches (Task 4.3) ──────────────────────────
+
+describe('registerIpcHandlers — ENGINE_NOT_AVAILABLE sem torrentEngine (Task 4.3)', () => {
+    function getHandler(
+        channel: string,
+    ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
+        const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
+        return call
+            ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
+            : undefined;
+    }
+
+    /** Registra handlers SEM torrentEngine para cobrir ENGINE_NOT_AVAILABLE */
+    function setupWithoutEngine(items: unknown[] = []) {
+        jest.clearAllMocks();
+        const dm = makeMockDownloadManager();
+        (dm.getAll as jest.Mock).mockReturnValue(items);
+        const sm = makeMockSettingsManager();
+        registerIpcHandlers(dm, sm); // sem torrentEngine
+        return { dm, sm };
+    }
+
+    it('tracker:get retorna ENGINE_NOT_AVAILABLE sem engine', async () => {
+        setupWithoutEngine();
+        const handler = getHandler('tracker:get')!;
+        const response = (await handler(null, { infoHash: 'a'.repeat(40) })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.ENGINE_NOT_AVAILABLE);
+    });
+
+    it('tracker:add retorna ENGINE_NOT_AVAILABLE sem engine', async () => {
+        setupWithoutEngine();
+        const handler = getHandler('tracker:add')!;
+        const response = (await handler(null, {
+            infoHash: 'a'.repeat(40),
+            url: 'udp://tracker.example.com:6969',
+        })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.ENGINE_NOT_AVAILABLE);
+    });
+
+    it('tracker:remove retorna ENGINE_NOT_AVAILABLE sem engine', async () => {
+        setupWithoutEngine();
+        const handler = getHandler('tracker:remove')!;
+        const response = (await handler(null, {
+            infoHash: 'a'.repeat(40),
+            url: 'udp://tracker.example.com:6969',
+        })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.ENGINE_NOT_AVAILABLE);
+    });
+
+    it('tracker:apply-global retorna ENGINE_NOT_AVAILABLE sem engine', async () => {
+        setupWithoutEngine();
+        const handler = getHandler('tracker:apply-global')!;
+        const response = (await handler(null, { infoHash: 'a'.repeat(40) })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.ENGINE_NOT_AVAILABLE);
+    });
+
+    it('torrent:get-files retorna ENGINE_NOT_AVAILABLE quando item existe mas engine ausente', async () => {
+        setupWithoutEngine([{ infoHash: 'a'.repeat(40), status: 'downloading' }]);
+        const handler = getHandler('torrent:get-files')!;
+        const response = (await handler(null, { infoHash: 'a'.repeat(40) })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.ENGINE_NOT_AVAILABLE);
+    });
+
+    it('torrent:set-file-selection retorna ENGINE_NOT_AVAILABLE quando item existe mas engine ausente', async () => {
+        setupWithoutEngine([{ infoHash: 'a'.repeat(40), status: 'downloading' }]);
+        const handler = getHandler('torrent:set-file-selection')!;
+        const response = (await handler(null, {
+            infoHash: 'a'.repeat(40),
+            selectedIndices: [0],
+        })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.ENGINE_NOT_AVAILABLE);
+    });
+
+    it('torrent:get-metadata retorna ENGINE_NOT_AVAILABLE sem engine', async () => {
+        setupWithoutEngine([{ infoHash: 'a'.repeat(40), status: 'downloading' }]);
+        const handler = getHandler('torrent:get-metadata')!;
+        const response = (await handler(null, { infoHash: 'a'.repeat(40) })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.ENGINE_NOT_AVAILABLE);
+    });
+
+    it('torrent:get-peers retorna ENGINE_NOT_AVAILABLE sem engine', async () => {
+        setupWithoutEngine([{ infoHash: 'a'.repeat(40), status: 'downloading' }]);
+        const handler = getHandler('torrent:get-peers')!;
+        const response = (await handler(null, { infoHash: 'a'.repeat(40) })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.ENGINE_NOT_AVAILABLE);
+    });
+
+    it('torrent:get-pieces retorna ENGINE_NOT_AVAILABLE sem engine', async () => {
+        setupWithoutEngine([{ infoHash: 'a'.repeat(40), status: 'downloading' }]);
+        const handler = getHandler('torrent:get-pieces')!;
+        const response = (await handler(null, { infoHash: 'a'.repeat(40) })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.ENGINE_NOT_AVAILABLE);
+    });
+});
+
+// ─── Tests: torrent:get-metadata handler (Task 4.3) ───────────────────────────
+
+describe('registerIpcHandlers — torrent:get-metadata handler (Task 4.3)', () => {
+    function getHandler(
+        channel: string,
+    ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
+        const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
+        return call
+            ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
+            : undefined;
+    }
+
+    const VALID_HASH = 'a'.repeat(40);
+    const VALID_ITEM = { infoHash: VALID_HASH, status: 'downloading' };
+    const VALID_METADATA = {
+        infoHash: VALID_HASH,
+        creator: 'TestCreator',
+        comment: 'Test comment',
+        creationDate: 1234567890,
+    };
+
+    function setup(items: unknown[] = [VALID_ITEM], isRestarting = false) {
+        jest.clearAllMocks();
+        const dm = makeMockDownloadManager();
+        (dm.getAll as jest.Mock).mockReturnValue(items);
+        const sm = makeMockSettingsManager();
+        const te = makeMockTorrentEngine();
+        (te as any).isRestarting = jest.fn().mockReturnValue(isRestarting);
+        (te as any).getMetadata = jest.fn().mockReturnValue(VALID_METADATA);
+        registerIpcHandlers(dm, sm, te as any);
+        return { dm, sm, te };
+    }
+
+    it('retorna metadados com sucesso para infoHash hexadecimal válido', async () => {
+        setup();
+        const handler = getHandler('torrent:get-metadata')!;
+        const response = (await handler(null, { infoHash: VALID_HASH })) as any;
+
+        expect(response.success).toBe(true);
+        expect(response.data).toEqual(VALID_METADATA);
+    });
+
+    it('retorna TORRENT_NOT_FOUND quando torrent não está na lista', async () => {
+        setup([]); // lista vazia
+        const handler = getHandler('torrent:get-metadata')!;
+        const response = (await handler(null, { infoHash: VALID_HASH })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.TORRENT_NOT_FOUND);
+    });
+
+    it('retorna ENGINE_RESTARTING quando motor está reiniciando', async () => {
+        setup([VALID_ITEM], true); // isRestarting = true
+        const handler = getHandler('torrent:get-metadata')!;
+        const response = (await handler(null, { infoHash: VALID_HASH })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.ENGINE_RESTARTING);
+    });
+
+    it('retorna INVALID_PARAMS para infoHash com menos de 40 chars', async () => {
+        setup();
+        const handler = getHandler('torrent:get-metadata')!;
+        const response = (await handler(null, { infoHash: 'abc123' })) as any;
+
+        expect(response.success).toBe(false);
+        expect(typeof response.error).toBe('string');
+    });
+
+    it('retorna INVALID_PARAMS para infoHash não hexadecimal de 40 chars', async () => {
+        setup();
+        const handler = getHandler('torrent:get-metadata')!;
+        // 40 chars but contains 'g'-'z' which are not hex
+        const nonHexHash = 'g'.repeat(40);
+        const response = (await handler(null, { infoHash: nonHexHash })) as any;
+
+        expect(response.success).toBe(false);
+        expect(typeof response.error).toBe('string');
+    });
+
+    it('retorna INVALID_PARAMS para payload null', async () => {
+        setup();
+        const handler = getHandler('torrent:get-metadata')!;
+        const response = (await handler(null, null)) as any;
+
+        expect(response.success).toBe(false);
+        expect(typeof response.error).toBe('string');
+    });
+
+    it('retorna erro quando getMetadata lança exceção', async () => {
+        const { te } = setup();
+        (te as any).getMetadata.mockImplementation(() => {
+            throw new Error('Torrent não encontrado no engine');
+        });
+
+        const handler = getHandler('torrent:get-metadata')!;
+        const response = (await handler(null, { infoHash: VALID_HASH })) as any;
+
+        expect(response.success).toBe(false);
+        // failWithLog retorna ErrorCodes.OPERATION_FAILED para não vazar err.message ao renderer
+        expect(response.error).toBe('error.operation.failed');
+    });
+});
+
+// ─── Tests: torrent:get-peers handler (Task 4.3) ──────────────────────────────
+
+describe('registerIpcHandlers — torrent:get-peers handler (Task 4.3)', () => {
+    function getHandler(
+        channel: string,
+    ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
+        const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
+        return call
+            ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
+            : undefined;
+    }
+
+    const VALID_HASH = 'b'.repeat(40);
+    const VALID_PEERS = [
+        { address: '1.2.3.4:6881', client: 'uTorrent', downloadSpeed: 0, uploadSpeed: 0 },
+        { address: '5.6.7.8:6881', client: 'qBittorrent', downloadSpeed: 512, uploadSpeed: 256 },
+    ];
+
+    function setup(items: unknown[] = [{ infoHash: VALID_HASH, status: 'downloading' }], isRestarting = false) {
+        jest.clearAllMocks();
+        const dm = makeMockDownloadManager();
+        (dm.getAll as jest.Mock).mockReturnValue(items);
+        const sm = makeMockSettingsManager();
+        const te = makeMockTorrentEngine();
+        (te as any).isRestarting = jest.fn().mockReturnValue(isRestarting);
+        (te as any).getPeers = jest.fn().mockReturnValue(VALID_PEERS);
+        registerIpcHandlers(dm, sm, te as any);
+        return { dm, sm, te };
+    }
+
+    it('retorna lista de peers com sucesso', async () => {
+        setup();
+        const handler = getHandler('torrent:get-peers')!;
+        const response = (await handler(null, { infoHash: VALID_HASH })) as any;
+
+        expect(response.success).toBe(true);
+        expect(response.data).toEqual(VALID_PEERS);
+    });
+
+    it('retorna array vazio para torrent em resolving-metadata', async () => {
+        setup([{ infoHash: VALID_HASH, status: 'resolving-metadata' }]);
+        const handler = getHandler('torrent:get-peers')!;
+        const response = (await handler(null, { infoHash: VALID_HASH })) as any;
+
+        expect(response.success).toBe(true);
+        expect(response.data).toEqual([]);
+    });
+
+    it('retorna TORRENT_NOT_FOUND quando torrent não está na lista', async () => {
+        setup([]); // lista vazia
+        const handler = getHandler('torrent:get-peers')!;
+        const response = (await handler(null, { infoHash: VALID_HASH })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.TORRENT_NOT_FOUND);
+    });
+
+    it('retorna ENGINE_RESTARTING quando motor está reiniciando', async () => {
+        setup([{ infoHash: VALID_HASH, status: 'downloading' }], true);
+        const handler = getHandler('torrent:get-peers')!;
+        const response = (await handler(null, { infoHash: VALID_HASH })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.ENGINE_RESTARTING);
+    });
+
+    it('retorna INVALID_PARAMS para payload null', async () => {
+        setup();
+        const handler = getHandler('torrent:get-peers')!;
+        const response = (await handler(null, null)) as any;
+
+        expect(response.success).toBe(false);
+        expect(typeof response.error).toBe('string');
+    });
+
+    it('retorna lista vazia de peers quando getPeers retorna []', async () => {
+        const { te } = setup();
+        (te as any).getPeers.mockReturnValue([]);
+        const handler = getHandler('torrent:get-peers')!;
+        const response = (await handler(null, { infoHash: VALID_HASH })) as any;
+
+        expect(response.success).toBe(true);
+        expect(response.data).toEqual([]);
+    });
+});
+
+// ─── Tests: torrent:get-pieces handler (Task 4.3) ─────────────────────────────
+
+describe('registerIpcHandlers — torrent:get-pieces handler (Task 4.3)', () => {
+    function getHandler(
+        channel: string,
+    ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
+        const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
+        return call
+            ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
+            : undefined;
+    }
+
+    const VALID_HASH = 'c'.repeat(40);
+    const VALID_PIECES = [true, false, true, true, false, true];
+
+    function setup(items: unknown[] = [{ infoHash: VALID_HASH, status: 'downloading' }], isRestarting = false) {
+        jest.clearAllMocks();
+        const dm = makeMockDownloadManager();
+        (dm.getAll as jest.Mock).mockReturnValue(items);
+        const sm = makeMockSettingsManager();
+        const te = makeMockTorrentEngine();
+        (te as any).isRestarting = jest.fn().mockReturnValue(isRestarting);
+        (te as any).getPieces = jest.fn().mockReturnValue(VALID_PIECES);
+        registerIpcHandlers(dm, sm, te as any);
+        return { dm, sm, te };
+    }
+
+    it('retorna lista de peças com sucesso', async () => {
+        setup();
+        const handler = getHandler('torrent:get-pieces')!;
+        const response = (await handler(null, { infoHash: VALID_HASH })) as any;
+
+        expect(response.success).toBe(true);
+        expect(response.data).toEqual(VALID_PIECES);
+    });
+
+    it('retorna array vazio para torrent em resolving-metadata', async () => {
+        setup([{ infoHash: VALID_HASH, status: 'resolving-metadata' }]);
+        const handler = getHandler('torrent:get-pieces')!;
+        const response = (await handler(null, { infoHash: VALID_HASH })) as any;
+
+        expect(response.success).toBe(true);
+        expect(response.data).toEqual([]);
+    });
+
+    it('retorna TORRENT_NOT_FOUND quando torrent não está na lista', async () => {
+        setup([]); // lista vazia
+        const handler = getHandler('torrent:get-pieces')!;
+        const response = (await handler(null, { infoHash: VALID_HASH })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.TORRENT_NOT_FOUND);
+    });
+
+    it('retorna ENGINE_RESTARTING quando motor está reiniciando', async () => {
+        setup([{ infoHash: VALID_HASH, status: 'downloading' }], true);
+        const handler = getHandler('torrent:get-pieces')!;
+        const response = (await handler(null, { infoHash: VALID_HASH })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.ENGINE_RESTARTING);
+    });
+
+    it('retorna INVALID_PARAMS para payload null', async () => {
+        setup();
+        const handler = getHandler('torrent:get-pieces')!;
+        const response = (await handler(null, null)) as any;
+
+        expect(response.success).toBe(false);
+        expect(typeof response.error).toBe('string');
+    });
+
+    it('retorna erro quando getPieces lança exceção', async () => {
+        const { te } = setup();
+        (te as any).getPieces.mockImplementation(() => {
+            throw new Error('Falha ao obter peças do torrent');
+        });
+
+        const handler = getHandler('torrent:get-pieces')!;
+        const response = (await handler(null, { infoHash: VALID_HASH })) as any;
+
+        expect(response.success).toBe(false);
+        // failWithLog retorna ErrorCodes.OPERATION_FAILED para não vazar err.message ao renderer
+        expect(response.error).toBe('error.operation.failed');
+    });
+});
+
+// ─── Tests: withTimeout timeout path (Task 4.3) ───────────────────────────────
+
+describe('registerIpcHandlers — withTimeout expiração de operação (Task 4.3)', () => {
+    function getHandler(
+        channel: string,
+    ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
+        const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
+        return call
+            ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
+            : undefined;
+    }
+
+    it('retorna erro quando operação IPC expira após 30 segundos', async () => {
+        jest.useFakeTimers();
+
+        jest.clearAllMocks();
+        const dm = makeMockDownloadManager();
+        // pause nunca resolve — simula operação travada
+        (dm.pause as jest.Mock).mockReturnValue(new Promise<void>(() => { }));
+
+        const sm = makeMockSettingsManager();
+        const te = makeMockTorrentEngine();
+        (te as any).isRestarting = jest.fn().mockReturnValue(false);
+        registerIpcHandlers(dm, sm, te as any);
+
+        const handler = getHandler('torrent:pause')!;
+
+        // Iniciar o handler (não await ainda — handler está bloqueado no pause)
+        const p = handler(null, { infoHash: 'a'.repeat(40) });
+
+        // Avançar o relógio além do timeout de 30s
+        jest.advanceTimersByTime(31_000);
+
+        // Agora aguardar a resposta — deve retornar o erro de timeout
+        const response = (await p) as any;
+
+        jest.useRealTimers();
+
+        expect(response.success).toBe(false);
+        // failWithLog retorna ErrorCodes.OPERATION_FAILED para não vazar err.message ao renderer
+        expect(response.error).toBe('error.operation.failed');
+    });
+});
+
+// ─── Tests: ChannelRateLimiter limit exceeded (Task 4.3) ──────────────────────
+
+describe('registerIpcHandlers — ChannelRateLimiter limite excedido (Task 4.3)', () => {
+    function getHandler(
+        channel: string,
+    ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
+        const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
+        return call
+            ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
+            : undefined;
+    }
+
+    it('retorna error.rateLimit quando canal excede 500 chamadas no mesmo segundo', async () => {
+        jest.clearAllMocks();
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        registerIpcHandlers(dm, sm);
+
+        // Preencher o rate limiter para o canal 'torrent:get-all' até o limite máximo (500)
+        // _rateLimiter está exportado para fins de teste
+        for (let i = 0; i < 500; i++) {
+            _rateLimiter.tryConsume('torrent:get-all');
+        }
+
+        // A próxima chamada ao handler deve ser bloqueada pelo rate limiter
+        const handler = getHandler('torrent:get-all')!;
+        const response = (await handler(null, undefined)) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe('error.rateLimit');
+    });
+
+    it('permite chamadas normais quando rate limiter está abaixo do limite', async () => {
+        jest.clearAllMocks();
+        const dm = makeMockDownloadManager();
+        const sm = makeMockSettingsManager();
+        registerIpcHandlers(dm, sm);
+
+        // Rate limiter foi resetado pelo afterEach — apenas algumas chamadas
+        for (let i = 0; i < 10; i++) {
+            _rateLimiter.tryConsume('settings:get');
+        }
+
+        // Chamada ao handler deve ser permitida
+        const handler = getHandler('settings:get')!;
+        const response = (await handler(null, undefined)) as any;
+
+        expect(response.success).toBe(true);
+    });
+});
+
+// ─── Tests: torrent:add-file-buffer com tipos de buffer (Task 4.3) ────────────
+
+describe('registerIpcHandlers — torrent:add-file-buffer tipos de buffer (Task 4.3)', () => {
+    function getHandler(
+        channel: string,
+    ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
+        const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
+        return call
+            ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
+            : undefined;
+    }
+
+    const MOCK_ITEM = {
+        infoHash: 'a'.repeat(40),
+        name: 'test.torrent',
+        status: 'downloading',
+        destinationFolder: '/downloads',
+        totalSize: 0,
+        downloadedSize: 0,
+        progress: 0,
+        downloadSpeed: 0,
+        uploadSpeed: 0,
+        numPeers: 0,
+        numSeeders: 0,
+        timeRemaining: 0,
+        addedAt: 0,
+    };
+
+    function setup() {
+        jest.clearAllMocks();
+        const dm = makeMockDownloadManager();
+        (dm.addTorrentBuffer as jest.Mock).mockResolvedValue(MOCK_ITEM);
+        const sm = makeMockSettingsManager();
+        const te = makeMockTorrentEngine();
+        (te as any).isRestarting = jest.fn().mockReturnValue(false);
+        registerIpcHandlers(dm, sm, te as any);
+        return { dm };
+    }
+
+    it('aceita ArrayBuffer e retorna o item adicionado', async () => {
+        const { dm } = setup();
+        const handler = getHandler('torrent:add-file-buffer')!;
+
+        // Criar um ArrayBuffer com conteúdo válido (bencode começa com 'd')
+        const arrayBuffer = new ArrayBuffer(8);
+        new Uint8Array(arrayBuffer)[0] = 0x64; // 'd' — início de bencode válido
+
+        const response = (await handler(null, { buffer: arrayBuffer })) as any;
+
+        expect(response.success).toBe(true);
+        expect(response.data).toEqual(MOCK_ITEM);
+        expect(dm.addTorrentBuffer).toHaveBeenCalledTimes(1);
+        // Verificar que o buffer passado é um Buffer Node.js (convertido de ArrayBuffer)
+        const passedBuffer = (dm.addTorrentBuffer as jest.Mock).mock.calls[0][0];
+        expect(Buffer.isBuffer(passedBuffer)).toBe(true);
+    });
+
+    it('aceita Buffer Node.js e retorna o item adicionado', async () => {
+        const { dm } = setup();
+        const handler = getHandler('torrent:add-file-buffer')!;
+
+        const nodeBuffer = Buffer.from([0x64, 0x31, 0x3a]); // 'd1:' — início de bencode
+
+        const response = (await handler(null, { buffer: nodeBuffer })) as any;
+
+        expect(response.success).toBe(true);
+        expect(dm.addTorrentBuffer).toHaveBeenCalledTimes(1);
+    });
+
+    it('aceita Uint8Array e retorna o item adicionado', async () => {
+        const { dm } = setup();
+        const handler = getHandler('torrent:add-file-buffer')!;
+
+        const uint8Array = new Uint8Array([0x64, 0x00, 0x01, 0x02]);
+
+        const response = (await handler(null, { buffer: uint8Array })) as any;
+
+        expect(response.success).toBe(true);
+        expect(dm.addTorrentBuffer).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejeita buffer vazio (length === 0) com INVALID_FILE_PATH', async () => {
+        setup();
+        const handler = getHandler('torrent:add-file-buffer')!;
+
+        const emptyBuffer = Buffer.alloc(0);
+
+        const response = (await handler(null, { buffer: emptyBuffer })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.INVALID_FILE_PATH);
+    });
+
+    it('rejeita ArrayBuffer vazio com INVALID_FILE_PATH', async () => {
+        setup();
+        const handler = getHandler('torrent:add-file-buffer')!;
+
+        const emptyArrayBuffer = new ArrayBuffer(0);
+
+        const response = (await handler(null, { buffer: emptyArrayBuffer })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.INVALID_FILE_PATH);
+    });
+
+    it('rejeita payload sem campo buffer', async () => {
+        setup();
+        const handler = getHandler('torrent:add-file-buffer')!;
+
+        const response = (await handler(null, { wrongKey: 'value' })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.INVALID_FILE_PATH);
+    });
+
+    it('rejeita buffer com tipo inválido (string) com INVALID_FILE_PATH', async () => {
+        setup();
+        const handler = getHandler('torrent:add-file-buffer')!;
+
+        const response = (await handler(null, { buffer: 'not-a-buffer' })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.INVALID_FILE_PATH);
+    });
+
+    it('rejeita buffer com tipo inválido (número) com INVALID_FILE_PATH', async () => {
+        setup();
+        const handler = getHandler('torrent:add-file-buffer')!;
+
+        const response = (await handler(null, { buffer: 12345 })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.INVALID_FILE_PATH);
+    });
+
+    it('rejeita payload null', async () => {
+        setup();
+        const handler = getHandler('torrent:add-file-buffer')!;
+
+        const response = (await handler(null, null)) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.INVALID_FILE_PATH);
+    });
+
+    it('retorna erro quando addTorrentBuffer lança exceção', async () => {
+        jest.clearAllMocks();
+        const dm = makeMockDownloadManager();
+        (dm.addTorrentBuffer as jest.Mock).mockRejectedValue(new Error('Arquivo .torrent corrompido'));
+        const sm = makeMockSettingsManager();
+        const te = makeMockTorrentEngine();
+        (te as any).isRestarting = jest.fn().mockReturnValue(false);
+        registerIpcHandlers(dm, sm, te as any);
+
+        const handler = getHandler('torrent:add-file-buffer')!;
+        const nodeBuffer = Buffer.from([0x64, 0x31]);
+
+        const response = (await handler(null, { buffer: nodeBuffer })) as any;
+
+        expect(response.success).toBe(false);
+        // failWithLog retorna ErrorCodes.OPERATION_FAILED para não vazar err.message ao renderer
+        expect(response.error).toBe('error.operation.failed');
+    });
+});
+
+// ─── Tests: torrent:add-file-buffer magic bytes (Tarefa 6.1) ─────────────────
+// Req 4.1/4.5: o handler valida os magic bytes do buffer antes de passá-lo ao engine.
+
+describe('registerIpcHandlers — torrent:add-file-buffer validação de magic bytes (Tarefa 6.1)', () => {
+    function getHandler(
+        channel: string,
+    ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
+        const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
+        return call
+            ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
+            : undefined;
+    }
+
+    const MOCK_ITEM = {
+        infoHash: 'a'.repeat(40),
+        name: 'test.torrent',
+        status: 'downloading',
+        destinationFolder: '/downloads',
+        totalSize: 0,
+        downloadedSize: 0,
+        progress: 0,
+        downloadSpeed: 0,
+        uploadSpeed: 0,
+        numPeers: 0,
+        numSeeders: 0,
+        timeRemaining: 0,
+        addedAt: 0,
+    };
+
+    function setup() {
+        jest.clearAllMocks();
+        const dm = makeMockDownloadManager();
+        (dm.addTorrentBuffer as jest.Mock).mockResolvedValue(MOCK_ITEM);
+        const sm = makeMockSettingsManager();
+        const te = makeMockTorrentEngine();
+        (te as any).isRestarting = jest.fn().mockReturnValue(false);
+        registerIpcHandlers(dm, sm, te as any);
+        return { dm };
+    }
+
+    it('rejeita Buffer com primeiro byte diferente de 0x64 (não-bencode)', async () => {
+        setup();
+        const handler = getHandler('torrent:add-file-buffer')!;
+
+        // Primeiro byte 0x50 ('P') — não é um dicionário bencode
+        const invalidBuffer = Buffer.from([0x50, 0x4b, 0x03, 0x04]); // ZIP magic bytes
+
+        const response = (await handler(null, { buffer: invalidBuffer })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.INVALID_FILE_PATH);
+    });
+
+    it('rejeita Uint8Array com primeiro byte diferente de 0x64', async () => {
+        setup();
+        const handler = getHandler('torrent:add-file-buffer')!;
+
+        // 0xFF não é início de bencode
+        const invalidUint8Array = new Uint8Array([0xff, 0x00, 0x01]);
+
+        const response = (await handler(null, { buffer: invalidUint8Array })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.INVALID_FILE_PATH);
+    });
+
+    it('aceita Buffer com primeiro byte 0x64 (bencode válido)', async () => {
+        const { dm } = setup();
+        const handler = getHandler('torrent:add-file-buffer')!;
+
+        const validBuffer = Buffer.from([0x64, 0x31, 0x3a]); // 'd1:' — início de bencode
+
+        const response = (await handler(null, { buffer: validBuffer })) as any;
+
+        expect(response.success).toBe(true);
+        expect(dm.addTorrentBuffer).toHaveBeenCalledTimes(1);
+    });
+
+    it('aceita Uint8Array com primeiro byte 0x64', async () => {
+        const { dm } = setup();
+        const handler = getHandler('torrent:add-file-buffer')!;
+
+        const validUint8 = new Uint8Array([0x64, 0x65, 0x66]); // 'd' start
+
+        const response = (await handler(null, { buffer: validUint8 })) as any;
+
+        expect(response.success).toBe(true);
+        expect(dm.addTorrentBuffer).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejeita ArrayBuffer com primeiro byte diferente de 0x64', async () => {
+        setup();
+        const handler = getHandler('torrent:add-file-buffer')!;
+
+        const arrayBuf = new ArrayBuffer(4);
+        new Uint8Array(arrayBuf)[0] = 0x4d; // 'M' — não é bencode
+
+        const response = (await handler(null, { buffer: arrayBuf })) as any;
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.INVALID_FILE_PATH);
     });
 });

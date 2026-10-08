@@ -8,7 +8,9 @@
  */
 
 import { EventEmitter } from 'events';
+import { resolve as resolvePath } from 'path';
 import { registerIpcHandlers } from '../../main/ipcHandler';
+import { ErrorCodes } from '../../shared/errorCodes';
 import type { DownloadManager } from '../../main/downloadManager';
 import type { SettingsManager, AppSettings } from '../../main/settingsManager';
 import type { DownloadItem, IPCResponse } from '../../shared/types';
@@ -295,7 +297,8 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
             const handler = getHandler('torrent:add-file')!;
             await handler(null, { filePath: '/path/to/test.torrent' });
 
-            expect(downloadManager.addTorrentFile).toHaveBeenCalledWith('/path/to/test.torrent');
+            // path.resolve normaliza o caminho antes de passá-lo ao manager (task 6.2)
+            expect(downloadManager.addTorrentFile).toHaveBeenCalledWith(resolvePath('/path/to/test.torrent'));
         });
 
         it('torrent:add-magnet delegates to downloadManager.addMagnetLink', async () => {
@@ -599,7 +602,8 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
             if (response.success) {
                 expect(response.data.destinationFolder).toBe('/new/folder');
             }
-            expect(settingsManager.set).toHaveBeenCalledWith({ destinationFolder: '/new/folder' });
+            // path.resolve normaliza o caminho antes de persistir (task 6.2)
+            expect(settingsManager.set).toHaveBeenCalledWith({ destinationFolder: resolvePath('/new/folder') });
         });
 
         it('settings:set with speed limit 0 (no limit) is accepted', async () => {
@@ -654,7 +658,7 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
 
             expect(response.success).toBe(false);
             if (!response.success) {
-                expect(response.error).toBe('Arquivo inválido');
+                expect(response.error).toBe(ErrorCodes.OPERATION_FAILED);
             }
         });
 
@@ -670,7 +674,7 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
 
             expect(response.success).toBe(false);
             if (!response.success) {
-                expect(response.error).toBe('Torrent já existe na lista');
+                expect(response.error).toBe(ErrorCodes.OPERATION_FAILED);
             }
         });
 
@@ -686,7 +690,7 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
 
             expect(response.success).toBe(false);
             if (!response.success) {
-                expect(response.error).toBe('Falha ao pausar: timeout');
+                expect(response.error).toBe(ErrorCodes.OPERATION_FAILED);
             }
         });
 
@@ -700,7 +704,7 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
 
             expect(response.success).toBe(false);
             if (!response.success) {
-                expect(response.error).toBe('Store corrupted');
+                expect(response.error).toBe(ErrorCodes.OPERATION_FAILED);
             }
         });
     });

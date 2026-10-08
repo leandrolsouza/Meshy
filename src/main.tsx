@@ -10,7 +10,7 @@ import App from './App';
 if (typeof window.meshy === 'undefined') {
     console.warn(
         '[Meshy] window.meshy is not available. ' +
-            'The app must run inside Electron with the preload script configured.',
+        'The app must run inside Electron with the preload script configured.',
     );
 }
 
@@ -26,7 +26,7 @@ window.onerror = (message, source, lineno, colno, error) => {
         window.meshy?.reportError({
             message: msg,
             source: `window.onerror (${source ?? 'unknown'}:${lineno ?? 0}:${colno ?? 0})`,
-            stack: error?.stack,
+            ...(error?.stack !== undefined ? { stack: error.stack } : {}),
         });
     } catch {
         // Silenciar falhas no report
@@ -42,7 +42,9 @@ window.onunhandledrejection = (event: PromiseRejectionEvent) => {
         window.meshy?.reportError({
             message,
             source: 'window.onunhandledrejection',
-            stack: reason instanceof Error ? reason.stack : undefined,
+            ...(reason instanceof Error && reason.stack !== undefined
+                ? { stack: reason.stack }
+                : {}),
         });
     } catch {
         // Silenciar falhas no report

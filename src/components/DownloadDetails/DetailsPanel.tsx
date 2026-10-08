@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TorrentStatus } from '../../../shared/types';
 import { GeneralTab } from './GeneralTab';
 import { PeersTab } from './PeersTab';
@@ -29,7 +29,7 @@ const NON_EXPANDABLE_STATUSES: TorrentStatus[] = ['resolving-metadata', 'queued'
  * Gerencia estado de expansão/colapso com animação CSS e aba ativa.
  * Painéis inativos permanecem montados (ocultos via CSS) para preservar estado.
  */
-export function DetailsPanel({
+export const DetailsPanel = React.memo(function DetailsPanel({
     infoHash,
     status,
     isExpanded,
@@ -54,7 +54,64 @@ export function DetailsPanel({
         }
     }, [status, isExpanded, onToggle]);
 
-    const _isDisabled = NON_EXPANDABLE_STATUSES.includes(status);
+    // Callback estável para mudança de aba — encapsulada em useCallback para não
+    // invalidar a memoização de TabBar (React.memo) a cada render do pai.
+    const handleTabChange = useCallback((tabId: string) => {
+        setActiveTab(tabId);
+    }, []);
+
+    // Memoiza os painéis de aba para evitar re-map quando props/estado irrelevantes mudam.
+    // Dependências: activeTab (controla isActive), infoHash/status (passados para sub-abas),
+    // isExpanded (passado como isCollecting para SpeedTab), panelIdPrefix (derivado de infoHash).
+    const tabPanels = useMemo(
+        () =>
+            TABS.map((tab) => {
+                const isActive = tab.id === activeTab;
+                return (
+                    <div
+                        key={tab.id}
+                        id={`${panelIdPrefix}-panel-${tab.id}`}
+                        role="tabpanel"
+                        aria-labelledby={`${panelIdPrefix}-tab-${tab.id}`}
+                        className={`${styles.tabPanel}${!isActive ? ` ${styles.tabPanelHidden}` : ''}`}
+                    >
+                        {tab.id === 'general' && (
+                            <div data-testid="general-tab-content">
+                                <GeneralTab
+                                    infoHash={infoHash}
+                                    status={status}
+                                />
+                            </div>
+                        )}
+                        {tab.id === 'peers' && (
+                            <div data-testid="peers-tab-content">
+                                <PeersTab
+                                    infoHash={infoHash}
+                                    status={status}
+                                />
+                            </div>
+                        )}
+                        {tab.id === 'pieces' && (
+                            <div data-testid="pieces-tab-content">
+                                <PiecesTab
+                                    infoHash={infoHash}
+                                    status={status}
+                                />
+                            </div>
+                        )}
+                        {tab.id === 'speed' && (
+                            <div data-testid="speed-tab-content">
+                                <SpeedTab
+                                    infoHash={infoHash}
+                                    isCollecting={isExpanded}
+                                />
+                            </div>
+                        )}
+                    </div>
+                );
+            }),
+        [activeTab, infoHash, status, isExpanded, panelIdPrefix],
+    );
 
     return (
         <div
@@ -66,59 +123,15 @@ export function DetailsPanel({
                 <TabBar
                     tabs={TABS}
                     activeTab={activeTab}
-                    onTabChange={setActiveTab}
+                    onTabChange={handleTabChange}
                     panelIdPrefix={panelIdPrefix}
                 />
 
-                {TABS.map((tab) => {
-                    const isActive = tab.id === activeTab;
-                    return (
-                        <div
-                            key={tab.id}
-                            id={`${panelIdPrefix}-panel-${tab.id}`}
-                            role="tabpanel"
-                            aria-labelledby={`${panelIdPrefix}-tab-${tab.id}`}
-                            className={`${styles.tabPanel}${!isActive ? ` ${styles.tabPanelHidden}` : ''}`}
-                        >
-                            {tab.id === 'general' && (
-                                <div data-testid="general-tab-content">
-                                    <GeneralTab
-                                        infoHash={infoHash}
-                                        status={status}
-                                    />
-                                </div>
-                            )}
-                            {tab.id === 'peers' && (
-                                <div data-testid="peers-tab-content">
-                                    <PeersTab
-                                        infoHash={infoHash}
-                                        status={status}
-                                    />
-                                </div>
-                            )}
-                            {tab.id === 'pieces' && (
-                                <div data-testid="pieces-tab-content">
-                                    <PiecesTab
-                                        infoHash={infoHash}
-                                        status={status}
-                                    />
-                                </div>
-                            )}
-                            {tab.id === 'speed' && (
-                                <div data-testid="speed-tab-content">
-                                    <SpeedTab
-                                        infoHash={infoHash}
-                                        isCollecting={isExpanded}
-                                    />
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
+                {tabPanels}
             </div>
         </div>
     );
-}
+});
 
 /**
  * Hook auxiliar para verificar se o status permite expansão.

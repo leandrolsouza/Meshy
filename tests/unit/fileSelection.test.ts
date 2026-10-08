@@ -85,7 +85,7 @@ function makeFakeTorrent(infoHash: string, files: TorrentFile[]): Torrent {
 }
 
 /** Creates a minimal mock WebTorrent client */
-function makeMockClient(): WebTorrent.Instance & {
+function makeMockClient(): WebTorrent & {
     throttleDownload: jest.Mock;
     throttleUpload: jest.Mock;
     torrents: Torrent[];
@@ -101,7 +101,7 @@ function makeMockClient(): WebTorrent.Instance & {
         on: jest.fn(),
         once: jest.fn(),
         emit: jest.fn(),
-    } as unknown as WebTorrent.Instance & {
+    } as unknown as WebTorrent & {
         throttleDownload: jest.Mock;
         throttleUpload: jest.Mock;
         torrents: Torrent[];

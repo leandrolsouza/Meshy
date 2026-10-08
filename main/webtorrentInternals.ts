@@ -94,11 +94,11 @@ function watchTrackerStatus(torrent: Torrent): void {
     const discovery = asRecord(torrent).discovery as Discovery | undefined;
     const client = discovery?.tracker as
         | (NonNullable<Discovery['tracker']> & {
-              on?: (
-                  event: string,
-                  listener: (value: { announce?: string } | Error) => void,
-              ) => void;
-          })
+            on?: (
+                event: string,
+                listener: (value: { announce?: string } | Error) => void,
+            ) => void;
+        })
         | undefined;
     if (!client?.on || watchedTrackers.has(client)) return;
     watchedTrackers.add(client);
@@ -202,7 +202,7 @@ export function stopTorrentNetwork(torrent: Torrent): Promise<void> {
         });
     });
     stopping.set(torrent, result);
-    result.finally(() => stopping.delete(torrent)).catch(() => {});
+    result.finally(() => stopping.delete(torrent)).catch(() => { });
     return result;
 }
 
@@ -300,7 +300,8 @@ export function destroyInternalTracker(
         -1;
     if (trackers && index >= 0) {
         const [tracker] = trackers.splice(index, 1);
-        tracker.destroy?.(() => {});
+        if (!tracker) return false;
+        tracker.destroy?.(() => { });
         if (discovery) discovery._announce = [...getAnnounceList(torrent)];
         return true;
     }
@@ -332,7 +333,7 @@ export function addTrackerToTorrent(torrent: Torrent, url: string): boolean {
             discovery._announce = [...getAnnounceList(torrent)];
             try {
                 const old = discovery.tracker;
-                if (old) old.destroy(() => {});
+                if (old) old.destroy(() => { });
                 discovery.tracker = discovery._createTracker();
                 watchTrackerStatus(torrent);
             } catch (err) {

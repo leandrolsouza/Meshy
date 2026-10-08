@@ -112,21 +112,21 @@ function createMainWindow(): BrowserWindow {
     window.webContents.session.webRequest.onHeadersReceived((details, callback) => {
         const cspDirectives = isDev
             ? [
-                  "default-src 'self'",
-                  "script-src 'self' 'unsafe-inline'",
-                  "style-src 'self' 'unsafe-inline'",
-                  "img-src 'self' data:",
-                  "font-src 'self'",
-                  "connect-src 'self' ws://localhost:*",
-              ]
+                "default-src 'self'",
+                "script-src 'self' 'unsafe-inline'",
+                "style-src 'self' 'unsafe-inline'",
+                "img-src 'self' data:",
+                "font-src 'self'",
+                "connect-src 'self' ws://localhost:*",
+            ]
             : [
-                  "default-src 'self'",
-                  "script-src 'self'",
-                  "style-src 'self' 'unsafe-inline'",
-                  "img-src 'self' data:",
-                  "font-src 'self'",
-                  "connect-src 'self'",
-              ];
+                "default-src 'self'",
+                "script-src 'self'",
+                "style-src 'self' 'unsafe-inline'",
+                "img-src 'self' data:",
+                "font-src 'self'",
+                "connect-src 'self'",
+            ];
 
         callback({
             responseHeaders: {
@@ -178,71 +178,87 @@ app.on('second-instance', () => {
     window?.focus();
 });
 
-app.whenReady().then(async () => {
-    if (!ownsInstance) return;
-    // ── Habilitar persistência de métricas ─────────────────────────────────────
-    try {
-        const logsDir = app.getPath('logs');
-        metrics.enablePersistence(logsDir);
-    } catch {
-        logger.warn('[Metrics] Falha ao habilitar persistência de métricas');
-    }
-
-    // ── Instantiate core services ──────────────────────────────────────────────
-    const settingsManager = createSettingsManager();
-    const settings = settingsManager.get();
-
-    const torrentEngine = createTorrentEngine({
-        downloadPath: settings.destinationFolder,
-        downloadSpeedLimit: settings.downloadSpeedLimit,
-        uploadSpeedLimit: settings.uploadSpeedLimit,
-        dhtEnabled: settings.dhtEnabled,
-        pexEnabled: settings.pexEnabled,
-        utpEnabled: settings.utpEnabled,
-    });
-
-    // Shared electron-store instance for download session persistence
-    const downloadsStore = new ElectronStore({ name: 'downloads' });
-    const persistedStore = {
-        get: (key: string) => downloadsStore.get(key),
-        set: (key: string, value: unknown) => downloadsStore.set(key, value),
-    } as import('./downloadManager').PersistedStore;
-
-    downloadManager = createDownloadManager(torrentEngine, settingsManager, persistedStore);
-
-    // Restore previous session
-    await downloadManager.restoreSession();
-
-    // ── Register before-quit handler to persist session ────────────────────────
-    app.on('before-quit', () => {
-        downloadManager?.persistSession();
-        metrics.persistSnapshot();
-    });
-
-    // ── Create main window ────────────────────────────────────────────────────
-    const mainWindow = createMainWindow();
-
-    // Register IPC handlers ONCE (global — survives window close/reopen on macOS).
-    registerIpcHandlers(downloadManager, settingsManager, torrentEngine);
-
-    // Attach per-window resources (progress interval, error forwarding).
-    attachWindowEvents(downloadManager, torrentEngine, mainWindow);
-
-    // ── Detectar crash do renderer process ────────────────────────────────────
-    attachRendererCrashHandler(mainWindow);
-
-    // Inicializar notificações nativas do OS com referência à janela principal
-    createNotificationManager(downloadManager, settingsManager, { mainWindow });
-
-    app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) {
-            const newWindow = createMainWindow();
-            // Only attach per-window events — IPC handlers are already registered.
-            attachWindowEvents(downloadManager!, torrentEngine, newWindow);
-            attachRendererCrashHandler(newWindow);
+app.whenReady()
+    .then(async () => {
+        if (!ownsInstance) return;
+        // ── Habilitar persistência de métricas ─────────────────────────────────────
+        try {
+            const logsDir = app.getPath('logs');
+            metrics.enablePersistence(logsDir);
+        } catch {
+            logger.warn('[Metrics] Falha ao habilitar persistência de métricas');
         }
+
+        // ── Instantiate core services ──────────────────────────────────────────────
+        const settingsManager = createSettingsManager();
+        const settings = settingsManager.get();
+
+        const torrentEngine = createTorrentEngine({
+            downloadPath: settings.destinationFolder,
+            downloadSpeedLimit: settings.downloadSpeedLimit,
+            uploadSpeedLimit: settings.uploadSpeedLimit,
+            dhtEnabled: settings.dhtEnabled,
+            pexEnabled: settings.pexEnabled,
+            utpEnabled: settings.utpEnabled,
+        });
+
+        // Shared electron-store instance for download session persistence
+        const downloadsStore = new ElectronStore({ name: 'downloads' });
+        const persistedStore = {
+            get: (key: string) => downloadsStore.get(key),
+            set: (key: string, value: unknown) => downloadsStore.set(key, value),
+        } as import('./downloadManager').PersistedStore;
+
+        downloadManager = createDownloadManager(torrentEngine, settingsManager, persistedStore);
+
+        // Restore previous session — falha não é fatal; o app inicia com estado vazio
+        try {
+            await downloadManager.restoreSession();
+        } catch (sessionErr) {
+            logger.warn(
+                '[Main] Falha ao restaurar sessão anterior — iniciando com estado vazio:',
+                (sessionErr as Error).message,
+            );
+        }
+
+        // ── Register before-quit handler to persist session ────────────────────────
+        app.on('before-quit', () => {
+            downloadManager?.persistSession();
+            metrics.persistSnapshot();
+        });
+
+        // ── Create main window ────────────────────────────────────────────────────
+        const mainWindow = createMainWindow();
+
+        // Register IPC handlers ONCE (global — survives window close/reopen on macOS).
+        registerIpcHandlers(downloadManager, settingsManager, torrentEngine);
+
+        // Attach per-window resources (progress interval, error forwarding).
+        attachWindowEvents(downloadManager, torrentEngine, mainWindow);
+
+        // ── Detectar crash do renderer process ────────────────────────────────────
+        attachRendererCrashHandler(mainWindow);
+
+        // Inicializar notificações nativas do OS com referência à janela principal
+        createNotificationManager(downloadManager, settingsManager, { mainWindow });
+
+        app.on('activate', () => {
+            if (BrowserWindow.getAllWindows().length === 0) {
+                const newWindow = createMainWindow();
+                // Only attach per-window events — IPC handlers are already registered.
+                attachWindowEvents(downloadManager!, torrentEngine, newWindow);
+                attachRendererCrashHandler(newWindow);
+            }
+        });
+    })
+    .catch((err: unknown) => {
+        // Captura qualquer erro não tratado durante a inicialização do app.
+        // Erros aqui são fatais — sem a janela principal o app não funciona.
+        const message = err instanceof Error ? err.message : String(err);
+        const stack = err instanceof Error ? err.stack : undefined;
+        logger.error('[Main] Falha crítica na inicialização do app:', message, stack);
+        app.exit(1);
     });
-});
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {

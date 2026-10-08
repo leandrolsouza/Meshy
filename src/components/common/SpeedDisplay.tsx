@@ -23,7 +23,7 @@ interface SpeedDisplayProps {
  * <SpeedDisplay speedBytesPerSec={1572864} icon={<VscArrowDown />} />
  * // renderiza: [↓ icon] 1.50 MB/s
  */
-export function SpeedDisplay({
+export const SpeedDisplay = React.memo(function SpeedDisplay({
     speedBytesPerSec,
     icon,
     label,
@@ -37,4 +37,4 @@ export function SpeedDisplay({
             {formatted}
         </span>
     );
-}
+});

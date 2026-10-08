@@ -44,12 +44,14 @@ describe('LanguageSelector — testes unitários', () => {
         });
     });
 
-    // ── Req 5.2: select com aria-label="Language" ───────────────────────
+    // ── Req 5.2: select com aria-label traduzido ────────────────────────
+    // O IntlProvider usa pt-BR, portanto o aria-label renderizado é "Idioma".
 
-    it('renderiza um select com aria-label="Language" (Req 5.2)', () => {
+    it('renderiza um select com aria-label traduzido (Req 5.2)', () => {
         renderWithIntl(<LanguageSelector onLocaleChange={jest.fn()} />);
 
-        const select = screen.getByLabelText('Language');
+        // Em pt-BR, settings.general.languageAriaLabel = "Idioma"
+        const select = screen.getByLabelText('Idioma');
         expect(select).toBeInTheDocument();
         expect(select.tagName).toBe('SELECT');
     });
@@ -59,7 +61,7 @@ describe('LanguageSelector — testes unitários', () => {
     it('mostra o locale atual selecionado por padrão (Req 5.3)', () => {
         renderWithIntl(<LanguageSelector onLocaleChange={jest.fn()} />);
 
-        const select = screen.getByLabelText('Language') as HTMLSelectElement;
+        const select = screen.getByLabelText('Idioma') as HTMLSelectElement;
         expect(select.value).toBe(DEFAULT_LOCALE);
 
         const defaultEntry = SUPPORTED_LOCALES.find((l) => l.code === DEFAULT_LOCALE)!;
@@ -73,7 +75,7 @@ describe('LanguageSelector — testes unitários', () => {
         const onLocaleChange = jest.fn();
         renderWithIntl(<LanguageSelector onLocaleChange={onLocaleChange} />);
 
-        const select = screen.getByLabelText('Language');
+        const select = screen.getByLabelText('Idioma');
         fireEvent.change(select, { target: { value: 'en-US' } });
 
         expect(onLocaleChange).toHaveBeenCalledTimes(1);
@@ -85,7 +87,7 @@ describe('LanguageSelector — testes unitários', () => {
     it('atualiza o locale no store ao selecionar um novo locale (Req 5.3)', () => {
         renderWithIntl(<LanguageSelector onLocaleChange={jest.fn()} />);
 
-        const select = screen.getByLabelText('Language');
+        const select = screen.getByLabelText('Idioma');
         fireEvent.change(select, { target: { value: 'en-US' } });
 
         expect(useLocaleStore.getState().locale).toBe('en-US');

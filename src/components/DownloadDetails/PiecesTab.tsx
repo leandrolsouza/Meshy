@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { TorrentStatus } from '../../../shared/types';
 import { usePolling } from '../../hooks/usePolling';
 import { computePieceSummary } from '../../utils/detailsFormatters';
@@ -17,7 +17,7 @@ export interface PiecesTabProps {
  * - Exibe último estado sem polling quando status é "paused" ou "completed".
  * - Mensagem de erro com botão "Tentar novamente" se IPC falha.
  */
-export function PiecesTab({ infoHash, status }: PiecesTabProps): React.JSX.Element {
+export const PiecesTab = React.memo(function PiecesTab({ infoHash, status }: PiecesTabProps): React.JSX.Element {
     const [pieces, setPieces] = useState<boolean[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [hasLoaded, setHasLoaded] = useState(false);
@@ -40,6 +40,9 @@ export function PiecesTab({ infoHash, status }: PiecesTabProps): React.JSX.Eleme
     // Polling habilitado apenas quando downloading
     const pollingEnabled = status === 'downloading';
     usePolling(fetchPieces, 2000, pollingEnabled);
+
+    // Memoiza o resumo textual que internamente faz filter sobre o array de peças
+    const pieceSummary = useMemo(() => computePieceSummary(pieces), [pieces]);
 
     if (error) {
         return (
@@ -71,9 +74,9 @@ export function PiecesTab({ infoHash, status }: PiecesTabProps): React.JSX.Eleme
     return (
         <div className={styles.container} data-testid="pieces-container">
             <p className={styles.summary} data-testid="pieces-summary">
-                {computePieceSummary(pieces)}
+                {pieceSummary}
             </p>
             <PieceGrid pieces={pieces} />
         </div>
     );
-}
+});

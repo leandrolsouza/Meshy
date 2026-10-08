@@ -67,7 +67,7 @@ export function createNotificationManager(
 
         // Verificar suporte a notificações
         if (!Notification.isSupported()) {
-            _log.warn('[NotificationManager] Notificações não suportadas neste sistema');
+            _log.info('[NotificationManager] Notificações não suportadas neste sistema');
             return;
         }
 

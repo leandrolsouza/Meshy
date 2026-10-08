@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useIntl } from 'react-intl';
 import { isValidMagnetUri } from '../../../shared/validators';
 import type { TorrentFileInfo } from '../../../shared/types';
@@ -22,6 +22,13 @@ interface FileSelectionState {
     files: TorrentFileInfo[];
     selectedIndices: number[];
 }
+
+// ─── Focus trap ───────────────────────────────────────────────────────────────
+
+/** Seletor CSS para todos os elementos interativos e focalizáveis do painel. */
+const FOCUSABLE_SEL =
+    'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), ' +
+    'select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -49,6 +56,7 @@ export function AddTorrentModal({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitProgress, setSubmitProgress] = useState<string | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     // ── File selection state (Task 7.1) ───────────────────────────────────
     const [fileSelection, setFileSelection] = useState<FileSelectionState | null>(null);
@@ -188,7 +196,9 @@ export function AddTorrentModal({
             // Valida todos os links antes de enviar
             const invalidLines: string[] = [];
             for (let i = 0; i < lines.length; i++) {
-                if (!isValidMagnetUri(lines[i])) {
+                const line = lines[i];
+                if (line === undefined) continue;
+                if (!isValidMagnetUri(line)) {
                     invalidLines.push(
                         intl.formatMessage(
                             { id: 'addTorrent.magnetLink.invalidLine' },
@@ -212,12 +222,14 @@ export function AddTorrentModal({
             let successCount = 0;
 
             for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                if (line === undefined) continue;
                 setSubmitProgress(
                     `${intl.formatMessage({ id: 'addTorrent.submitting' })} (${i + 1}/${lines.length})`,
                 );
 
                 try {
-                    const response = await window.meshy.addMagnetLink(lines[i]);
+                    const response = await window.meshy.addMagnetLink(line);
                     if (response.success) {
                         successCount++;
                     } else {
@@ -259,6 +271,52 @@ export function AddTorrentModal({
             }
         },
         [magnetUri, handleClose, intl],
+    );
+
+    // ── Focus trap: mover foco ao entrar no passo file picker ─────────────
+    useEffect(() => {
+        if (inline || fileSelection === null) return;
+        // Aguarda o DOM ser atualizado antes de mover o foco
+        const frameId = requestAnimationFrame(() => {
+            const el = containerRef.current?.querySelector<HTMLElement>(FOCUSABLE_SEL);
+            el?.focus();
+        });
+        return () => cancelAnimationFrame(frameId);
+    }, [inline, fileSelection]);
+
+    // ── Focus trap: Tab cycling e fechamento por Escape ───────────────────
+    const handleKeyDown = useCallback(
+        (e: React.KeyboardEvent<HTMLDivElement>) => {
+            if (e.key === 'Escape') {
+                handleClose();
+                return;
+            }
+            if (e.key !== 'Tab') return;
+
+            const elements = Array.from(
+                containerRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SEL) ?? [],
+            );
+            if (elements.length === 0) return;
+
+            const first = elements[0];
+            const last = elements[elements.length - 1];
+            if (first === undefined || last === undefined) return;
+
+            if (e.shiftKey) {
+                // Shift+Tab no primeiro elemento → salta para o último
+                if (document.activeElement === first) {
+                    e.preventDefault();
+                    last.focus();
+                }
+            } else {
+                // Tab no último elemento → salta para o primeiro
+                if (document.activeElement === last) {
+                    e.preventDefault();
+                    first.focus();
+                }
+            }
+        },
+        [handleClose],
     );
 
     if (!isOpen) return null;
@@ -415,13 +473,15 @@ export function AddTorrentModal({
     // ── Command Palette modal rendering (future shortcut access) ──────────
 
     return (
-        <div
-            className={styles.commandPaletteOverlay}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="add-torrent-modal-title"
-        >
-            <div className={styles.commandPalettePanel}>
+        <div className={styles.commandPaletteOverlay}>
+            <div
+                ref={containerRef}
+                className={styles.commandPalettePanel}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="add-torrent-modal-title"
+                onKeyDown={handleKeyDown}
+            >
                 <h2 id="add-torrent-modal-title" className={styles.panelTitle}>
                     {intl.formatMessage({ id: 'addTorrent.title' })}
                 </h2>

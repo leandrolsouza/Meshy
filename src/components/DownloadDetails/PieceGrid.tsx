@@ -34,7 +34,7 @@ function getBlockStyle(block: PieceBlock): React.CSSProperties {
  * Renderiza blocos coloridos representando o progresso de download de cada peça.
  * Usa `groupPieces` para agrupar peças adjacentes quando o total excede 1000.
  */
-export function PieceGrid({ pieces }: PieceGridProps): React.JSX.Element {
+export const PieceGrid = React.memo(function PieceGrid({ pieces }: PieceGridProps): React.JSX.Element {
     const blocks = useMemo(() => groupPieces(pieces), [pieces]);
 
     return (
@@ -44,4 +44,4 @@ export function PieceGrid({ pieces }: PieceGridProps): React.JSX.Element {
             ))}
         </div>
     );
-}
+});

@@ -129,7 +129,7 @@
     "settings.general.selectFolder": "Selecionar pasta",
     "settings.general.notifications": "Notificações do sistema (download concluído ou com erro)",
     "settings.general.language": "Idioma",
-    "settings.general.languageAriaLabel": "Language",
+    "settings.general.languageAriaLabel": "Idioma",
     "settings.transfer.downloadLimit": "Limite de download (KB/s, 0 = sem limite)",
     "settings.transfer.uploadLimit": "Limite de upload (KB/s, 0 = sem limite)",
     "settings.transfer.maxConcurrent": "Downloads simultâneos (máx)",
@@ -211,5 +211,8 @@
     "error.destination.folderNotFound": "Pasta de destino não encontrada",
     "error.destination.fileNotFound": "Arquivo não encontrado",
     "error.destination.openFailed": "Falha ao abrir destino",
-    "error.destination.notCompleted": "Download não concluído"
+    "error.destination.notCompleted": "Download não concluído",
+    "error.rateLimit": "Muitas requisições. Tente novamente em instantes.",
+    "error.operation.failed": "Ocorreu um erro inesperado.",
+    "downloads.speedLimits.error": "Erro ao aplicar seleção de arquivos."
 }

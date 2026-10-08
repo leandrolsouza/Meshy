@@ -18,7 +18,7 @@ export interface SpeedTabProps {
  * - Ao retomar, `useSpeedHistory.addSample` preenche gaps com zeros automaticamente.
  * - Passa amostras para `SpeedChart` para renderização via Canvas 2D.
  */
-export function SpeedTab({ infoHash, isCollecting }: SpeedTabProps): React.JSX.Element {
+export const SpeedTab = React.memo(function SpeedTab({ infoHash, isCollecting }: SpeedTabProps): React.JSX.Element {
     const { addSample, getSamples } = useSpeedHistory();
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const [, forceUpdate] = React.useState(0);
@@ -33,11 +33,12 @@ export function SpeedTab({ infoHash, isCollecting }: SpeedTabProps): React.JSX.E
         }
 
         const collect = () => {
-            const items = useDownloadStore.getState().items;
-            const item = items.find((i) => i.infoHash === infoHash);
-            const downloadSpeed = item?.downloadSpeed ?? 0;
-            const uploadSpeed = item?.uploadSpeed ?? 0;
-            addSample(downloadSpeed, uploadSpeed);
+            // Seletor granular: lê apenas downloadSpeed e uploadSpeed do item correspondente.
+            // Usa getState() (não hook) para evitar subscrição desnecessária dentro do setInterval.
+            const item = useDownloadStore
+                .getState()
+                .items.find((i) => i.infoHash === infoHash);
+            addSample(item?.downloadSpeed ?? 0, item?.uploadSpeed ?? 0);
             forceUpdate((n) => n + 1);
         };
 
@@ -61,4 +62,4 @@ export function SpeedTab({ infoHash, isCollecting }: SpeedTabProps): React.JSX.E
             </div>
         </div>
     );
-}
+});

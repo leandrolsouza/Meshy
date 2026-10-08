@@ -110,7 +110,9 @@ function drawLine(
 
     for (let i = 0; i < samples.length; i++) {
         const x = PADDING.left + ((startOffset + i) / (MAX_POINTS - 1)) * chartW;
-        const value = samples[i][key];
+        const sample = samples[i];
+        if (!sample) continue;
+        const value = sample[key];
         const y = PADDING.top + chartH - (value / maxY) * chartH;
 
         if (i === 0) {
@@ -188,7 +190,7 @@ function drawSpeedChart(
  * representando os últimos 60 segundos de atividade.
  * Redesenha automaticamente quando as amostras mudam.
  */
-export function SpeedChart({ samples }: SpeedChartProps): React.JSX.Element {
+export const SpeedChart = React.memo(function SpeedChart({ samples }: SpeedChartProps): React.JSX.Element {
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     useEffect(() => {
@@ -222,4 +224,4 @@ export function SpeedChart({ samples }: SpeedChartProps): React.JSX.Element {
             role="img"
         />
     );
-}
+});

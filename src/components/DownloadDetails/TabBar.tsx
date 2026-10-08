@@ -17,7 +17,7 @@ export interface TabBarProps {
  * Barra de abas acessível com navegação por teclado (ARIA tablist/tab).
  * Componente controlado — `activeTab` e `onTabChange` vêm do pai.
  */
-export function TabBar({ tabs, activeTab, onTabChange, panelIdPrefix }: TabBarProps): React.JSX.Element {
+export const TabBar = React.memo(function TabBar({ tabs, activeTab, onTabChange, panelIdPrefix }: TabBarProps): React.JSX.Element {
     const tabsRef = useRef<(HTMLButtonElement | null)[]>([]);
 
     const handleKeyDown = useCallback(
@@ -43,7 +43,8 @@ export function TabBar({ tabs, activeTab, onTabChange, panelIdPrefix }: TabBarPr
                 case 'Enter':
                 case ' ':
                     e.preventDefault();
-                    onTabChange(tabs[currentIndex].id);
+                    // noUncheckedIndexedAccess: currentIndex é resultado de findIndex, sempre válido
+                    onTabChange(tabs[currentIndex]!.id);
                     return;
                 default:
                     return;
@@ -51,7 +52,8 @@ export function TabBar({ tabs, activeTab, onTabChange, panelIdPrefix }: TabBarPr
 
             e.preventDefault();
             tabsRef.current[nextIndex]?.focus();
-            onTabChange(tabs[nextIndex].id);
+            // noUncheckedIndexedAccess: nextIndex é calculado por módulo, sempre dentro dos limites
+            onTabChange(tabs[nextIndex]!.id);
         },
         [tabs, activeTab, onTabChange],
     );
@@ -89,4 +91,4 @@ export function TabBar({ tabs, activeTab, onTabChange, panelIdPrefix }: TabBarPr
             })}
         </div>
     );
-}
+});

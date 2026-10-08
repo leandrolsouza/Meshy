@@ -261,7 +261,8 @@ describe('queue:reorder', () => {
         })) as any;
 
         expect(response.success).toBe(false);
-        expect(response.error).toContain('Item não encontrado na fila');
+        // failWithLog retorna ErrorCodes.OPERATION_FAILED para não vazar err.message ao renderer
+        expect(response.error).toBe('error.operation.failed');
     });
 
     // ── Erro do DownloadManager (newIndex fora dos limites) ───────────────────
@@ -278,7 +279,8 @@ describe('queue:reorder', () => {
         })) as any;
 
         expect(response.success).toBe(false);
-        expect(response.error).toContain('Posição inválida na fila');
+        // failWithLog retorna ErrorCodes.OPERATION_FAILED para não vazar err.message ao renderer
+        expect(response.error).toBe('error.operation.failed');
     });
 });
 
@@ -328,6 +330,7 @@ describe('queue:get-order', () => {
         const response = (await handler(null, undefined)) as any;
 
         expect(response.success).toBe(false);
-        expect(response.error).toContain('Erro inesperado');
+        // failWithLog retorna ErrorCodes.OPERATION_FAILED para não vazar err.message ao renderer
+        expect(response.error).toBe('error.operation.failed');
     });
 });

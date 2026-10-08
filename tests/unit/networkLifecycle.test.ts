@@ -31,7 +31,7 @@ class MockTracker extends EventEmitter {
         });
     }
     destroy = jest.fn((cb) => {
-        this._trackers.forEach((tracker) => tracker.destroy(() => {}));
+        this._trackers.forEach((tracker) => tracker.destroy(() => { }));
         cb?.();
     });
 }
@@ -131,7 +131,7 @@ class MockClient extends EventEmitter {
     );
     destroy = jest.fn((cb: (err?: Error) => void) => {
         for (const torrent of [...this.torrents])
-            torrent.destroy({ destroyStore: false }, () => {});
+            torrent.destroy({ destroyStore: false }, () => { });
         cb();
     });
 }
@@ -148,7 +148,7 @@ const options = {
 };
 function setup(maxConcurrentDownloads = 1) {
     const client = new MockClient();
-    const engine = createTorrentEngine(options, client as unknown as WebTorrent.Instance);
+    const engine = createTorrentEngine(options, client as unknown as WebTorrent);
     const settings = {
         get: () => ({
             destinationFolder: process.cwd(),
@@ -346,7 +346,7 @@ test('metadata timers are suspended during restart and rearmed for the replaceme
     await jest.advanceTimersByTimeAsync(50_000);
     let finishDestroy!: () => void;
     client.destroy.mockImplementation((cb) => {
-        for (const torrent of [...client.torrents]) torrent.destroy({}, () => {});
+        for (const torrent of [...client.torrents]) torrent.destroy({}, () => { });
         finishDestroy = cb;
     });
     const restarting = engine.restart(options);

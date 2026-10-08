@@ -4,18 +4,30 @@
         "target": "ES2020",
         "module": "ESNext",
         "moduleResolution": "bundler",
-        "lib": ["ES2020", "DOM", "DOM.Iterable"],
+        "lib": [
+            "ES2020",
+            "DOM",
+            "DOM.Iterable"
+        ],
         "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "noImplicitReturns": true,
+        "exactOptionalPropertyTypes": true,
         "esModuleInterop": true,
         "allowSyntheticDefaultImports": true,
         "resolveJsonModule": true,
         "skipLibCheck": true,
         "jsx": "react-jsx",
         "outDir": "out/renderer",
-        "baseUrl": ".",
         "paths": {
-            "@renderer/*": ["src/*"]
+            "@renderer/*": [
+                "./src/*"
+            ]
         }
     },
-    "include": ["src/**/*", "src/**/*.json", "shared/**/*"]
+    "include": [
+        "src/**/*",
+        "src/**/*.json",
+        "shared/**/*"
+    ]
 }

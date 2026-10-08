@@ -1,6 +1,6 @@
 import { ipcMain, dialog, shell, BrowserWindow } from 'electron';
 import { existsSync, accessSync, constants as fsConstants } from 'fs';
-import { join } from 'path';
+import { join, resolve, basename } from 'path';
 import type { DownloadManager } from './downloadManager';
 import type { SettingsManager } from './settingsManager';
 import type { TorrentEngine } from './torrentEngine';
@@ -14,7 +14,7 @@ import type {
     PeerInfo,
     PieceStatus,
 } from '../shared/types';
-import { isValidTorrentFile } from './validators';
+import { isValidTorrentFile, hasTorrentMagicBytes } from './validators';
 import { isValidTrackerUrl } from '../shared/validators';
 import { ErrorCodes } from '../shared/errorCodes';
 import { logger, createScopedLogger } from './logger';
@@ -51,7 +51,9 @@ function failWithLog(channel: string, err: unknown, scopedLog?: ScopedLogger): I
     } else {
         logger.error(`[IPC] ${channel} failed:`, message);
     }
-    return { success: false, error: message };
+    // Retornar código genérico para não vazar caminhos de SO, nomes de classe
+    // ou stack traces internos para o renderer. O erro completo fica apenas nos logs.
+    return { success: false, error: ErrorCodes.OPERATION_FAILED };
 }
 
 // ─── Timeout wrapper ──────────────────────────────────────────────────────────
@@ -97,7 +99,8 @@ class ChannelRateLimiter {
         }
 
         // Remover timestamps fora da janela de 1 segundo
-        while (calls.length > 0 && calls[0] <= windowStart) {
+        // noUncheckedIndexedAccess: calls[0] é garantido pela guarda calls.length > 0
+        while (calls.length > 0 && calls[0]! <= windowStart) {
             calls.shift();
         }
 
@@ -121,8 +124,8 @@ const rateLimiter = new ChannelRateLimiter(500);
 // Exportado para permitir reset nos testes
 export { rateLimiter as _rateLimiter };
 
-/** Código de erro para rate limiting */
-const RATE_LIMITED = 'error.rateLimit';
+/** Código de erro para rate limiting (centralizado em ErrorCodes) */
+const RATE_LIMITED = ErrorCodes.RATE_LIMITED;
 
 /** Timeout padrão para operações IPC (30 segundos) */
 const IPC_TIMEOUT_MS = 30_000;
@@ -207,6 +210,8 @@ export function attachWindowEvents(
     // ── TorrentEngine error forwarding ────────────────────────────────────────
     const errorListener = (infoHash: string, err: Error) => {
         metrics.recordEngineError();
+        const stack = err.stack?.split('\n').slice(0, 3).join(' | ') ?? '';
+        logger.error('[IPC] Engine error:', infoHash.slice(0, 8), err.message, stack);
         if (!mainWindow.isDestroyed()) {
             mainWindow.webContents.send('torrent:error', { infoHash, message: err.message });
         }
@@ -269,15 +274,21 @@ export function registerIpcHandlers(
                 });
                 if (!result.valid) return fail(ErrorCodes.INVALID_FILE_PATH);
 
+                // Resolver o caminho antes de qualquer validação ou uso.
+                // Normaliza separadores, expande '..', e previne path traversal.
+                const filePath = resolve(result.data.filePath);
+
                 // Validar extensão .torrent antes de ler o arquivo do filesystem
-                if (!isValidTorrentFile(result.data.filePath)) {
+                if (!isValidTorrentFile(filePath)) {
                     return fail(ErrorCodes.INVALID_FILE_PATH);
                 }
 
+                logger.info('[IPC] torrent:add-file início:', basename(filePath));
                 const item = await withTimeout(
-                    downloadManager.addTorrentFile(result.data.filePath),
+                    downloadManager.addTorrentFile(filePath),
                     'torrent:add-file',
                 );
+                logger.info('[IPC] torrent:add-file sucesso:', item.infoHash.slice(0, 8));
                 return ok(item);
             } catch (err) {
                 return failWithLog('torrent:add-file', err);
@@ -296,6 +307,16 @@ export function registerIpcHandlers(
                     return fail(ErrorCodes.ENGINE_RESTARTING);
                 }
 
+                // Validação manual do campo `buffer` proveniente do renderer.
+                // `validatePayload` suporta apenas tipos primitivos (string/number/boolean) e
+                // não pode validar Buffer/Uint8Array/ArrayBuffer diretamente. Os campos
+                // validados aqui são:
+                //   - `buffer`: presença no objeto payload
+                //   - tipo compatível (Buffer, Uint8Array ou ArrayBuffer) — Electron serializa
+                //     Uint8Array como objeto numérico ao cruzar o processo IPC
+                //   - conteúdo não-vazio (length > 0)
+                //   - magic bytes bencode (primeiro byte === 0x64), rejeitando arquivos que não
+                //     sejam torrents antes de passá-los ao WebTorrent
                 if (
                     typeof payload !== 'object' ||
                     payload === null ||
@@ -323,10 +344,20 @@ export function registerIpcHandlers(
                     return fail(ErrorCodes.INVALID_FILE_PATH);
                 }
 
+                // Verificar magic bytes bencode: todo arquivo .torrent começa com 'd' (0x64),
+                // indicador de dicionário bencode. Rejeita buffers que não sejam torrents
+                // antes de enviá-los ao engine, consistente com a validação de extensão em
+                // torrent:add-file.
+                if (!hasTorrentMagicBytes(buffer)) {
+                    return fail(ErrorCodes.INVALID_FILE_PATH);
+                }
+
+                logger.info('[IPC] torrent:add-file-buffer início:', buffer.length, 'bytes');
                 const item = await withTimeout(
                     downloadManager.addTorrentBuffer(buffer),
                     'torrent:add-file-buffer',
                 );
+                logger.info('[IPC] torrent:add-file-buffer sucesso:', item.infoHash.slice(0, 8));
                 return ok(item);
             } catch (err) {
                 return failWithLog('torrent:add-file-buffer', err);
@@ -348,10 +379,12 @@ export function registerIpcHandlers(
                 });
                 if (!result.valid) return fail(ErrorCodes.INVALID_MAGNET_URI);
 
+                logger.info('[IPC] torrent:add-magnet início');
                 const item = await withTimeout(
                     downloadManager.addMagnetLink(result.data.magnetUri),
                     'torrent:add-magnet',
                 );
+                logger.info('[IPC] torrent:add-magnet sucesso:', item.infoHash.slice(0, 8));
                 return ok(item);
             } catch (err) {
                 return failWithLog('torrent:add-magnet', err);
@@ -465,12 +498,17 @@ export function registerIpcHandlers(
 
                 // Validar que a pasta de destino existe e tem permissão de escrita
                 if (partial.destinationFolder !== undefined) {
+                    // Resolver o caminho antes de validar (normaliza separadores, expande
+                    // '..', e previne path traversal). O caminho resolvido é também
+                    // persistido para evitar caminhos relativos em configurações salvas.
+                    const resolvedFolder = resolve(partial.destinationFolder);
                     if (
-                        !existsSync(partial.destinationFolder) ||
-                        !hasWritePermission(partial.destinationFolder)
+                        !existsSync(resolvedFolder) ||
+                        !hasWritePermission(resolvedFolder)
                     ) {
                         return fail(ErrorCodes.INVALID_PARAMS);
                     }
+                    partial.destinationFolder = resolvedFolder;
                 }
 
                 // Capturar configurações anteriores ANTES de persistir (para detecção de mudança)
@@ -523,7 +561,8 @@ export function registerIpcHandlers(
                 return fail(ErrorCodes.NO_FOLDER_SELECTED);
             }
 
-            return ok(result.filePaths[0]);
+            // noUncheckedIndexedAccess: filePaths[0] garantido pela guarda length === 0 acima
+            return ok(result.filePaths[0]!);
         } catch (err) {
             return failWithLog('settings:select-folder', err);
         }
@@ -545,7 +584,8 @@ export function registerIpcHandlers(
                     return fail(ErrorCodes.NO_FILE_SELECTED);
                 }
 
-                return ok(result.filePaths[0]);
+                // noUncheckedIndexedAccess: filePaths[0] garantido pela guarda length === 0 acima
+                return ok(result.filePaths[0]!);
             } catch (err) {
                 return failWithLog('dialog:select-torrent-file', err);
             }
@@ -592,13 +632,20 @@ export function registerIpcHandlers(
         'torrent:set-file-selection',
         async (_event, payload: unknown): Promise<IPCResponse<TorrentFileInfo[]>> => {
             try {
+                // Campos validados via validatePayload:
+                //   - `infoHash`: string não-vazia, identifica o torrent alvo
                 const result = validatePayload<{ infoHash: string }>(payload, infoHashSchema);
                 if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
 
                 const { infoHash } = result.data;
+
+                // `selectedIndices` é um array de inteiros e não pode ser validado pelo
+                // validatePayload (suporta apenas tipos primitivos). Validação manual:
+                //   - deve ser um array não-vazio
+                //   - cada elemento deve ser um inteiro não-negativo
+                //   - cada índice deve estar dentro do intervalo [0, totalFiles - 1]
                 const rawIndices = (payload as Record<string, unknown>).selectedIndices;
 
-                // Validate selectedIndices is a non-empty array of non-negative integers
                 if (!Array.isArray(rawIndices) || rawIndices.length === 0) {
                     return fail(ErrorCodes.FILE_SELECTION_EMPTY);
                 }
@@ -623,9 +670,16 @@ export function registerIpcHandlers(
                     return fail(ErrorCodes.ENGINE_NOT_AVAILABLE);
                 }
 
-                // Validate indices are within range by getting file count first
+                // Validação de índices fora de range: obtém o número real de arquivos do
+                // torrent e rejeita qualquer índice >= totalFiles. Também rejeita quando
+                // o torrent ainda não possui arquivos conhecidos (totalFiles === 0), pois
+                // índices seriam inválidos independente do valor.
                 const currentFiles = torrentEngine.getFiles(infoHash);
                 const totalFiles = currentFiles.length;
+
+                if (totalFiles === 0) {
+                    return fail(ErrorCodes.FILE_INDEX_INVALID);
+                }
 
                 for (const idx of selectedIndices) {
                     if (idx >= totalFiles) {

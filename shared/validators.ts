@@ -29,7 +29,7 @@ export function isValidTorrentFile(filePath: string): boolean {
  * Valida o conteúdo de um buffer verificando os magic bytes do formato bencode.
  * Um arquivo .torrent válido começa com 'd' (0x64) — dicionário bencode.
  */
-export function hasTorrentMagicBytes(buffer: Buffer): boolean {
+export function hasTorrentMagicBytes(buffer: Uint8Array): boolean {
     return buffer.length > 0 && buffer[0] === 0x64;
 }
 
@@ -89,7 +89,9 @@ export function isValidTrackerUrl(url: string): boolean {
         const protocolMatch = trimmed.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//);
         if (!protocolMatch) return false;
 
-        const protocol = protocolMatch[1].toLowerCase() + ':';
+        const [, capturedProtocol] = protocolMatch;
+        if (!capturedProtocol) return false;
+        const protocol = capturedProtocol.toLowerCase() + ':';
         if (!VALID_TRACKER_PROTOCOLS.includes(protocol)) return false;
 
         let hostname: string;
@@ -104,8 +106,9 @@ export function isValidTrackerUrl(url: string): boolean {
             const afterProtocol = trimmed.slice(protocolMatch[0].length);
             // Hostname é tudo antes de : ou / ou fim da string
             const hostnameMatch = afterProtocol.match(/^([^:/]+)/);
-            if (!hostnameMatch || hostnameMatch[1].length === 0) return false;
-            hostname = hostnameMatch[1];
+            const hostnameCapture = hostnameMatch?.[1];
+            if (!hostnameCapture) return false;
+            hostname = hostnameCapture;
         }
 
         // Rejeitar IPs privados, loopback e reservados (SSRF protection)
@@ -134,7 +137,10 @@ function isPrivateHost(hostname: string): boolean {
     // Verificar se é um endereço IPv4
     const ipv4Match = lower.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
     if (ipv4Match) {
-        const [, a, b] = ipv4Match.map(Number);
+        const [, rawA, rawB] = ipv4Match;
+        if (rawA === undefined || rawB === undefined) return false;
+        const a = Number(rawA);
+        const b = Number(rawB);
         // 0.0.0.0/8
         if (a === 0) return true;
         // 10.0.0.0/8

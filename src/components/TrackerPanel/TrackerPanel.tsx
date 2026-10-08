@@ -18,13 +18,14 @@ interface TrackerPanelProps {
 function statusIndicatorClass(status: TrackerInfo['status']): string {
     switch (status) {
         case 'connected':
-            return styles.statusConnected;
+            // noUncheckedIndexedAccess: classes CSS geradas em tempo de build pelo CSS Modules
+            return styles.statusConnected ?? '';
         case 'error':
-            return styles.statusError;
+            return styles.statusError ?? '';
         case 'pending':
-            return styles.statusPending;
+            return styles.statusPending ?? '';
         default:
-            return styles.statusPending;
+            return styles.statusPending ?? '';
     }
 }
 

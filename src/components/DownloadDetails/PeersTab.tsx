@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { PeerInfo, TorrentStatus } from '../../../shared/types';
 import { usePolling } from '../../hooks/usePolling';
 import { formatPeerProgress, formatPeerSpeed } from '../../utils/detailsFormatters';
@@ -16,7 +16,7 @@ export interface PeersTabProps {
  * - Exibe última lista sem polling quando status não é "downloading".
  * - Interrompe polling em caso de erro IPC até próxima ativação.
  */
-export function PeersTab({ infoHash, status }: PeersTabProps): React.JSX.Element {
+export const PeersTab = React.memo(function PeersTab({ infoHash, status }: PeersTabProps): React.JSX.Element {
     const [peers, setPeers] = useState<PeerInfo[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [hasLoaded, setHasLoaded] = useState(false);
@@ -42,6 +42,20 @@ export function PeersTab({ infoHash, status }: PeersTabProps): React.JSX.Element
     // Polling habilitado apenas quando downloading e sem erro
     const pollingEnabled = status === 'downloading' && !hasError;
     usePolling(fetchPeers, 2000, pollingEnabled);
+
+    // Memoiza as linhas da tabela para evitar re-map a cada render do componente pai
+    const peerRows = useMemo(
+        () =>
+            peers.map((peer, index) => (
+                <tr key={`${peer.address}-${index}`}>
+                    <td>{peer.address}</td>
+                    <td>{peer.client}</td>
+                    <td>{formatPeerSpeed(peer.downloadSpeed)}</td>
+                    <td>{formatPeerProgress(peer.progress)}</td>
+                </tr>
+            )),
+        [peers],
+    );
 
     if (error) {
         return (
@@ -85,16 +99,9 @@ export function PeersTab({ infoHash, status }: PeersTabProps): React.JSX.Element
                     </tr>
                 </thead>
                 <tbody>
-                    {peers.map((peer, index) => (
-                        <tr key={`${peer.address}-${index}`}>
-                            <td>{peer.address}</td>
-                            <td>{peer.client}</td>
-                            <td>{formatPeerSpeed(peer.downloadSpeed)}</td>
-                            <td>{formatPeerProgress(peer.progress)}</td>
-                        </tr>
-                    ))}
+                    {peerRows}
                 </tbody>
             </table>
         </div>
     );
-}
+});

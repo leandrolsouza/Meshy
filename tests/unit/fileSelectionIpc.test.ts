@@ -432,3 +432,32 @@ describe('torrent:set-file-selection handler', () => {
         expect(response.error).toBe(ErrorCodes.FILE_INDEX_INVALID);
     });
 });
+
+// ─── Tests: torrent:set-file-selection com totalFiles === 0 (Tarefa 6.1) ─────
+
+describe('torrent:set-file-selection — rejeição quando torrent não possui arquivos (totalFiles === 0)', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('retorna FILE_INDEX_INVALID quando o torrent ainda não possui arquivos (lista vazia)', async () => {
+        const item = makeDownloadItem({ infoHash: 'abc123', status: 'downloading' });
+        const dm = makeMockDownloadManager([item]);
+        const sm = makeMockSettingsManager();
+        // Engine retorna lista vazia de arquivos — torrent sem metadados completos
+        const engine = makeMockTorrentEngine([]);
+
+        registerIpcHandlers(dm, sm, engine);
+
+        const handler = getHandler('torrent:set-file-selection');
+        const response = (await handler!(null, {
+            infoHash: 'abc123',
+            selectedIndices: [0],
+        })) as { success: boolean; error?: string };
+
+        expect(response.success).toBe(false);
+        expect(response.error).toBe(ErrorCodes.FILE_INDEX_INVALID);
+        // Garante que setFileSelection não foi chamado com dados inválidos
+        expect(engine.setFileSelection as jest.Mock).not.toHaveBeenCalled();
+    });
+});

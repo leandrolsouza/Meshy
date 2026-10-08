@@ -23,12 +23,13 @@ interface ProgressBarProps {
  * `aria-valuemax` for screen-reader compatibility.
  */
 const variantClassMap: Record<string, string> = {
-    default: styles.fillDefault,
-    success: styles.fillSuccess,
-    error: styles.fillError,
+    // noUncheckedIndexedAccess: classes CSS geradas em tempo de build pelo CSS Modules
+    default: styles.fillDefault ?? '',
+    success: styles.fillSuccess ?? '',
+    error: styles.fillError ?? '',
 };
 
-export function ProgressBar({
+export const ProgressBar = React.memo(function ProgressBar({
     value,
     max = 100,
     label,
@@ -42,12 +43,12 @@ export function ProgressBar({
         <div
             className={styles.container}
             role="progressbar"
-            aria-valuenow={clampedValue}
+            aria-valuenow={Math.round(percentage)}
             aria-valuemin={0}
-            aria-valuemax={max}
+            aria-valuemax={100}
             aria-label={label}
         >
             <div className={fillClass} style={{ width: `${percentage}%` }} />
         </div>
     );
-}
+});

@@ -13,7 +13,7 @@ export interface GeneralTabProps {
  * Invoca `window.meshy.getMetadata(infoHash)` ao montar para obter os dados via IPC.
  * Exibe fallbacks para campos null e indicadores de loading quando status é "resolving-metadata".
  */
-export function GeneralTab({ infoHash, status }: GeneralTabProps): React.JSX.Element {
+export const GeneralTab = React.memo(function GeneralTab({ infoHash, status }: GeneralTabProps): React.JSX.Element {
     const [metadata, setMetadata] = useState<TorrentMetadata | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -169,4 +169,4 @@ export function GeneralTab({ infoHash, status }: GeneralTabProps): React.JSX.Ele
             </div>
         </div>
     );
-}
+});

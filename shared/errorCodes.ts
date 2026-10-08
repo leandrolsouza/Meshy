@@ -42,6 +42,11 @@ export const ErrorCodes = {
     DESTINATION_FILE_NOT_FOUND: 'error.destination.fileNotFound',
     DESTINATION_OPEN_FAILED: 'error.destination.openFailed',
     DESTINATION_NOT_COMPLETED: 'error.destination.notCompleted',
+
+    // Rate limiting
+    RATE_LIMITED: 'error.rateLimit',
+
+    // Falha de operação genérica (erro inesperado em catch)
+    OPERATION_FAILED: 'error.operation.failed',
 } as const;
 
-export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

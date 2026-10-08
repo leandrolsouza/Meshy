@@ -4,6 +4,10 @@ import {
     hasTorrentMagicBytes,
     isValidSpeedLimit,
     isValidNetworkToggle,
+    isValidMaxConcurrentDownloads,
+    isValidThemeId,
+    MIN_CONCURRENT_DOWNLOADS,
+    MAX_CONCURRENT_DOWNLOADS,
 } from '../../main/validators';
 import fc from 'fast-check';
 
@@ -303,6 +307,56 @@ describe('isValidTorrentFile', () => {
     });
 });
 
+// ─── PBT: Property 1 — isValidTorrentFile rejeita extensões inválidas ────────
+
+// Property 1: Requisito 3.4
+describe('[PBT] Property 1: isValidTorrentFile — extensão .torrent (case-insensitive)', () => {
+    const fileBaseName = fc.stringOf(
+        fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789_-'.split('')),
+        { minLength: 1, maxLength: 30 },
+    );
+
+    /** Gerador de extensões .torrent com variações de capitalização */
+    const torrentExtension = fc.constantFrom('.torrent', '.TORRENT', '.Torrent', '.tOrReNt');
+
+    /** Gerador de extensões que NÃO são .torrent */
+    const nonTorrentExtension = fc.constantFrom(
+        '.txt',
+        '.zip',
+        '.mp4',
+        '.pdf',
+        '.exe',
+        '.bin',
+        '',
+    );
+
+    it('retorna true para qualquer caminho terminando com .torrent (case-insensitive)', () => {
+        // Property 1: Requisito 3.4
+        fc.assert(
+            fc.property(
+                fc.tuple(fileBaseName, torrentExtension).map(([name, ext]) => name + ext),
+                (filePath) => {
+                    expect(isValidTorrentFile(filePath)).toBe(true);
+                },
+            ),
+            { numRuns: 100 },
+        );
+    });
+
+    it('retorna false para qualquer caminho que não termina com .torrent', () => {
+        // Property 1: Requisito 3.4
+        fc.assert(
+            fc.property(
+                fc.tuple(fileBaseName, nonTorrentExtension).map(([name, ext]) => name + ext),
+                (filePath) => {
+                    expect(isValidTorrentFile(filePath)).toBe(false);
+                },
+            ),
+            { numRuns: 100 },
+        );
+    });
+});
+
 // ─── hasTorrentMagicBytes ─────────────────────────────────────────────────────
 
 describe('hasTorrentMagicBytes', () => {
@@ -329,6 +383,75 @@ describe('hasTorrentMagicBytes', () => {
     it('returns false for a buffer starting with 0x00', () => {
         const buf = Buffer.from([0x00, 0x64]);
         expect(hasTorrentMagicBytes(buf)).toBe(false);
+    });
+});
+
+// ─── PBT: Property 2 — hasTorrentMagicBytes detecta por primeiro byte ────────
+
+// Property 2: Requisito 3.4
+describe('[PBT] Property 2: hasTorrentMagicBytes retorna true sse buffer.length > 0 && buffer[0] === 0x64', () => {
+    /** Gerador de buffer não-vazio com primeiro byte exatamente 0x64 */
+    const bufferWithMagicByte = fc
+        .tuple(
+            fc.constant(0x64),
+            fc.array(fc.integer({ min: 0, max: 255 }), { minLength: 0, maxLength: 50 }),
+        )
+        .map(([magic, rest]) => Buffer.from([magic, ...rest]));
+
+    /** Gerador de buffer não-vazio com primeiro byte diferente de 0x64 */
+    const bufferWithoutMagicByte = fc
+        .tuple(
+            fc.integer({ min: 0, max: 255 }).filter((b) => b !== 0x64),
+            fc.array(fc.integer({ min: 0, max: 255 }), { minLength: 0, maxLength: 50 }),
+        )
+        .map(([first, rest]) => Buffer.from([first, ...rest]));
+
+    /** Buffer vazio */
+    const emptyBuffer = fc.constant(Buffer.alloc(0));
+
+    it('retorna true para qualquer buffer não-vazio com primeiro byte 0x64', () => {
+        // Property 2: Requisito 3.4
+        fc.assert(
+            fc.property(bufferWithMagicByte, (buffer) => {
+                expect(hasTorrentMagicBytes(buffer)).toBe(true);
+            }),
+            { numRuns: 100 },
+        );
+    });
+
+    it('retorna false para qualquer buffer não-vazio com primeiro byte diferente de 0x64', () => {
+        // Property 2: Requisito 3.4
+        fc.assert(
+            fc.property(bufferWithoutMagicByte, (buffer) => {
+                expect(hasTorrentMagicBytes(buffer)).toBe(false);
+            }),
+            { numRuns: 100 },
+        );
+    });
+
+    it('retorna false para buffer vazio', () => {
+        // Property 2: Requisito 3.4
+        fc.assert(
+            fc.property(emptyBuffer, (buffer) => {
+                expect(hasTorrentMagicBytes(buffer)).toBe(false);
+            }),
+            { numRuns: 100 },
+        );
+    });
+
+    it('retorna true se e somente se buffer.length > 0 && buffer[0] === 0x64 (propriedade completa)', () => {
+        // Property 2: Requisito 3.4
+        fc.assert(
+            fc.property(
+                fc.oneof(bufferWithMagicByte, bufferWithoutMagicByte, emptyBuffer),
+                (buffer) => {
+                    const result = hasTorrentMagicBytes(buffer);
+                    const expected = buffer.length > 0 && buffer[0] === 0x64;
+                    expect(result).toBe(expected);
+                },
+            ),
+            { numRuns: 100 },
+        );
     });
 });
 
@@ -796,5 +919,437 @@ describe('[PBT] Propriedade 1: Para qualquer não-booleano, isValidNetworkToggle
             ),
             { numRuns: 200 },
         );
+    });
+});
+
+// ─── isValidMaxConcurrentDownloads ────────────────────────────────────────────
+
+describe('isValidMaxConcurrentDownloads', () => {
+    it('aceita o valor mínimo (1)', () => {
+        expect(isValidMaxConcurrentDownloads(MIN_CONCURRENT_DOWNLOADS)).toBe(true);
+    });
+
+    it('aceita o valor máximo (10)', () => {
+        expect(isValidMaxConcurrentDownloads(MAX_CONCURRENT_DOWNLOADS)).toBe(true);
+    });
+
+    it('aceita todos os inteiros válidos no intervalo [1, 10]', () => {
+        for (let i = 1; i <= 10; i++) {
+            expect(isValidMaxConcurrentDownloads(i)).toBe(true);
+        }
+    });
+
+    it('rejeita 0 (abaixo do mínimo)', () => {
+        expect(isValidMaxConcurrentDownloads(0)).toBe(false);
+    });
+
+    it('rejeita 11 (acima do máximo)', () => {
+        expect(isValidMaxConcurrentDownloads(11)).toBe(false);
+    });
+
+    it('rejeita inteiros negativos', () => {
+        expect(isValidMaxConcurrentDownloads(-1)).toBe(false);
+        expect(isValidMaxConcurrentDownloads(-100)).toBe(false);
+    });
+
+    it('rejeita inteiros muito acima do máximo', () => {
+        expect(isValidMaxConcurrentDownloads(100)).toBe(false);
+        expect(isValidMaxConcurrentDownloads(1000)).toBe(false);
+    });
+
+    it('rejeita floats (não-inteiros)', () => {
+        expect(isValidMaxConcurrentDownloads(1.5)).toBe(false);
+        expect(isValidMaxConcurrentDownloads(5.5)).toBe(false);
+        expect(isValidMaxConcurrentDownloads(9.9)).toBe(false);
+    });
+
+    it('rejeita strings numéricas', () => {
+        expect(isValidMaxConcurrentDownloads('5')).toBe(false);
+        expect(isValidMaxConcurrentDownloads('1')).toBe(false);
+        expect(isValidMaxConcurrentDownloads('10')).toBe(false);
+    });
+
+    it('rejeita null', () => {
+        expect(isValidMaxConcurrentDownloads(null)).toBe(false);
+    });
+
+    it('rejeita undefined', () => {
+        expect(isValidMaxConcurrentDownloads(undefined)).toBe(false);
+    });
+
+    it('rejeita NaN', () => {
+        expect(isValidMaxConcurrentDownloads(NaN)).toBe(false);
+    });
+
+    it('rejeita Infinity', () => {
+        expect(isValidMaxConcurrentDownloads(Infinity)).toBe(false);
+        expect(isValidMaxConcurrentDownloads(-Infinity)).toBe(false);
+    });
+
+    it('rejeita booleanos', () => {
+        expect(isValidMaxConcurrentDownloads(true)).toBe(false);
+        expect(isValidMaxConcurrentDownloads(false)).toBe(false);
+    });
+
+    it('rejeita objetos e arrays', () => {
+        expect(isValidMaxConcurrentDownloads({})).toBe(false);
+        expect(isValidMaxConcurrentDownloads([])).toBe(false);
+        expect(isValidMaxConcurrentDownloads([5])).toBe(false);
+    });
+});
+
+// ─── PBT: Property 3 — isValidMaxConcurrentDownloads respeita faixa [1, 10] ──
+
+// Property 3: Requisito 3.4
+describe('[PBT] Property 3: isValidMaxConcurrentDownloads — faixa válida [1, 10]', () => {
+    /** Gerador de inteiros no intervalo válido [1, 10] */
+    const validConcurrentDownloads = fc.integer({
+        min: MIN_CONCURRENT_DOWNLOADS,
+        max: MAX_CONCURRENT_DOWNLOADS,
+    });
+
+    /** Gerador de inteiros abaixo do mínimo (< 1) */
+    const belowMin = fc.integer({ min: -1_000_000, max: MIN_CONCURRENT_DOWNLOADS - 1 });
+
+    /** Gerador de inteiros acima do máximo (> 10) */
+    const aboveMax = fc.integer({ min: MAX_CONCURRENT_DOWNLOADS + 1, max: 1_000_000 });
+
+    /** Gerador de floats não-inteiros */
+    const nonIntegerFloat = fc
+        .double({ min: -1e6, max: 1e6, noNaN: true, noDefaultInfinity: true })
+        .filter((n) => !Number.isInteger(n));
+
+    it('retorna true para qualquer inteiro no intervalo [1, 10]', () => {
+        // Property 3: Requisito 3.4
+        fc.assert(
+            fc.property(validConcurrentDownloads, (n) => {
+                expect(isValidMaxConcurrentDownloads(n)).toBe(true);
+            }),
+            { numRuns: 100 },
+        );
+    });
+
+    it('retorna false para qualquer inteiro abaixo de 1', () => {
+        // Property 3: Requisito 3.4
+        fc.assert(
+            fc.property(belowMin, (n) => {
+                expect(isValidMaxConcurrentDownloads(n)).toBe(false);
+            }),
+            { numRuns: 100 },
+        );
+    });
+
+    it('retorna false para qualquer inteiro acima de 10', () => {
+        // Property 3: Requisito 3.4
+        fc.assert(
+            fc.property(aboveMax, (n) => {
+                expect(isValidMaxConcurrentDownloads(n)).toBe(false);
+            }),
+            { numRuns: 100 },
+        );
+    });
+
+    it('retorna false para qualquer float não-inteiro', () => {
+        // Property 3: Requisito 3.4
+        fc.assert(
+            fc.property(nonIntegerFloat, (n) => {
+                expect(isValidMaxConcurrentDownloads(n)).toBe(false);
+            }),
+            { numRuns: 100 },
+        );
+    });
+
+    it('retorna false para qualquer não-número', () => {
+        // Property 3: Requisito 3.4
+        fc.assert(
+            fc.property(
+                fc.oneof(
+                    fc.string(),
+                    fc.boolean(),
+                    fc.constant(null),
+                    fc.constant(undefined),
+                    fc.object(),
+                    fc.array(fc.anything()),
+                    fc.constant(NaN),
+                    fc.constant(Infinity),
+                    fc.constant(-Infinity),
+                ),
+                (value) => {
+                    expect(isValidMaxConcurrentDownloads(value)).toBe(false);
+                },
+            ),
+            { numRuns: 100 },
+        );
+    });
+
+    it('retorna true se e somente se o valor é inteiro em [1, 10] (propriedade completa)', () => {
+        // Property 3: Requisito 3.4
+        fc.assert(
+            fc.property(
+                fc.oneof(
+                    validConcurrentDownloads.map((n) => ({ value: n, expected: true })),
+                    belowMin.map((n) => ({ value: n, expected: false })),
+                    aboveMax.map((n) => ({ value: n, expected: false })),
+                    nonIntegerFloat.map((n) => ({ value: n, expected: false })),
+                    fc.string().map((s) => ({ value: s, expected: false })),
+                    fc.constant({ value: null, expected: false }),
+                    fc.constant({ value: undefined, expected: false }),
+                ),
+                ({ value, expected }) => {
+                    expect(isValidMaxConcurrentDownloads(value)).toBe(expected);
+                },
+            ),
+            { numRuns: 100 },
+        );
+    });
+});
+
+// ─── isValidThemeId ───────────────────────────────────────────────────────────
+
+describe('isValidThemeId', () => {
+    it('aceita string não-vazia simples', () => {
+        expect(isValidThemeId('dark')).toBe(true);
+    });
+
+    it('aceita string não-vazia com hífens e underscores', () => {
+        expect(isValidThemeId('dark-theme')).toBe(true);
+        expect(isValidThemeId('theme_v2')).toBe(true);
+    });
+
+    it('aceita string com um único caractere', () => {
+        expect(isValidThemeId('a')).toBe(true);
+    });
+
+    it('aceita string com espaços internos (não-vazia)', () => {
+        expect(isValidThemeId('my theme')).toBe(true);
+    });
+
+    it('aceita string com caracteres especiais', () => {
+        expect(isValidThemeId('theme@2025')).toBe(true);
+    });
+
+    it('rejeita string vazia', () => {
+        expect(isValidThemeId('')).toBe(false);
+    });
+
+    it('rejeita número zero', () => {
+        expect(isValidThemeId(0)).toBe(false);
+    });
+
+    it('rejeita número positivo', () => {
+        expect(isValidThemeId(1)).toBe(false);
+        expect(isValidThemeId(42)).toBe(false);
+    });
+
+    it('rejeita null', () => {
+        expect(isValidThemeId(null)).toBe(false);
+    });
+
+    it('rejeita undefined', () => {
+        expect(isValidThemeId(undefined)).toBe(false);
+    });
+
+    it('rejeita booleano true', () => {
+        expect(isValidThemeId(true)).toBe(false);
+    });
+
+    it('rejeita booleano false', () => {
+        expect(isValidThemeId(false)).toBe(false);
+    });
+
+    it('rejeita objeto', () => {
+        expect(isValidThemeId({})).toBe(false);
+        expect(isValidThemeId({ id: 'dark' })).toBe(false);
+    });
+
+    it('rejeita array', () => {
+        expect(isValidThemeId([])).toBe(false);
+        expect(isValidThemeId(['dark'])).toBe(false);
+    });
+});
+
+// ─── PBT: Property 4 — isValidThemeId rejeita não-strings e strings vazias ───
+
+// Property 4: Requisito 3.4
+describe('[PBT] Property 4: isValidThemeId — strings não-vazias são válidas; não-strings e strings vazias são inválidas', () => {
+    it('retorna true para qualquer string não-vazia', () => {
+        // Property 4: Requisito 3.4
+        fc.assert(
+            fc.property(fc.string({ minLength: 1 }), (s) => {
+                expect(isValidThemeId(s)).toBe(true);
+            }),
+            { numRuns: 100 },
+        );
+    });
+
+    it('retorna false para string vazia', () => {
+        // Property 4: Requisito 3.4
+        expect(isValidThemeId('')).toBe(false);
+    });
+
+    it('retorna false para qualquer não-string', () => {
+        // Property 4: Requisito 3.4
+        fc.assert(
+            fc.property(
+                fc.oneof(
+                    fc.integer(),
+                    fc.double({ noNaN: true, noDefaultInfinity: true }),
+                    fc.boolean(),
+                    fc.constant(null),
+                    fc.constant(undefined),
+                    fc.object(),
+                    fc.array(fc.anything()),
+                    fc.constant(NaN),
+                    fc.constant(Infinity),
+                    fc.constant(-Infinity),
+                ),
+                (value) => {
+                    expect(isValidThemeId(value)).toBe(false);
+                },
+            ),
+            { numRuns: 100 },
+        );
+    });
+
+    it('retorna true se e somente se o valor é uma string não-vazia (propriedade completa)', () => {
+        // Property 4: Requisito 3.4
+        fc.assert(
+            fc.property(
+                fc.oneof(
+                    fc.string({ minLength: 1 }).map((s) => ({ value: s as unknown, expected: true })),
+                    fc.constant({ value: '' as unknown, expected: false }),
+                    fc.integer().map((n) => ({ value: n as unknown, expected: false })),
+                    fc.boolean().map((b) => ({ value: b as unknown, expected: false })),
+                    fc.constant({ value: null as unknown, expected: false }),
+                    fc.constant({ value: undefined as unknown, expected: false }),
+                ),
+                ({ value, expected }) => {
+                    expect(isValidThemeId(value)).toBe(expected);
+                },
+            ),
+            { numRuns: 100 },
+        );
+    });
+});
+
+// ─── isValidTrackerUrl — IPs privados e reservados ────────────────────────────
+//
+// Testa a função isPrivateHost indiretamente via isValidTrackerUrl.
+// Cobre todas as faixas de IP privado/reservado bloqueadas pela proteção SSRF.
+
+describe('isValidTrackerUrl — rejeição de IPs privados e reservados', () => {
+    it('rejeita localhost via http', () => {
+        expect(isValidTrackerUrl('http://localhost:6969/announce')).toBe(false);
+    });
+
+    it('rejeita localhost via https', () => {
+        expect(isValidTrackerUrl('https://localhost:6969/announce')).toBe(false);
+    });
+
+    it('rejeita localhost via udp', () => {
+        expect(isValidTrackerUrl('udp://localhost:6969/announce')).toBe(false);
+    });
+
+    it('rejeita IPv6 loopback [::1] via http', () => {
+        expect(isValidTrackerUrl('http://[::1]:6969/announce')).toBe(false);
+    });
+
+    it('rejeita IPv6 loopback [::1] via https', () => {
+        expect(isValidTrackerUrl('https://[::1]:6969')).toBe(false);
+    });
+
+    // faixa 10.0.0.0/8
+    it('rejeita 10.0.0.1 (faixa 10.x.x.x) via http', () => {
+        expect(isValidTrackerUrl('http://10.0.0.1:6969/announce')).toBe(false);
+    });
+
+    it('rejeita 10.255.255.255 (faixa 10.x.x.x) via https', () => {
+        expect(isValidTrackerUrl('https://10.255.255.255:6969')).toBe(false);
+    });
+
+    it('rejeita 10.128.64.32 (faixa 10.x.x.x) via udp', () => {
+        expect(isValidTrackerUrl('udp://10.128.64.32:6969')).toBe(false);
+    });
+
+    // faixa 172.16.0.0/12
+    it('rejeita 172.16.0.1 (início da faixa privada) via http', () => {
+        expect(isValidTrackerUrl('http://172.16.0.1:6969/announce')).toBe(false);
+    });
+
+    it('rejeita 172.20.10.5 (meio da faixa 172.16-31) via udp', () => {
+        expect(isValidTrackerUrl('udp://172.20.10.5:6969')).toBe(false);
+    });
+
+    it('rejeita 172.31.255.255 (fim da faixa privada) via https', () => {
+        expect(isValidTrackerUrl('https://172.31.255.255:6969')).toBe(false);
+    });
+
+    it('aceita 172.15.0.1 (abaixo da faixa privada) via http', () => {
+        expect(isValidTrackerUrl('http://172.15.0.1:6969/announce')).toBe(true);
+    });
+
+    it('aceita 172.32.0.1 (acima da faixa privada) via http', () => {
+        expect(isValidTrackerUrl('http://172.32.0.1:6969/announce')).toBe(true);
+    });
+
+    // faixa 192.168.0.0/16
+    it('rejeita 192.168.0.1 (faixa 192.168.x.x) via http', () => {
+        expect(isValidTrackerUrl('http://192.168.0.1:6969/announce')).toBe(false);
+    });
+
+    it('rejeita 192.168.1.100 (faixa 192.168.x.x) via udp', () => {
+        expect(isValidTrackerUrl('udp://192.168.1.100:6969')).toBe(false);
+    });
+
+    it('rejeita 192.168.255.255 (faixa 192.168.x.x) via https', () => {
+        expect(isValidTrackerUrl('https://192.168.255.255:6969')).toBe(false);
+    });
+
+    // faixa 169.254.0.0/16 (link-local)
+    it('rejeita 169.254.0.1 (link-local) via http', () => {
+        expect(isValidTrackerUrl('http://169.254.0.1:6969/announce')).toBe(false);
+    });
+
+    it('rejeita 169.254.169.254 (IMDS AWS link-local) via https', () => {
+        expect(isValidTrackerUrl('https://169.254.169.254:80')).toBe(false);
+    });
+
+    it('rejeita 169.254.169.254 (IMDS AWS link-local) via udp', () => {
+        expect(isValidTrackerUrl('udp://169.254.169.254:6969')).toBe(false);
+    });
+
+    // faixa 0.0.0.0/8
+    it('rejeita 0.0.0.0 (faixa reservada) via http', () => {
+        expect(isValidTrackerUrl('http://0.0.0.0:6969')).toBe(false);
+    });
+
+    it('rejeita 0.0.0.0 (faixa reservada) via udp', () => {
+        expect(isValidTrackerUrl('udp://0.0.0.0:6969')).toBe(false);
+    });
+
+    // faixa 127.0.0.0/8 (loopback)
+    it('rejeita 127.0.0.1 (loopback) via http', () => {
+        expect(isValidTrackerUrl('http://127.0.0.1:6969/announce')).toBe(false);
+    });
+
+    it('rejeita 127.0.0.1 (loopback) via udp', () => {
+        expect(isValidTrackerUrl('udp://127.0.0.1:6969')).toBe(false);
+    });
+
+    it('rejeita 127.255.255.255 (loopback) via https', () => {
+        expect(isValidTrackerUrl('https://127.255.255.255:6969')).toBe(false);
+    });
+
+    // IPs públicos válidos — confirmação de não-bloqueio
+    it('aceita IP público 8.8.8.8 via http', () => {
+        expect(isValidTrackerUrl('http://8.8.8.8:6969/announce')).toBe(true);
+    });
+
+    it('aceita IP público 1.1.1.1 via udp', () => {
+        expect(isValidTrackerUrl('udp://1.1.1.1:6969')).toBe(true);
+    });
+
+    it('aceita IP público 203.0.113.1 via https', () => {
+        expect(isValidTrackerUrl('https://203.0.113.1:6969')).toBe(true);
     });
 });

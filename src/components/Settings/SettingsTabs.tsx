@@ -13,7 +13,7 @@ export interface SettingsTab {
 
 // ─── Definição das abas ───────────────────────────────────────────────────────
 
-export const SETTINGS_TABS: SettingsTab[] = [
+const SETTINGS_TABS: SettingsTab[] = [
     { id: 'general', labelKey: 'settings.tabs.general' },
     { id: 'transfer', labelKey: 'settings.tabs.transfer' },
     { id: 'network', labelKey: 'settings.tabs.network' },
@@ -52,6 +52,7 @@ export function SettingsTabs({ activeTab, onTabChange }: SettingsTabsProps): Rea
         if (nextIndex !== null) {
             e.preventDefault();
             const nextTab = SETTINGS_TABS[nextIndex];
+            if (!nextTab) return;
             onTabChange(nextTab.id);
             // Foca o botão da aba destino
             const tabEl = document.getElementById(`settings-tab-${nextTab.id}`);

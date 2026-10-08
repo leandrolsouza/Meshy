@@ -36,16 +36,20 @@ jest.mock('../../src/hooks/useDownloads', () => ({
     }),
 }));
 
-// Mock do filterStore
-jest.mock('../../src/store/filterStore', () => ({
-    useFilterStore: () => ({
+// Mock do filterStore — suporta seletores granulares: useFilterStore((s) => s.campo)
+jest.mock('../../src/store/filterStore', () => {
+    const mockState = {
         searchTerm: '',
-        selectedStatuses: [],
+        selectedStatuses: [] as string[],
         sortField: 'addedAt' as const,
         sortDirection: 'desc' as const,
         resetFilters: jest.fn(),
-    }),
-}));
+    };
+    return {
+        useFilterStore: (selector?: (s: typeof mockState) => unknown) =>
+            selector ? selector(mockState) : mockState,
+    };
+});
 
 // Mock de ícones
 jest.mock('react-icons/vsc', () => ({

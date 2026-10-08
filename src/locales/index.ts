@@ -16,7 +16,8 @@ export const DEFAULT_LOCALE = 'pt-BR';
 
 export function getLocaleMessages(locale: string): Record<string, string> {
     const entry = SUPPORTED_LOCALES.find((l) => l.code === locale);
-    return entry?.messages ?? SUPPORTED_LOCALES[0].messages;
+    // noUncheckedIndexedAccess: fallback direto para o módulo pt-BR importado estaticamente
+    return entry?.messages ?? ptBR;
 }
 
 export function isSupportedLocale(locale: string): boolean {

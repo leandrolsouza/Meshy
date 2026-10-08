@@ -1,5 +1,11 @@
 /**
  * @jest-environment jsdom
+ *
+ * Testes dos componentes de filtro da lista de downloads:
+ * SearchBar, StatusFilter e SortSelector.
+ *
+ * Nota: este arquivo substituiu downloadListToolbar.test.tsx após a remoção
+ * do componente morto DownloadListToolbar (tarefa 7.3).
  */
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -8,7 +14,6 @@ import '@testing-library/jest-dom';
 import { SearchBar } from '../../src/components/DownloadList/SearchBar';
 import { StatusFilter } from '../../src/components/DownloadList/StatusFilter';
 import { SortSelector } from '../../src/components/DownloadList/SortSelector';
-import { DownloadListToolbar } from '../../src/components/DownloadList/DownloadListToolbar';
 import { useFilterStore } from '../../src/store/filterStore';
 import ptBR from '../../src/locales/pt-BR.json';
 
@@ -186,74 +191,5 @@ describe('SortSelector', () => {
 
         fireEvent.click(directionButton);
         expect(useFilterStore.getState().sortDirection).toBe('desc');
-    });
-});
-
-// ─── DownloadListToolbar ──────────────────────────────────────────────────────
-// Requisitos: 6.1, 6.2, 6.3
-
-describe('DownloadListToolbar', () => {
-    it('renderiza SearchBar, StatusFilter e SortSelector juntos', () => {
-        renderWithIntl(<DownloadListToolbar completedCount={0} onClearCompleted={jest.fn()} />);
-
-        // SearchBar presente
-        expect(
-            screen.getByRole('textbox', { name: 'Buscar downloads por nome' }),
-        ).toBeInTheDocument();
-
-        // StatusFilter presente
-        expect(
-            screen.getByRole('group', { name: 'Filtrar downloads por status' }),
-        ).toBeInTheDocument();
-
-        // SortSelector presente
-        expect(
-            screen.getByRole('combobox', { name: 'Ordenar lista de downloads' }),
-        ).toBeInTheDocument();
-    });
-
-    it('não exibe botão "Limpar concluídos" quando completedCount é 0', () => {
-        renderWithIntl(<DownloadListToolbar completedCount={0} onClearCompleted={jest.fn()} />);
-
-        expect(
-            screen.queryByRole('button', { name: 'Limpar downloads concluídos' }),
-        ).not.toBeInTheDocument();
-    });
-
-    it('exibe botão "Limpar concluídos" com contagem quando há itens concluídos', () => {
-        renderWithIntl(<DownloadListToolbar completedCount={3} onClearCompleted={jest.fn()} />);
-
-        const button = screen.getByRole('button', { name: 'Limpar downloads concluídos' });
-        expect(button).toBeInTheDocument();
-        expect(button).toHaveTextContent('Limpar concluídos (3)');
-    });
-
-    it('clicar no botão abre diálogo de confirmação', () => {
-        renderWithIntl(<DownloadListToolbar completedCount={2} onClearCompleted={jest.fn()} />);
-
-        fireEvent.click(screen.getByRole('button', { name: 'Limpar downloads concluídos' }));
-
-        expect(screen.getByRole('dialog')).toBeInTheDocument();
-        expect(screen.getByText('Limpar downloads concluídos')).toBeInTheDocument();
-    });
-
-    it('confirmar "Manter arquivos" chama onClearCompleted(false)', () => {
-        const onClear = jest.fn();
-        renderWithIntl(<DownloadListToolbar completedCount={1} onClearCompleted={onClear} />);
-
-        fireEvent.click(screen.getByRole('button', { name: 'Limpar downloads concluídos' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Manter arquivos' }));
-
-        expect(onClear).toHaveBeenCalledWith(false);
-    });
-
-    it('confirmar "Excluir arquivos" chama onClearCompleted(true)', () => {
-        const onClear = jest.fn();
-        renderWithIntl(<DownloadListToolbar completedCount={1} onClearCompleted={onClear} />);
-
-        fireEvent.click(screen.getByRole('button', { name: 'Limpar downloads concluídos' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Excluir arquivos' }));
-
-        expect(onClear).toHaveBeenCalledWith(true);
     });
 });

@@ -211,5 +211,8 @@
     "error.destination.folderNotFound": "Destination folder not found",
     "error.destination.fileNotFound": "File not found",
     "error.destination.openFailed": "Failed to open destination",
-    "error.destination.notCompleted": "Download not completed"
+    "error.destination.notCompleted": "Download not completed",
+    "error.rateLimit": "Too many requests. Please try again shortly.",
+    "error.operation.failed": "An unexpected error occurred.",
+    "downloads.speedLimits.error": "Error applying file selection."
 }
