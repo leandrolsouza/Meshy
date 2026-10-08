@@ -61,6 +61,7 @@ export interface DownloadItem {
     totalFileCount?: number; // quantidade total de arquivos
     errorMessage?: string; // mensagem de erro (quando status === 'error')
     queuePosition?: number; // posição na fila (1-based), undefined para não-enfileirados
+    pauseReason?: 'disk-space';
 }
 
 // ─── PersistedDownloadItem ────────────────────────────────────────────────────
@@ -80,6 +81,32 @@ export interface PersistedDownloadItem {
     torrentFilePath?: string;
     selectedFileIndices?: number[]; // índices dos arquivos selecionados
     errorMessage?: string; // mensagem de erro (persistida)
+    pauseReason?: 'disk-space';
+    /** Metadados confirmados, sem conteúdo dos arquivos; mantém trackers e flag private. */
+    torrentFileBase64?: string;
+    selectedFileCount?: number;
+    totalFileCount?: number;
+}
+
+/** Metadados temporários: preparar não inicia o download dos arquivos. */
+export interface TorrentPreview {
+    requestId: string;
+    infoHash: string;
+    name: string;
+    files: TorrentFileInfo[];
+}
+
+export type TorrentSource =
+    | { kind: 'magnet'; magnetUri: string }
+    | { kind: 'file'; filePath: string }
+    | { kind: 'buffer'; buffer: Uint8Array };
+
+export interface DiskSpaceInfo {
+    freeBytes: number;
+    selectedBytes: number;
+    reservedBytes: number;
+    safetyMarginBytes: number;
+    sufficient: boolean;
 }
 
 // ─── AppSettings ──────────────────────────────────────────────────────────────
@@ -136,6 +163,18 @@ export type IPCResponse<T> = { success: true; data: T } | { success: false; erro
 // ─── MeshyAPI ─────────────────────────────────────────────────────────────────
 
 export interface MeshyAPI {
+    prepareTorrent(requestId: string, source: TorrentSource): Promise<IPCResponse<TorrentPreview>>;
+    cancelTorrentPreparation(requestId: string): Promise<IPCResponse<void>>;
+    getDiskSpace(
+        requestId: string,
+        destinationFolder: string,
+        selectedIndices: number[],
+    ): Promise<IPCResponse<DiskSpaceInfo>>;
+    confirmTorrent(
+        requestId: string,
+        destinationFolder: string,
+        selectedIndices: number[],
+    ): Promise<IPCResponse<DownloadItem>>;
     // Commands
     addTorrentFile(filePath: string): Promise<IPCResponse<DownloadItem>>;
     addTorrentFileBuffer(buffer: Uint8Array): Promise<IPCResponse<DownloadItem>>;

@@ -945,7 +945,9 @@ describe('DownloadManager — restoreSession()', () => {
         const manager = createDownloadManager(engine, settings, store);
         await manager.restoreSession();
 
-        expect(engine.addMagnetLink).toHaveBeenCalledWith(magnetUri);
+        expect(engine.addMagnetLink).toHaveBeenCalledWith(magnetUri, false, {
+            destinationFolder: '/downloads',
+        });
     });
 
     it('auto-resumes items that were downloading (via torrentFilePath) when folder exists', async () => {
@@ -970,7 +972,9 @@ describe('DownloadManager — restoreSession()', () => {
         const manager = createDownloadManager(engine, settings, store);
         await manager.restoreSession();
 
-        expect(engine.addTorrentFile).toHaveBeenCalledWith(torrentFilePath);
+        expect(engine.addTorrentFile).toHaveBeenCalledWith(torrentFilePath, false, {
+            destinationFolder: '/downloads',
+        });
     });
 
     it('does NOT auto-resume items that were downloading when folder is missing', async () => {
@@ -1172,7 +1176,7 @@ describe('DownloadManager — Property 16: Auto-retomada seletiva na restauraç�
      * na sessão anterior — e não para itens com outros statuses (`paused`, `completed`,
      * `error`, etc.).
      */
-    it('restoreSession() re-adds only items with downloading status and leaves others untouched', async () => {
+    it('restoreSession() re-adds active downloads and pending metadata while leaving inactive items untouched', async () => {
         // All possible statuses for persisted items
         const allStatuses: TorrentStatus[] = [
             'downloading',
@@ -1257,7 +1261,7 @@ describe('DownloadManager — Property 16: Auto-retomada seletiva na restauraç�
 
                 // Make addMagnetLink resolve for each downloading item
                 for (const item of items) {
-                    if (item.status === 'downloading') {
+                    if (item.status === 'downloading' || item.status === 'resolving-metadata') {
                         (engine.addMagnetLink as jest.Mock).mockResolvedValueOnce(
                             makeTorrentInfo({
                                 infoHash: item.infoHash,
@@ -1273,8 +1277,12 @@ describe('DownloadManager — Property 16: Auto-retomada seletiva na restauraç�
                 await manager.restoreSession();
 
                 // Determine which items should have been re-added (status === 'downloading')
-                const downloadingItems = items.filter((i) => i.status === 'downloading');
-                const nonDownloadingItems = items.filter((i) => i.status !== 'downloading');
+                const downloadingItems = items.filter(
+                    (i) => i.status === 'downloading' || i.status === 'resolving-metadata',
+                );
+                const nonDownloadingItems = items.filter(
+                    (i) => i.status !== 'downloading' && i.status !== 'resolving-metadata',
+                );
 
                 // engine.addMagnetLink should have been called exactly once per downloading item
                 const addMagnetCalls = (engine.addMagnetLink as jest.Mock).mock.calls;

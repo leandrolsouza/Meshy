@@ -17,6 +17,9 @@ Meshy é um cliente BitTorrent desktop com interface moderna inspirada no VS Cod
 - Adicionar torrents via arquivo `.torrent`, magnet link ou arrastar e soltar
 - Pausar, retomar e remover downloads
 - Seleção individual de arquivos dentro de um torrent
+- Revisão antes de iniciar: arquivos, tamanho selecionado e pasta por download
+- Verificação de espaço livre considerando downloads ativos e enfileirados no mesmo volume
+- Pausa por falta de espaço, preservando dados e seleção para retomada manual
 - Limites configuráveis de velocidade de download e upload e máximo de downloads simultâneos
 - Progresso, velocidade e contagem de peers em tempo real (atualização a cada segundo)
 - Persistência de sessão — downloads são restaurados ao reabrir o app
@@ -25,6 +28,14 @@ Meshy é um cliente BitTorrent desktop com interface moderna inspirada no VS Cod
 - Temas customizáveis com aplicação dinâmica via variáveis CSS
 - Internacionalização: `pt-BR` e `en-US`
 - Configurações avançadas de rede: DHT, PEX, uTP
+
+Ao adicionar um torrent, o Meshy primeiro obtém apenas seus metadados. Escolha os arquivos e a
+pasta de destino na revisão e confirme em **Iniciar download**. Para várias entradas, cada torrent
+tem sua própria confirmação. A seleção e a pasta são preservadas ao reabrir o aplicativo.
+
+A proteção de disco mantém uma margem de 64 MiB e verifica o espaço antes de iniciar ou retomar,
+inclusive ao sair da fila. Durante a transferência, há uma nova verificação a cada cinco segundos;
+um erro `ENOSPC` também provoca a pausa. Libere espaço ou reduza a seleção antes de retomar.
 
 ### Stack
 

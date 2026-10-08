@@ -73,8 +73,19 @@ function makeMockEngine(): TorrentEngine & EventEmitter {
         removeTracker: jest.fn(),
         restart: jest.fn().mockResolvedValue(undefined),
         isRestarting: jest.fn().mockReturnValue(false),
-        healthCheck: jest.fn().mockReturnValue({ healthy: true, restarting: false, activeTorrents: 0, totalPeers: 0, uptimeMs: 0 }),
-        getMetadata: jest.fn().mockReturnValue({ infoHash: 'a'.repeat(40), creator: null, comment: null, creationDate: null }),
+        healthCheck: jest.fn().mockReturnValue({
+            healthy: true,
+            restarting: false,
+            activeTorrents: 0,
+            totalPeers: 0,
+            uptimeMs: 0,
+        }),
+        getMetadata: jest.fn().mockReturnValue({
+            infoHash: 'a'.repeat(40),
+            creator: null,
+            comment: null,
+            creationDate: null,
+        }),
         getPeers: jest.fn().mockReturnValue([]),
         getPieces: jest.fn().mockReturnValue([]),
     });
@@ -330,7 +341,9 @@ describe('Integration: Session Persistence (Requirements 7.1, 7.2, 7.3, 7.4)', (
             await manager.restoreSession();
 
             // Engine should have been called to re-add the downloading item
-            expect(engine.addMagnetLink).toHaveBeenCalledWith(magnetUri);
+            expect(engine.addMagnetLink).toHaveBeenCalledWith(magnetUri, false, {
+                destinationFolder: '/downloads',
+            });
 
             const all = manager.getAll();
             expect(all).toHaveLength(1);
@@ -374,7 +387,9 @@ describe('Integration: Session Persistence (Requirements 7.1, 7.2, 7.3, 7.4)', (
             const manager = createDownloadManager(engine, settings, store);
             await manager.restoreSession();
 
-            expect(engine.addTorrentFile).toHaveBeenCalledWith(torrentFilePath);
+            expect(engine.addTorrentFile).toHaveBeenCalledWith(torrentFilePath, false, {
+                destinationFolder: '/downloads',
+            });
 
             const all = manager.getAll();
             expect(all).toHaveLength(1);
@@ -659,6 +674,8 @@ describe('Integration: Session Persistence (Requirements 7.1, 7.2, 7.3, 7.4)', (
             expect(downloading!.status).toBe('downloading');
             expect(engine.addMagnetLink).toHaveBeenCalledWith(
                 `magnet:?xt=urn:btih:${downloadingHash}`,
+                false,
+                { destinationFolder: '/downloads' },
             );
 
             // Paused item: stays paused (folder exists)

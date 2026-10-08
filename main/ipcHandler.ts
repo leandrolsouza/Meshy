@@ -14,16 +14,24 @@ import type {
     PeerInfo,
     PieceStatus,
 } from '../shared/types';
-import { isValidTorrentFile, hasTorrentMagicBytes } from './validators';
+import { isValidTorrentFile, hasTorrentMagicBytes, MAX_TORRENT_BYTES } from './validators';
 import { isValidTrackerUrl } from '../shared/validators';
 import { ErrorCodes } from '../shared/errorCodes';
 import { logger, createScopedLogger } from './logger';
 import type { ScopedLogger } from './logger';
 import { metrics } from './metrics';
 import type { MetricsSnapshot } from './metrics';
-import { validatePayload, infoHashSchema, infoHashHexSchema, infoHashUrlSchema, urlSchema } from './payloadValidator';
+import {
+    validatePayload,
+    infoHashSchema,
+    infoHashHexSchema,
+    infoHashUrlSchema,
+    urlSchema,
+} from './payloadValidator';
 import { validateSettingsPayload } from './settingsValidator';
 import { randomBytes } from 'crypto';
+import type { TorrentPreparation } from './torrentPreparation';
+import type { TorrentSource } from '../shared/types';
 
 export type { IPCResponse } from '../shared/types';
 
@@ -53,7 +61,8 @@ function failWithLog(channel: string, err: unknown, scopedLog?: ScopedLogger): I
     }
     // Retornar código genérico para não vazar caminhos de SO, nomes de classe
     // ou stack traces internos para o renderer. O erro completo fica apenas nos logs.
-    return { success: false, error: ErrorCodes.OPERATION_FAILED };
+    const known = Object.values(ErrorCodes).some((code) => code === message);
+    return { success: false, error: known ? message : ErrorCodes.OPERATION_FAILED };
 }
 
 // ─── Timeout wrapper ──────────────────────────────────────────────────────────
@@ -212,7 +221,10 @@ export function attachWindowEvents(
         metrics.recordEngineError();
         const stack = err.stack?.split('\n').slice(0, 3).join(' | ') ?? '';
         logger.error('[IPC] Engine error:', infoHash.slice(0, 8), err.message, stack);
-        if (!mainWindow.isDestroyed()) {
+        if (
+            !mainWindow.isDestroyed() &&
+            !downloadManager.getAll().find((item) => item.infoHash === infoHash)?.pauseReason
+        ) {
             mainWindow.webContents.send('torrent:error', { infoHash, message: err.message });
         }
     };
@@ -242,6 +254,7 @@ export function registerIpcHandlers(
     downloadManager: DownloadManager,
     settingsManager: SettingsManager,
     torrentEngine?: TorrentEngine,
+    preparation?: TorrentPreparation,
 ): void {
     // ── Wrapper para tracking automático de métricas ──────────────────────────
     // Intercepta ipcMain.handle para medir latência e contar erros de cada canal.
@@ -261,6 +274,149 @@ export function registerIpcHandlers(
     };
 
     // ── torrent:add-file ──────────────────────────────────────────────────────
+    const requestSchema = { requestId: { type: 'string' as const, nonEmpty: true } };
+    const requestIdFor = (payload: unknown): string => {
+        const result = validatePayload<{ requestId: string }>(payload, requestSchema);
+        if (!result.valid || !/^[a-zA-Z0-9-]{8,80}$/.test(result.data.requestId))
+            throw new Error(ErrorCodes.INVALID_PARAMS);
+        return result.data.requestId;
+    };
+    const selectionFor = (
+        event: Electron.IpcMainInvokeEvent,
+        payload: unknown,
+    ): { requestId: string; destinationFolder: string; selectedIndices: number[] } => {
+        const requestId = scopedRequestId(event, requestIdFor(payload));
+        const data = payload as Record<string, unknown>;
+        if (
+            typeof data.destinationFolder !== 'string' ||
+            !data.destinationFolder.trim() ||
+            !Array.isArray(data.selectedIndices)
+        )
+            throw new Error(ErrorCodes.INVALID_PARAMS);
+        const selectedIndices: number[] = [];
+        for (const index of data.selectedIndices) {
+            if (typeof index !== 'number' || !Number.isInteger(index) || index < 0)
+                throw new Error(ErrorCodes.FILE_INDEX_INVALID);
+            selectedIndices.push(index);
+        }
+        if (!preparation) throw new Error(ErrorCodes.ENGINE_NOT_AVAILABLE);
+        const draft = preparation.get(requestId);
+        if (
+            !selectedIndices.every((index) =>
+                draft.preview.files.some((file) => file.index === index),
+            )
+        )
+            throw new Error(ErrorCodes.FILE_INDEX_INVALID);
+        return {
+            requestId,
+            destinationFolder: resolve(data.destinationFolder),
+            selectedIndices: [...new Set(selectedIndices)],
+        };
+    };
+
+    const scopedRequestId = (event: Electron.IpcMainInvokeEvent, requestId: string): string => {
+        if (
+            event.senderFrame &&
+            event.sender?.mainFrame &&
+            event.senderFrame !== event.sender.mainFrame
+        )
+            throw new Error(ErrorCodes.INVALID_PARAMS);
+        return `${event.sender?.id ?? 0}-${requestId}`;
+    };
+
+    trackedHandle('torrent:prepare', async (_event, payload) => {
+        try {
+            const publicId = requestIdFor(payload);
+            const requestId = scopedRequestId(_event, publicId);
+            if (!preparation) return fail(ErrorCodes.ENGINE_NOT_AVAILABLE);
+            const source = (payload as Record<string, unknown>).source as
+                Record<string, unknown> | undefined;
+            if (!source || typeof source !== 'object') return fail(ErrorCodes.INVALID_PARAMS);
+            let input: TorrentSource;
+            if (source.kind === 'magnet' && typeof source.magnetUri === 'string')
+                input = { kind: 'magnet', magnetUri: source.magnetUri };
+            else if (
+                source.kind === 'file' &&
+                typeof source.filePath === 'string' &&
+                source.filePath.trim()
+            )
+                input = { kind: 'file', filePath: resolve(source.filePath) };
+            else if (
+                source.kind === 'buffer' &&
+                source.buffer instanceof Uint8Array &&
+                source.buffer.length > 0 &&
+                source.buffer.length <= MAX_TORRENT_BYTES
+            )
+                input = { kind: 'buffer', buffer: source.buffer };
+            else return fail(ErrorCodes.INVALID_PARAMS);
+            const preview = await preparation.prepare(requestId, input);
+            if (downloadManager.getAll().some((item) => item.infoHash === preview.infoHash)) {
+                preparation.cancel(requestId);
+                return fail(ErrorCodes.TORRENT_DUPLICATE);
+            }
+            return ok({ ...preview, requestId: publicId });
+        } catch (error) {
+            return failWithLog('torrent:prepare', error);
+        }
+    });
+    trackedHandle('torrent:cancel-preparation', async (_event, payload) => {
+        try {
+            preparation?.cancel(scopedRequestId(_event, requestIdFor(payload)));
+            return ok(undefined);
+        } catch (error) {
+            return failWithLog('torrent:cancel-preparation', error);
+        }
+    });
+    trackedHandle('torrent:disk-space', async (_event, payload) => {
+        try {
+            const selection = selectionFor(_event, payload);
+            const draft = preparation!.get(selection.requestId);
+            const bytes = draft.preview.files
+                .filter((file) => selection.selectedIndices.includes(file.index))
+                .reduce((sum, file) => sum + file.length, 0);
+            return ok(
+                await downloadManager.getDiskSpace(
+                    selection.destinationFolder,
+                    bytes,
+                    draft.preview.infoHash,
+                ),
+            );
+        } catch (error) {
+            return failWithLog('torrent:disk-space', error);
+        }
+    });
+    const confirming = new Set<string>();
+    trackedHandle('torrent:confirm', async (_event, payload) => {
+        let requestId: string | undefined;
+        let ownsConfirmation = false;
+        try {
+            const selection = selectionFor(_event, payload);
+            requestId = selection.requestId;
+            if (selection.selectedIndices.length === 0)
+                return fail(ErrorCodes.FILE_SELECTION_EMPTY);
+            if (confirming.has(requestId)) return fail(ErrorCodes.INVALID_PARAMS);
+            if (torrentEngine?.isRestarting()) return fail(ErrorCodes.ENGINE_RESTARTING);
+            if (
+                !existsSync(selection.destinationFolder) ||
+                !hasWritePermission(selection.destinationFolder)
+            )
+                return fail(ErrorCodes.DESTINATION_FOLDER_NOT_FOUND);
+            confirming.add(requestId);
+            ownsConfirmation = true;
+            const item = await downloadManager.addPreparedTorrent(
+                preparation!.get(requestId),
+                selection.destinationFolder,
+                selection.selectedIndices,
+            );
+            preparation!.cancel(requestId);
+            return ok(item);
+        } catch (error) {
+            return failWithLog('torrent:confirm', error);
+        } finally {
+            if (requestId && ownsConfirmation) confirming.delete(requestId);
+        }
+    });
+
     trackedHandle(
         'torrent:add-file',
         async (_event, payload: unknown): Promise<IPCResponse<DownloadItem>> => {
@@ -317,11 +473,7 @@ export function registerIpcHandlers(
                 //   - conteúdo não-vazio (length > 0)
                 //   - magic bytes bencode (primeiro byte === 0x64), rejeitando arquivos que não
                 //     sejam torrents antes de passá-los ao WebTorrent
-                if (
-                    typeof payload !== 'object' ||
-                    payload === null ||
-                    !('buffer' in payload)
-                ) {
+                if (typeof payload !== 'object' || payload === null || !('buffer' in payload)) {
                     return fail(ErrorCodes.INVALID_FILE_PATH);
                 }
 
@@ -502,10 +654,7 @@ export function registerIpcHandlers(
                     // '..', e previne path traversal). O caminho resolvido é também
                     // persistido para evitar caminhos relativos em configurações salvas.
                     const resolvedFolder = resolve(partial.destinationFolder);
-                    if (
-                        !existsSync(resolvedFolder) ||
-                        !hasWritePermission(resolvedFolder)
-                    ) {
+                    if (!existsSync(resolvedFolder) || !hasWritePermission(resolvedFolder)) {
                         return fail(ErrorCodes.INVALID_PARAMS);
                     }
                     partial.destinationFolder = resolvedFolder;
@@ -571,26 +720,23 @@ export function registerIpcHandlers(
     // ── dialog:select-torrent-file ────────────────────────────────────────────
     // Abre o diálogo nativo do SO para selecionar um arquivo .torrent.
     // Necessário porque sandbox: true impede o acesso a File.path no renderer.
-    trackedHandle(
-        'dialog:select-torrent-file',
-        async (_event): Promise<IPCResponse<string>> => {
-            try {
-                const result = await dialog.showOpenDialog({
-                    properties: ['openFile'],
-                    filters: [{ name: 'Torrent', extensions: ['torrent'] }],
-                });
+    trackedHandle('dialog:select-torrent-file', async (_event): Promise<IPCResponse<string>> => {
+        try {
+            const result = await dialog.showOpenDialog({
+                properties: ['openFile'],
+                filters: [{ name: 'Torrent', extensions: ['torrent'] }],
+            });
 
-                if (result.canceled || result.filePaths.length === 0) {
-                    return fail(ErrorCodes.NO_FILE_SELECTED);
-                }
-
-                // noUncheckedIndexedAccess: filePaths[0] garantido pela guarda length === 0 acima
-                return ok(result.filePaths[0]!);
-            } catch (err) {
-                return failWithLog('dialog:select-torrent-file', err);
+            if (result.canceled || result.filePaths.length === 0) {
+                return fail(ErrorCodes.NO_FILE_SELECTED);
             }
-        },
-    );
+
+            // noUncheckedIndexedAccess: filePaths[0] garantido pela guarda length === 0 acima
+            return ok(result.filePaths[0]!);
+        } catch (err) {
+            return failWithLog('dialog:select-torrent-file', err);
+        }
+    });
 
     // ── torrent:get-files ─────────────────────────────────────────────────────
     trackedHandle(

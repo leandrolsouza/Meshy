@@ -42,6 +42,11 @@ export const ErrorCodes = {
     DESTINATION_FILE_NOT_FOUND: 'error.destination.fileNotFound',
     DESTINATION_OPEN_FAILED: 'error.destination.openFailed',
     DESTINATION_NOT_COMPLETED: 'error.destination.notCompleted',
+    DISK_SPACE_LOW: 'error.destination.diskSpaceLow',
+    DISK_SPACE_UNAVAILABLE: 'error.destination.diskSpaceUnavailable',
+    PREPARATION_CANCELLED: 'error.torrent.preparationCancelled',
+    PREPARATION_EXPIRED: 'error.torrent.preparationExpired',
+    METADATA_TIMEOUT: 'error.torrent.metadataTimeout',
 
     // Rate limiting
     RATE_LIMITED: 'error.rateLimit',
@@ -49,4 +54,3 @@ export const ErrorCodes = {
     // Falha de operação genérica (erro inesperado em catch)
     OPERATION_FAILED: 'error.operation.failed',
 } as const;
-

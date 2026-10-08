@@ -38,10 +38,10 @@ import type { Torrent } from 'webtorrent';
 import { readdir, rm } from 'fs/promises';
 
 // readdir é sobrecarregado; cast via unknown para contornar a incompatibilidade de tipos.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockReaddir = readdir as unknown as jest.MockedFunction<(...args: any[]) => Promise<string[]>>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockRm = rm as unknown as jest.MockedFunction<(...args: any[]) => Promise<void>>;
+const mockReaddir = readdir as unknown as jest.MockedFunction<
+    (...args: unknown[]) => Promise<string[]>
+>;
+const mockRm = rm as unknown as jest.MockedFunction<(...args: unknown[]) => Promise<void>>;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -54,6 +54,7 @@ function makeFakeTorrent(
     return {
         infoHash,
         name: 'fake-torrent',
+        path: '/tmp/downloads',
         length: 1024,
         progress: 0,
         downloadSpeed: 0,
@@ -164,8 +165,12 @@ describe('TorrentEngine.healthCheck() — bloco catch (Requisitos 6.5, 6.6)', ()
 
     it('conta torrents ativos e peers corretamente no caminho feliz', () => {
         const mockClient = makeMockClient();
-        mockClient.torrents.push(makeFakeTorrent('a'.repeat(40), { numPeers: 2 } as Partial<Torrent>));
-        mockClient.torrents.push(makeFakeTorrent('b'.repeat(40), { numPeers: 5 } as Partial<Torrent>));
+        mockClient.torrents.push(
+            makeFakeTorrent('a'.repeat(40), { numPeers: 2 } as Partial<Torrent>),
+        );
+        mockClient.torrents.push(
+            makeFakeTorrent('b'.repeat(40), { numPeers: 5 } as Partial<Torrent>),
+        );
 
         const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
         const result = engine.healthCheck();

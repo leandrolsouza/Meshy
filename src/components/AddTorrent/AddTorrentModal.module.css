@@ -24,7 +24,9 @@
 }
 
 .commandPalettePanel {
-    margin-top: 20%;
+    margin-top: 5vh;
+    max-height: 90vh;
+    overflow-y: auto;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: 6px;
@@ -65,7 +67,7 @@
 }
 
 .magnetTextareaError {
-    border-color: var(--color-error);
+    border-color: var(--color-danger);
 }
 
 .linkCount {
@@ -76,7 +78,7 @@
 }
 
 .multiLineError {
-    color: var(--color-error);
+    color: var(--color-danger);
     font-size: var(--font-size-sm);
     margin-top: var(--space-xs);
     white-space: pre-line;
@@ -148,4 +150,29 @@
     border-radius: var(--radius-sm);
     max-height: 320px;
     overflow-y: auto;
+}
+
+.folderRow {
+    display: flex;
+    gap: var(--space-sm);
+    margin-top: var(--space-sm);
+}
+
+.folderRow input {
+    flex: 1;
+    min-width: 0;
+}
+.previewName {
+    overflow-wrap: anywhere;
+    margin-bottom: var(--space-sm);
+}
+.spaceSummary {
+    margin-top: var(--space-sm);
+    color: var(--color-text-secondary);
+}
+.spaceSummary p {
+    margin: var(--space-xs) 0;
+}
+.spaceSummary [role='alert'] {
+    color: var(--color-danger);
 }

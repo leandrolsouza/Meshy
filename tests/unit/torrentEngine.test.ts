@@ -37,6 +37,7 @@ function makeFakeTorrent(infoHash: string, overrides: Partial<Torrent> = {}): To
     return {
         infoHash,
         name: 'fake-torrent',
+        path: '/tmp/downloads',
         length: 1024,
         progress: 0,
         downloadSpeed: 0,

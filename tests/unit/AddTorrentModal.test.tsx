@@ -24,6 +24,42 @@ const FOCUSABLE_SEL =
 // ─── Mock window.meshy ───────────────────────────────────────────────────────
 
 const mockMeshy = {
+    getSettings: jest
+        .fn()
+        .mockResolvedValue({ success: true, data: { destinationFolder: '/downloads' } }),
+    selectFolder: jest.fn().mockResolvedValue({ success: false }),
+    prepareTorrent: jest.fn().mockImplementation((requestId: string) =>
+        Promise.resolve({
+            success: true,
+            data: {
+                requestId,
+                infoHash: 'a'.repeat(40),
+                name: 'Video',
+                files: [
+                    {
+                        index: 0,
+                        name: 'video.mp4',
+                        path: 'video.mp4',
+                        length: 1048576,
+                        downloaded: 0,
+                        selected: true,
+                    },
+                ],
+            },
+        }),
+    ),
+    cancelTorrentPreparation: jest.fn().mockResolvedValue({ success: true }),
+    getDiskSpace: jest.fn().mockResolvedValue({
+        success: true,
+        data: {
+            freeBytes: 1000000000,
+            selectedBytes: 1048576,
+            reservedBytes: 0,
+            safetyMarginBytes: 67108864,
+            sufficient: true,
+        },
+    }),
+    confirmTorrent: jest.fn().mockResolvedValue({ success: true, data: {} }),
     addMagnetLink: jest.fn().mockResolvedValue({ success: true, data: {} }),
     addTorrentFile: jest.fn().mockResolvedValue({
         success: true,
@@ -69,11 +105,7 @@ function renderModal(overrides: { isOpen?: boolean; onClose?: () => void } = {})
     const onClose = overrides.onClose ?? jest.fn();
     const result = render(
         <IntlProvider locale="pt-BR" defaultLocale="pt-BR" messages={ptBR}>
-            <AddTorrentModal
-                isOpen={overrides.isOpen ?? true}
-                onClose={onClose}
-                inline={false}
-            />
+            <AddTorrentModal isOpen={overrides.isOpen ?? true} onClose={onClose} inline={false} />
         </IntlProvider>,
     );
     return { ...result, onClose };
@@ -110,7 +142,7 @@ async function advanceToFilePickerStep(): Promise<void> {
     // 2) Após o state de fileSelection mudar, o useEffect agenda um requestAnimationFrame.
     //    Agora que os efeitos foram processados pelo act acima, podemos disparar os timers.
     await act(async () => {
-        jest.runAllTimers();
+        jest.runOnlyPendingTimers();
     });
 }
 

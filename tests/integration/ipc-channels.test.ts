@@ -41,6 +41,10 @@ const { ipcMain: mockIpcMain, dialog: mockDialog } = require('electron') as {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const EXPECTED_CHANNELS = [
+    'torrent:prepare',
+    'torrent:cancel-preparation',
+    'torrent:disk-space',
+    'torrent:confirm',
     'torrent:add-file',
     'torrent:add-file-buffer',
     'torrent:add-magnet',
@@ -146,8 +150,19 @@ function makeMockTorrentEngine() {
         setFileSelection: jest.fn().mockReturnValue([]),
         restart: jest.fn().mockResolvedValue(undefined),
         isRestarting: jest.fn().mockReturnValue(false),
-        healthCheck: jest.fn().mockReturnValue({ healthy: true, restarting: false, activeTorrents: 0, totalPeers: 0, uptimeMs: 0 }),
-        getMetadata: jest.fn().mockReturnValue({ infoHash: 'a'.repeat(40), creator: null, comment: null, creationDate: null }),
+        healthCheck: jest.fn().mockReturnValue({
+            healthy: true,
+            restarting: false,
+            activeTorrents: 0,
+            totalPeers: 0,
+            uptimeMs: 0,
+        }),
+        getMetadata: jest.fn().mockReturnValue({
+            infoHash: 'a'.repeat(40),
+            creator: null,
+            comment: null,
+            creationDate: null,
+        }),
         getPeers: jest.fn().mockReturnValue([]),
         getPieces: jest.fn().mockReturnValue([]),
         on: jest.fn(),
@@ -182,9 +197,9 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
 
     // ── Smoke tests: all channels registered ─────────────────────────────────
 
-    describe('Smoke: all 30 IPC channels are registered and respond', () => {
-        it('registers exactly 30 IPC channels', () => {
-            expect(mockIpcMain.handle).toHaveBeenCalledTimes(30);
+    describe('Smoke: all IPC channels are registered and respond', () => {
+        it('registers exactly the expected IPC channels', () => {
+            expect(mockIpcMain.handle).toHaveBeenCalledTimes(EXPECTED_CHANNELS.length);
         });
 
         it.each(EXPECTED_CHANNELS)('channel "%s" is registered', (channel) => {
@@ -298,7 +313,9 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
             await handler(null, { filePath: '/path/to/test.torrent' });
 
             // path.resolve normaliza o caminho antes de passá-lo ao manager (task 6.2)
-            expect(downloadManager.addTorrentFile).toHaveBeenCalledWith(resolvePath('/path/to/test.torrent'));
+            expect(downloadManager.addTorrentFile).toHaveBeenCalledWith(
+                resolvePath('/path/to/test.torrent'),
+            );
         });
 
         it('torrent:add-magnet delegates to downloadManager.addMagnetLink', async () => {
@@ -603,7 +620,9 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                 expect(response.data.destinationFolder).toBe('/new/folder');
             }
             // path.resolve normaliza o caminho antes de persistir (task 6.2)
-            expect(settingsManager.set).toHaveBeenCalledWith({ destinationFolder: resolvePath('/new/folder') });
+            expect(settingsManager.set).toHaveBeenCalledWith({
+                destinationFolder: resolvePath('/new/folder'),
+            });
         });
 
         it('settings:set with speed limit 0 (no limit) is accepted', async () => {

@@ -2,19 +2,38 @@ import { EventEmitter } from 'events';
 import { existsSync, accessSync, constants as fsConstants } from 'fs';
 import type { TorrentEngine, TorrentInfo } from './torrentEngine';
 import type { SettingsManager } from './settingsManager';
+import type { DiskSpaceService } from './diskSpace';
+import type { PreparedTorrent } from './torrentPreparation';
+import { ErrorCodes } from '../shared/errorCodes';
 import type {
     DownloadItem,
     PersistedDownloadItem,
     TorrentFileInfo,
     TorrentStatus,
+    DiskSpaceInfo,
 } from '../shared/types';
-import { DEFAULT_MAX_CONCURRENT_DOWNLOADS } from '../shared/validators';
+import {
+    DEFAULT_MAX_CONCURRENT_DOWNLOADS,
+    MAX_TORRENT_BYTES,
+    hasTorrentMagicBytes,
+} from '../shared/validators';
 import { logger as defaultLogger } from './logger';
 import type { Logger } from './logger';
 
 export type { DownloadItem, PersistedDownloadItem } from '../shared/types';
 
 export interface DownloadManager {
+    addPreparedTorrent(
+        prepared: PreparedTorrent,
+        destinationFolder: string,
+        selectedIndices: number[],
+    ): Promise<DownloadItem>;
+    getDiskSpace(
+        destinationFolder: string,
+        selectedBytes: number,
+        excludeHash?: string,
+    ): Promise<DiskSpaceInfo>;
+    checkDiskSpace(): Promise<void>;
     addTorrentFile(filePath: string): Promise<DownloadItem>;
     addTorrentBuffer(buffer: Buffer): Promise<DownloadItem>;
     addMagnetLink(magnetUri: string): Promise<DownloadItem>;
@@ -114,6 +133,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
     private readonly metadataTimers = new Map<string, ReturnType<typeof setTimeout>>();
     /** Tracks selected file indices per torrent for persistence */
     private readonly selectedFileIndicesMap = new Map<string, number[]>();
+    private readonly confirmedMetadata = new Map<string, Buffer>();
     /** Fila ordenada de infoHashes aguardando slot de download */
     private readonly queue: string[] = [];
     /** Limite de downloads simultâneos */
@@ -128,6 +148,10 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
     private readonly settings: SettingsManager;
     private readonly store: PersistedStore | undefined;
     private readonly log: Logger;
+    private readonly diskSpace: DiskSpaceService | undefined;
+    private admission: Promise<unknown> = Promise.resolve();
+    private checkingDisk = false;
+    private processingDiskQueue = false;
     /** Timer de limpeza periódica de recursos órfãos */
     private readonly cleanupTimer: ReturnType<typeof setInterval> | null;
     /**
@@ -142,7 +166,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
         settings: SettingsManager,
         store?: PersistedStore,
         log?: Logger,
-        options?: { disableCleanupTimer?: boolean },
+        options?: { disableCleanupTimer?: boolean; diskSpace?: DiskSpaceService },
     ) {
         super();
         // Evitar warnings de memory leak — o ipcHandler e notificationManager
@@ -152,6 +176,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
         this.settings = settings;
         this.store = store;
         this.log = log ?? defaultLogger;
+        this.diskSpace = options?.diskSpace;
         this.maxConcurrent =
             settings.get().maxConcurrentDownloads ?? DEFAULT_MAX_CONCURRENT_DOWNLOADS;
 
@@ -336,6 +361,24 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             const existing = this.items.get(infoHash);
             if (!existing) return;
 
+            if (
+                (err as NodeJS.ErrnoException).code === 'ENOSPC' ||
+                /\bENOSPC\b/.test(err.message)
+            ) {
+                this._markDiskPaused(existing, ErrorCodes.DISK_SPACE_LOW);
+                void this.engine
+                    .pause(infoHash)
+                    .catch((pauseError) =>
+                        this.log.warn(
+                            '[DownloadManager] Falha ao suspender disco cheio:',
+                            pauseError,
+                        ),
+                    );
+                this.persistSession();
+                this._processQueue();
+                return;
+            }
+
             this._clearMetadataTimer(infoHash);
             const updated: DownloadItem = {
                 ...existing,
@@ -352,6 +395,170 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
 
     // ── addTorrentFile ──────────────────────────────────────────────────────────
 
+    addPreparedTorrent(
+        prepared: PreparedTorrent,
+        destinationFolder: string,
+        selectedIndices: number[],
+    ): Promise<DownloadItem> {
+        const work = this.admission
+            .catch(() => {})
+            .then(async () => {
+                const { preview } = prepared;
+                if (this.items.has(preview.infoHash) || this.pendingHashes.has(preview.infoHash))
+                    throw new Error(ErrorCodes.TORRENT_DUPLICATE);
+                if (selectedIndices.length === 0) throw new Error(ErrorCodes.FILE_SELECTION_EMPTY);
+                if (
+                    selectedIndices.some(
+                        (index) =>
+                            !Number.isInteger(index) ||
+                            !preview.files.some((file) => file.index === index),
+                    )
+                )
+                    throw new Error(ErrorCodes.FILE_INDEX_INVALID);
+                validateDestinationFolder(destinationFolder);
+                const indices = [...new Set(selectedIndices)];
+                const selectedBytes = preview.files
+                    .filter((file) => indices.includes(file.index))
+                    .reduce((sum, file) => sum + file.length, 0);
+                await this._ensureDiskSpace(destinationFolder, selectedBytes);
+                const hasSlot = this._activeCount() < this.maxConcurrent;
+                this.pendingHashes.add(preview.infoHash);
+                this.pendingAdds++;
+                let slotReserved = true;
+                try {
+                    const info = await this.engine.addTorrentBuffer(prepared.buffer, true, {
+                        destinationFolder,
+                        selectedFileIndices: indices,
+                    });
+                    const files = this.engine
+                        .getFiles(info.infoHash)
+                        .filter((file) => file.selected);
+                    const downloadedSize = files.reduce((sum, file) => sum + file.downloaded, 0);
+                    const complete =
+                        files.length > 0 && files.every((file) => file.downloaded >= file.length);
+                    const now = Date.now();
+                    const item: DownloadItem = {
+                        ...torrentInfoToDownloadItem(info, destinationFolder, now),
+                        totalSize: selectedBytes,
+                        downloadedSize,
+                        progress: complete
+                            ? 1
+                            : selectedBytes > 0
+                              ? downloadedSize / selectedBytes
+                              : 0,
+                        selectedFileCount: indices.length,
+                        totalFileCount: preview.files.length,
+                        status: complete ? 'completed' : hasSlot ? 'paused' : 'queued',
+                        ...(complete ? { completedAt: now, elapsedMs: 0 } : {}),
+                    };
+                    this.originalMagnetUris.set(info.infoHash, prepared.magnetUri);
+                    this.confirmedMetadata.set(info.infoHash, Buffer.from(prepared.buffer));
+                    this.selectedFileIndicesMap.set(info.infoHash, indices);
+                    this.items.set(info.infoHash, item);
+                    if (!hasSlot && !complete) this.queue.push(info.infoHash);
+                    this.emit('update', item);
+                    // Libera a reserva de slot antes de resume, que contabiliza os itens ativos.
+                    this.pendingAdds--;
+                    slotReserved = false;
+                    if (hasSlot && !complete) {
+                        try {
+                            await this.resume(info.infoHash, true);
+                        } catch (error) {
+                            const current = this.items.get(info.infoHash);
+                            const message = (error as Error).message;
+                            if (
+                                current &&
+                                (message === ErrorCodes.DISK_SPACE_LOW ||
+                                    message === ErrorCodes.DISK_SPACE_UNAVAILABLE)
+                            )
+                                this._markDiskPaused(current, message);
+                            else if (current) {
+                                const failed: DownloadItem = {
+                                    ...current,
+                                    status: 'error',
+                                    errorMessage: ErrorCodes.OPERATION_FAILED,
+                                };
+                                this.items.set(current.infoHash, failed);
+                                this.emit('update', failed);
+                            }
+                        }
+                    }
+                    this._applyGlobalTrackers(info.infoHash);
+                    this.persistSession();
+                    return this.getAll().find((download) => download.infoHash === info.infoHash)!;
+                } finally {
+                    this.pendingHashes.delete(preview.infoHash);
+                    // O slot também precisa ser liberado quando a adição falha antes de criar o item.
+                    if (slotReserved) this.pendingAdds--;
+                    this._processQueue();
+                }
+            });
+        this.admission = work;
+        return work;
+    }
+
+    async getDiskSpace(
+        destinationFolder: string,
+        selectedBytes: number,
+        excludeHash?: string,
+    ): Promise<DiskSpaceInfo> {
+        if (!this.diskSpace) throw new Error(ErrorCodes.DISK_SPACE_UNAVAILABLE);
+        return this.diskSpace.inspect(destinationFolder, selectedBytes, this.getAll(), excludeHash);
+    }
+
+    private async _ensureDiskSpace(
+        destinationFolder: string,
+        selectedBytes: number,
+        excludeHash?: string,
+    ): Promise<void> {
+        if (!this.diskSpace) return;
+        const space = await this.getDiskSpace(destinationFolder, selectedBytes, excludeHash);
+        if (!space.sufficient) throw new Error(ErrorCodes.DISK_SPACE_LOW);
+    }
+
+    private _markDiskPaused(item: DownloadItem, reason: string): void {
+        this._clearMetadataTimer(item.infoHash);
+        const queueIndex = this.queue.indexOf(item.infoHash);
+        if (queueIndex !== -1) this.queue.splice(queueIndex, 1);
+        const paused: DownloadItem = {
+            ...item,
+            status: 'paused',
+            pauseReason: 'disk-space',
+            errorMessage: reason,
+            downloadSpeed: 0,
+            uploadSpeed: 0,
+        };
+        this.items.set(item.infoHash, paused);
+        this.emit('update', paused);
+    }
+
+    async checkDiskSpace(): Promise<void> {
+        if (!this.diskSpace || this.checkingDisk || this.engine.isRestarting?.()) return;
+        this.checkingDisk = true;
+        try {
+            for (const item of this.getAll()) {
+                if (!this._isActiveStatus(item.status)) continue;
+                try {
+                    await this._ensureDiskSpace(
+                        item.destinationFolder,
+                        Math.max(0, item.totalSize - item.downloadedSize),
+                        item.infoHash,
+                    );
+                } catch (error) {
+                    const current = this.items.get(item.infoHash);
+                    if (!current || !this._isActiveStatus(current.status)) continue;
+                    await this.pause(item.infoHash);
+                    const paused = this.items.get(item.infoHash);
+                    if (paused?.status === 'paused')
+                        this._markDiskPaused(paused, (error as Error).message);
+                    this.persistSession();
+                }
+            }
+        } finally {
+            this.checkingDisk = false;
+        }
+    }
+
     async addTorrentFile(filePath: string): Promise<DownloadItem> {
         const destinationFolder = this.settings.get().destinationFolder;
         validateDestinationFolder(destinationFolder);
@@ -359,7 +566,9 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
         const hasSlot = this._activeCount() < this.maxConcurrent;
         if (hasSlot) this.pendingAdds++;
         try {
-            const info = await this.engine.addTorrentFile(filePath, !hasSlot);
+            const info = await this.engine.addTorrentFile(filePath, !hasSlot, {
+                destinationFolder,
+            });
 
             // Duplicate detection: check if infoHash already exists
             const existing = this.items.get(info.infoHash);
@@ -409,7 +618,9 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
         const hasSlot = this._activeCount() < this.maxConcurrent;
         if (hasSlot) this.pendingAdds++;
         try {
-            const info = await this.engine.addTorrentBuffer(buffer, !hasSlot);
+            const info = await this.engine.addTorrentBuffer(buffer, !hasSlot, {
+                destinationFolder,
+            });
 
             // Duplicate detection: check if infoHash already exists
             const existing = this.items.get(info.infoHash);
@@ -509,7 +720,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
         if (pendingHash) this.pendingHashes.add(pendingHash);
         if (hasSlot) this.pendingAdds++;
         try {
-            const info = await this.engine.addMagnetLink(magnetUri);
+            const info = await this.engine.addMagnetLink(magnetUri, false, { destinationFolder });
 
             // Armazenar magnetUri original para persistência de sessão
             this.originalMagnetUris.set(info.infoHash, magnetUri);
@@ -626,11 +837,25 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
 
     // ── resume ──────────────────────────────────────────────────────────────────
 
-    async resume(infoHash: string): Promise<void> {
+    async resume(infoHash: string, admitted = false): Promise<void> {
+        if (this.diskSpace && !admitted) {
+            const work = this.admission.catch(() => {}).then(() => this.resume(infoHash, true));
+            this.admission = work;
+            return work;
+        }
         return this._withLock(infoHash, async () => {
             const existing = this.items.get(infoHash);
             if (!existing) {
                 throw new Error(`Torrent não encontrado: ${infoHash}`);
+            }
+            await this._ensureDiskSpace(
+                existing.destinationFolder,
+                Math.max(0, existing.totalSize - existing.downloadedSize),
+                infoHash,
+            );
+            if (existing.pauseReason) {
+                delete existing.pauseReason;
+                delete existing.errorMessage;
             }
 
             // Se não há slots disponíveis, enfileirar em vez de retomar
@@ -665,7 +890,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                 this.emit('update', starting);
 
                 try {
-                    const info = await this.engine.addMagnetLink(magnetUri);
+                    const info = await this._addStoredTorrent(existing, magnetUri);
 
                     const current = this.items.get(infoHash);
                     if (!current) return;
@@ -673,7 +898,9 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                     const updated: DownloadItem = {
                         ...current,
                         name: info.name || current.name,
-                        totalSize: info.totalSize || current.totalSize,
+                        totalSize: this.selectedFileIndicesMap.has(infoHash)
+                            ? current.totalSize
+                            : info.totalSize || current.totalSize,
                         status:
                             info.status === 'downloading' ? 'downloading' : 'resolving-metadata',
                     };
@@ -726,7 +953,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                         this.items.set(infoHash, reAdded);
                         this.emit('update', reAdded);
 
-                        const reAddedInfo = await this.engine.addMagnetLink(magnetUri);
+                        const reAddedInfo = await this._addStoredTorrent(existing, magnetUri);
 
                         // Reaplicar seleção de arquivos se existir
                         const selectedIndices = this.selectedFileIndicesMap.get(infoHash);
@@ -824,7 +1051,11 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             throw new Error(`Torrent não está em estado de erro: ${existing.status}`);
         }
 
-        this.log.info('[DownloadManager] Retentando download:', infoHash.slice(0, 8), existing.name);
+        this.log.info(
+            '[DownloadManager] Retentando download:',
+            infoHash.slice(0, 8),
+            existing.name,
+        );
 
         // Limpar estado de erro
         const { errorMessage: _, ...existingBase } = existing;
@@ -905,7 +1136,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
 
             if (magnetUri) {
                 try {
-                    const info = await this.engine.addMagnetLink(magnetUri);
+                    const info = await this._addStoredTorrent(retrying, magnetUri);
                     const updated: DownloadItem = {
                         ...retrying,
                         name: info.name || retrying.name,
@@ -984,6 +1215,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             // o progress handler ignore eventos residuais imediatamente.
             this._clearMetadataTimer(infoHash);
             this.selectedFileIndicesMap.delete(infoHash);
+            this.confirmedMetadata.delete(infoHash);
             this.items.delete(infoHash);
             this.emit('remove', infoHash);
 
@@ -1118,6 +1350,22 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             }
 
             // Check if destination folder exists
+            if (persistedItem.torrentFileBase64 !== undefined) {
+                const encoded = persistedItem.torrentFileBase64;
+                if (
+                    typeof encoded !== 'string' ||
+                    encoded.length > Math.ceil(MAX_TORRENT_BYTES / 3) * 4 ||
+                    !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)
+                ) {
+                    this.log.warn(
+                        '[DownloadManager] Metadados persistidos inválidos, ignorando item',
+                    );
+                    continue;
+                }
+                const buffer = Buffer.from(encoded, 'base64');
+                if (!hasTorrentMagicBytes(buffer)) continue;
+                this.confirmedMetadata.set(persistedItem.infoHash, buffer);
+            }
             const folderExists = existsSync(persistedItem.destinationFolder);
 
             let status: TorrentStatus = persistedItem.status;
@@ -1140,6 +1388,12 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                 status,
                 destinationFolder: persistedItem.destinationFolder,
                 addedAt: persistedItem.addedAt,
+                ...(persistedItem.selectedFileCount !== undefined
+                    ? { selectedFileCount: persistedItem.selectedFileCount }
+                    : {}),
+                ...(persistedItem.totalFileCount !== undefined
+                    ? { totalFileCount: persistedItem.totalFileCount }
+                    : {}),
                 ...(persistedItem.completedAt !== undefined
                     ? { completedAt: persistedItem.completedAt }
                     : {}),
@@ -1148,6 +1402,9 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                     : {}),
                 ...(persistedItem.errorMessage !== undefined
                     ? { errorMessage: persistedItem.errorMessage }
+                    : {}),
+                ...(persistedItem.pauseReason === 'disk-space'
+                    ? { pauseReason: persistedItem.pauseReason }
                     : {}),
             };
 
@@ -1182,7 +1439,10 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                 continue;
             }
 
-            const shouldResume = persistedItem.status === 'downloading' && folderExists;
+            const shouldResume =
+                (persistedItem.status === 'downloading' ||
+                    persistedItem.status === 'resolving-metadata') &&
+                folderExists;
 
             if (shouldResume) {
                 // Verificar se há slots disponíveis
@@ -1208,11 +1468,18 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                 try {
                     // Re-add to engine using magnetUri or torrentFilePath
                     let restoredInfo: TorrentInfo | undefined;
+                    await this._ensureDiskSpace(
+                        item.destinationFolder,
+                        Math.max(0, item.totalSize - item.downloadedSize),
+                        item.infoHash,
+                    );
                     if (persistedItem.magnetUri) {
-                        restoredInfo = await this.engine.addMagnetLink(persistedItem.magnetUri);
+                        restoredInfo = await this._addStoredTorrent(item, persistedItem.magnetUri);
                     } else if (persistedItem.torrentFilePath) {
                         restoredInfo = await this.engine.addTorrentFile(
                             persistedItem.torrentFilePath,
+                            false,
+                            this._torrentOptions(item),
                         );
                     }
 
@@ -1253,6 +1520,13 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                     if (updated.status === 'resolving-metadata')
                         this._startMetadataTimer(item.infoHash);
                 } catch (restoreErr) {
+                    if (
+                        (restoreErr as Error).message === ErrorCodes.DISK_SPACE_LOW ||
+                        (restoreErr as Error).message === ErrorCodes.DISK_SPACE_UNAVAILABLE
+                    ) {
+                        this._markDiskPaused(item, (restoreErr as Error).message);
+                        continue;
+                    }
                     // Falha ao re-adicionar — marcar como erro com mensagem
                     const errMsg = (restoreErr as Error).message;
                     this.log.error(
@@ -1297,6 +1571,20 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                 ...(selectedFileIndices !== undefined ? { selectedFileIndices } : {}),
                 ...(magnetUri !== undefined ? { magnetUri } : {}),
                 ...(item.errorMessage !== undefined ? { errorMessage: item.errorMessage } : {}),
+                ...(item.pauseReason ? { pauseReason: item.pauseReason } : {}),
+                ...(this.confirmedMetadata.has(item.infoHash)
+                    ? {
+                          torrentFileBase64: this.confirmedMetadata
+                              .get(item.infoHash)!
+                              .toString('base64'),
+                      }
+                    : {}),
+                ...(item.selectedFileCount !== undefined
+                    ? { selectedFileCount: item.selectedFileCount }
+                    : {}),
+                ...(item.totalFileCount !== undefined
+                    ? { totalFileCount: item.totalFileCount }
+                    : {}),
             };
         });
 
@@ -1335,10 +1623,10 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
      */
     private _withLock(infoHash: string, fn: () => Promise<void>): Promise<void> {
         const prev = this.opLocks.get(infoHash) ?? Promise.resolve();
-        const next = prev.catch(() => { }).then(fn);
+        const next = prev.catch(() => {}).then(fn);
         this.opLocks.set(infoHash, next);
         // Limpar o lock quando a cadeia terminar para não acumular memória
-        next.catch(() => { }).then(() => {
+        next.catch(() => {}).then(() => {
             if (this.opLocks.get(infoHash) === next) {
                 this.opLocks.delete(infoHash);
             }
@@ -1492,8 +1780,50 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
      * Processa a fila: inicia o próximo download enfileirado se há slots disponíveis.
      * Chamado automaticamente quando um download completa, falha, é pausado ou removido.
      */
+    private _torrentOptions(item: DownloadItem): import('./torrentEngine').TorrentAddOptions {
+        const selectedFileIndices = this.selectedFileIndicesMap.get(item.infoHash);
+        return {
+            destinationFolder: item.destinationFolder,
+            ...(selectedFileIndices ? { selectedFileIndices } : {}),
+        };
+    }
+
+    private _addStoredTorrent(item: DownloadItem, magnetUri: string): Promise<TorrentInfo> {
+        const buffer = this.confirmedMetadata.get(item.infoHash);
+        return buffer
+            ? this.engine.addTorrentBuffer(buffer, false, this._torrentOptions(item))
+            : this.engine.addMagnetLink(magnetUri, false, this._torrentOptions(item));
+    }
+
     private _processQueue(): void {
         if (this.engine.isRestarting?.()) return;
+        if (this.diskSpace) {
+            if (this.processingDiskQueue) return;
+            this.processingDiskQueue = true;
+            void (async () => {
+                while (this.queue.length > 0 && this._activeCount() < this.maxConcurrent) {
+                    const hash = this.queue[0]!;
+                    const item = this.items.get(hash);
+                    if (!item || item.status !== 'queued') {
+                        this.queue.shift();
+                        continue;
+                    }
+                    try {
+                        await this.resume(hash);
+                    } catch (error) {
+                        const current = this.items.get(hash);
+                        if (current?.status === 'queued')
+                            this._markDiskPaused(current, (error as Error).message);
+                    }
+                }
+                this.persistSession();
+            })()
+                .catch((error) => this.log.warn('[DownloadManager] Falha na fila:', error))
+                .finally(() => {
+                    this.processingDiskQueue = false;
+                });
+            return;
+        }
         while (this.queue.length > 0 && this._activeCount() < this.maxConcurrent) {
             const infoHash = this.queue.shift()!;
             const item = this.items.get(infoHash);
@@ -1513,8 +1843,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                 this.emit('update', starting);
 
                 // Adicionar ao engine de forma assíncrona
-                this.engine
-                    .addMagnetLink(magnetUri)
+                this._addStoredTorrent(item, magnetUri)
                     .then((info) => {
                         const current = this.items.get(infoHash);
                         if (!current || !this._isActiveStatus(current.status)) return;
@@ -1522,7 +1851,9 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                         const updated: DownloadItem = {
                             ...current,
                             name: info.name || current.name,
-                            totalSize: info.totalSize || current.totalSize,
+                            totalSize: this.selectedFileIndicesMap.has(infoHash)
+                                ? current.totalSize
+                                : info.totalSize || current.totalSize,
                             status:
                                 info.status === 'downloading'
                                     ? 'downloading'
@@ -1658,7 +1989,7 @@ export function createDownloadManager(
     settings: SettingsManager,
     store?: PersistedStore,
     log?: Logger,
-    options?: { disableCleanupTimer?: boolean },
+    options?: { disableCleanupTimer?: boolean; diskSpace?: DiskSpaceService },
 ): DownloadManager {
     return new DownloadManagerImpl(engine, settings, store, log, options);
 }

@@ -214,5 +214,19 @@
     "error.destination.notCompleted": "Download não concluído",
     "error.rateLimit": "Muitas requisições. Tente novamente em instantes.",
     "error.operation.failed": "Ocorreu um erro inesperado.",
-    "downloads.speedLimits.error": "Erro ao aplicar seleção de arquivos."
+    "downloads.speedLimits.error": "Erro ao aplicar seleção de arquivos.",
+    "addTorrent.preparing": "Obtendo a lista de arquivos. O conteúdo só será baixado após sua confirmação.",
+    "addTorrent.remaining": "{count, plural, one {Mais # torrent aguardando revisão} other {Mais # torrents aguardando revisão}}",
+    "addTorrent.selectedSize": "Tamanho selecionado: {size}",
+    "addTorrent.checkingSpace": "Verificando espaço em disco…",
+    "addTorrent.availableSpace": "Espaço livre: {size}",
+    "addTorrent.reservedSpace": "Outros downloads neste volume: {size}. Margem de segurança: {margin}.",
+    "addTorrent.startDownload": "Iniciar download",
+    "addTorrent.review": "Revisar arquivos",
+    "addTorrent.retryPreparation": "Tentar obter arquivos novamente",
+    "error.destination.diskSpaceLow": "Espaço insuficiente para os arquivos selecionados e os downloads pendentes. Libere espaço ou escolha outra pasta antes de iniciar ou retomar.",
+    "error.destination.diskSpaceUnavailable": "Não foi possível verificar o espaço em disco. Verifique se a pasta está acessível e tente novamente.",
+    "error.torrent.preparationCancelled": "A preparação foi cancelada.",
+    "error.torrent.preparationExpired": "A revisão expirou. Obtenha a lista de arquivos novamente.",
+    "error.torrent.metadataTimeout": "Não foi possível obter os metadados em um minuto. Confira a conexão e tente novamente."
 }

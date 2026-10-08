@@ -1,0 +1,210 @@
+import { readFile, stat } from 'fs/promises';
+import WebTorrent from 'webtorrent';
+import type { Torrent, TorrentOptions } from 'webtorrent';
+import type { AppSettings, TorrentPreview, TorrentSource } from '../shared/types';
+import { ErrorCodes } from '../shared/errorCodes';
+import {
+    hasTorrentMagicBytes,
+    isValidMagnetUri,
+    isValidTorrentFile,
+    MAX_TORRENT_BYTES,
+} from './validators';
+import { configureTorrentNetwork } from './webtorrentInternals';
+
+const PREVIEW_TTL_MS = 10 * 60_000;
+
+/** A preparação nunca abre arquivos no disco nem armazena conteúdo de peças. */
+export class MetadataOnlyStore {
+    get(_index: number, options: unknown, callback?: (error: Error) => void): void {
+        const cb = typeof options === 'function' ? (options as (error: Error) => void) : callback;
+        queueMicrotask(() => cb?.(new Error('Peça ausente')));
+    }
+    put(_index: number, _data: Uint8Array, callback: (error: Error) => void): void {
+        queueMicrotask(() => callback(new Error('Preparação não transfere conteúdo')));
+    }
+    close(callback: () => void): void {
+        queueMicrotask(callback);
+    }
+    destroy(callback: () => void): void {
+        queueMicrotask(callback);
+    }
+}
+
+export interface PreparedTorrent {
+    preview: TorrentPreview;
+    buffer: Buffer;
+    magnetUri: string;
+}
+
+export interface TorrentPreparation {
+    prepare(requestId: string, source: TorrentSource): Promise<TorrentPreview>;
+    get(requestId: string): PreparedTorrent;
+    cancel(requestId: string): void;
+    dispose(): void;
+}
+
+export function createTorrentPreparation(
+    options: {
+        createClient?: () => WebTorrent;
+        metadataTimeoutMs?: number;
+        getNetworkOptions?: () => Pick<AppSettings, 'dhtEnabled' | 'pexEnabled' | 'utpEnabled'>;
+    } = {},
+): TorrentPreparation {
+    const drafts = new Map<string, PreparedTorrent>();
+    const pending = new Map<string, () => void>();
+    const expiry = new Map<string, ReturnType<typeof setTimeout>>();
+    const createClient =
+        options.createClient ??
+        (() => {
+            const network = options.getNetworkOptions?.();
+            const networkOptions = {
+                dht: network?.dhtEnabled ?? true,
+                utp: network?.utpEnabled ?? true,
+                utPex: network?.pexEnabled ?? true,
+                maxConns: 12,
+                seedOutgoingConnections: false,
+                webSeeds: false,
+            };
+            const client = new WebTorrent(networkOptions);
+            client.utPex = networkOptions.utPex;
+            return client;
+        });
+
+    const cancel = (requestId: string): void => {
+        pending.get(requestId)?.();
+        drafts.delete(requestId);
+        clearTimeout(expiry.get(requestId));
+        expiry.delete(requestId);
+    };
+
+    return {
+        async prepare(requestId, source) {
+            if (
+                pending.has(requestId) ||
+                drafts.has(requestId) ||
+                pending.size + drafts.size >= 4
+            ) {
+                throw new Error(ErrorCodes.INVALID_PARAMS);
+            }
+            let cancelled = false;
+            pending.set(requestId, () => {
+                cancelled = true;
+            });
+            try {
+                let input: string | Buffer;
+                if (source.kind === 'magnet') {
+                    if (!isValidMagnetUri(source.magnetUri))
+                        throw new Error(ErrorCodes.INVALID_MAGNET_URI);
+                    input = source.magnetUri;
+                } else {
+                    if (source.kind === 'file') {
+                        if (
+                            !isValidTorrentFile(source.filePath) ||
+                            (await stat(source.filePath)).size > MAX_TORRENT_BYTES
+                        ) {
+                            throw new Error(ErrorCodes.INVALID_FILE_PATH);
+                        }
+                        input = await readFile(source.filePath);
+                    } else {
+                        input = Buffer.from(source.buffer);
+                    }
+                    if (input.length > MAX_TORRENT_BYTES || !hasTorrentMagicBytes(input)) {
+                        throw new Error(ErrorCodes.INVALID_FILE_PATH);
+                    }
+                }
+                if (cancelled) throw new Error(ErrorCodes.PREPARATION_CANCELLED);
+                const client = createClient();
+                const prepared = await new Promise<PreparedTorrent>((resolve, reject) => {
+                    let settled = false;
+                    let torrent: Torrent;
+                    const finish = (error?: Error, value?: PreparedTorrent): void => {
+                        if (settled) return;
+                        settled = true;
+                        clearTimeout(timer);
+                        client.destroy((cleanupError) => {
+                            if (error || cleanupError) reject(error ?? cleanupError);
+                            else if (value) resolve(value);
+                        });
+                    };
+                    const timer = setTimeout(
+                        () => finish(new Error(ErrorCodes.METADATA_TIMEOUT)),
+                        options.metadataTimeoutMs ?? 60_000,
+                    );
+                    pending.set(requestId, () => {
+                        cancelled = true;
+                        finish(new Error(ErrorCodes.PREPARATION_CANCELLED));
+                    });
+                    client.on('error', (error) =>
+                        finish(error instanceof Error ? error : new Error(String(error))),
+                    );
+                    const metadataReady = (): void => {
+                        if (settled) return;
+                        if (
+                            !torrent.torrentFile ||
+                            torrent.torrentFile.length > MAX_TORRENT_BYTES
+                        ) {
+                            finish(new Error(ErrorCodes.INVALID_FILE_PATH));
+                            return;
+                        }
+                        finish(undefined, {
+                            buffer: Buffer.from(torrent.torrentFile),
+                            magnetUri: torrent.magnetURI,
+                            preview: {
+                                requestId,
+                                infoHash: torrent.infoHash,
+                                name: torrent.name,
+                                files: torrent.files.map((file, index) => ({
+                                    index,
+                                    name: file.name,
+                                    path: file.path,
+                                    length: file.length,
+                                    downloaded: 0,
+                                    selected: true,
+                                })),
+                            },
+                        });
+                    };
+                    try {
+                        torrent = client.add(input, {
+                            deselect: true,
+                            store: MetadataOnlyStore as unknown as NonNullable<
+                                TorrentOptions['store']
+                            >,
+                            storeCacheSlots: 0,
+                            uploads: false,
+                        });
+                        configureTorrentNetwork(torrent);
+                        torrent.once('metadata', metadataReady);
+                        torrent.once('error', (error) =>
+                            finish(error instanceof Error ? error : new Error(String(error))),
+                        );
+                        torrent.once('close', () => {
+                            if (!settled) finish(new Error(ErrorCodes.PREPARATION_CANCELLED));
+                        });
+                        if (torrent.metadata) metadataReady();
+                    } catch (error) {
+                        finish(error instanceof Error ? error : new Error(String(error)));
+                    }
+                });
+                if (cancelled) throw new Error(ErrorCodes.PREPARATION_CANCELLED);
+                drafts.set(requestId, prepared);
+                const timer = setTimeout(() => cancel(requestId), PREVIEW_TTL_MS);
+                timer.unref?.();
+                expiry.set(requestId, timer);
+                return prepared.preview;
+            } finally {
+                pending.delete(requestId);
+            }
+        },
+        get(requestId) {
+            const prepared = drafts.get(requestId);
+            if (!prepared) throw new Error(ErrorCodes.PREPARATION_EXPIRED);
+            return prepared;
+        },
+        cancel,
+        dispose() {
+            for (const requestId of new Set([...pending.keys(), ...drafts.keys()]))
+                cancel(requestId);
+        },
+    };
+}

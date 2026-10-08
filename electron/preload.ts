@@ -14,6 +14,14 @@ import type {
 // ─── Expose API via contextBridge ────────────────────────────────────────────
 
 const meshyAPI: MeshyAPI = {
+    prepareTorrent: (requestId, source) =>
+        ipcRenderer.invoke('torrent:prepare', { requestId, source }),
+    cancelTorrentPreparation: (requestId) =>
+        ipcRenderer.invoke('torrent:cancel-preparation', { requestId }),
+    getDiskSpace: (requestId, destinationFolder, selectedIndices) =>
+        ipcRenderer.invoke('torrent:disk-space', { requestId, destinationFolder, selectedIndices }),
+    confirmTorrent: (requestId, destinationFolder, selectedIndices) =>
+        ipcRenderer.invoke('torrent:confirm', { requestId, destinationFolder, selectedIndices }),
     // ── Commands ────────────────────────────────────────────────────────────────
 
     addTorrentFile(filePath: string): Promise<IPCResponse<DownloadItem>> {

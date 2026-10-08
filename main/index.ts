@@ -8,6 +8,8 @@ import { registerIpcHandlers, attachWindowEvents } from './ipcHandler';
 import type { DownloadManager } from './downloadManager';
 import { logger } from './logger';
 import { metrics } from './metrics';
+import { createTorrentPreparation } from './torrentPreparation';
+import { createDiskSpaceService } from './diskSpace';
 
 import ElectronStore from 'electron-store';
 
@@ -112,21 +114,21 @@ function createMainWindow(): BrowserWindow {
     window.webContents.session.webRequest.onHeadersReceived((details, callback) => {
         const cspDirectives = isDev
             ? [
-                "default-src 'self'",
-                "script-src 'self' 'unsafe-inline'",
-                "style-src 'self' 'unsafe-inline'",
-                "img-src 'self' data:",
-                "font-src 'self'",
-                "connect-src 'self' ws://localhost:*",
-            ]
+                  "default-src 'self'",
+                  "script-src 'self' 'unsafe-inline'",
+                  "style-src 'self' 'unsafe-inline'",
+                  "img-src 'self' data:",
+                  "font-src 'self'",
+                  "connect-src 'self' ws://localhost:*",
+              ]
             : [
-                "default-src 'self'",
-                "script-src 'self'",
-                "style-src 'self' 'unsafe-inline'",
-                "img-src 'self' data:",
-                "font-src 'self'",
-                "connect-src 'self'",
-            ];
+                  "default-src 'self'",
+                  "script-src 'self'",
+                  "style-src 'self' 'unsafe-inline'",
+                  "img-src 'self' data:",
+                  "font-src 'self'",
+                  "connect-src 'self'",
+              ];
 
         callback({
             responseHeaders: {
@@ -209,11 +211,27 @@ app.whenReady()
             set: (key: string, value: unknown) => downloadsStore.set(key, value),
         } as import('./downloadManager').PersistedStore;
 
-        downloadManager = createDownloadManager(torrentEngine, settingsManager, persistedStore);
+        downloadManager = createDownloadManager(
+            torrentEngine,
+            settingsManager,
+            persistedStore,
+            undefined,
+            { diskSpace: createDiskSpaceService() },
+        );
+        const preparation = createTorrentPreparation({
+            getNetworkOptions: () => settingsManager.get(),
+        });
+        const diskTimer = setInterval(() => {
+            void downloadManager
+                ?.checkDiskSpace()
+                .catch((error) => logger.warn('[Main] Falha na proteção de espaço:', error));
+        }, 5000);
+        diskTimer.unref();
 
         // Restore previous session — falha não é fatal; o app inicia com estado vazio
         try {
             await downloadManager.restoreSession();
+            downloadManager.setMaxConcurrentDownloads(settings.maxConcurrentDownloads);
         } catch (sessionErr) {
             logger.warn(
                 '[Main] Falha ao restaurar sessão anterior — iniciando com estado vazio:',
@@ -223,6 +241,8 @@ app.whenReady()
 
         // ── Register before-quit handler to persist session ────────────────────────
         app.on('before-quit', () => {
+            clearInterval(diskTimer);
+            preparation.dispose();
             downloadManager?.persistSession();
             metrics.persistSnapshot();
         });
@@ -231,7 +251,7 @@ app.whenReady()
         const mainWindow = createMainWindow();
 
         // Register IPC handlers ONCE (global — survives window close/reopen on macOS).
-        registerIpcHandlers(downloadManager, settingsManager, torrentEngine);
+        registerIpcHandlers(downloadManager, settingsManager, torrentEngine, preparation);
 
         // Attach per-window resources (progress interval, error forwarding).
         attachWindowEvents(downloadManager, torrentEngine, mainWindow);

@@ -96,8 +96,7 @@ export const DownloadItem = React.memo(function DownloadItem({
     const progressPercent = Math.round(item.progress * 100);
     const isCompleted = item.status === 'completed';
     const isPaused = item.status === 'paused';
-    const isWaiting =
-        item.status === 'queued' || item.status === 'resolving-metadata';
+    const isWaiting = item.status === 'queued' || item.status === 'resolving-metadata';
     const isQueued = item.status === 'queued';
     const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
 
@@ -114,7 +113,6 @@ export const DownloadItem = React.memo(function DownloadItem({
             prevStatusRef.current = item.status;
             setIsBusy(false);
         }
-
     }, [item.status]);
 
     // ── Ref para rastrear mudança de posição na fila (aria-live) ─────────────
@@ -308,10 +306,13 @@ export const DownloadItem = React.memo(function DownloadItem({
     }, [item.infoHash, intl]);
 
     // ── Context menu handler (Task 5.4) ─────────────────────────────────────
-    const handleContextMenu = useCallback((e: React.MouseEvent) => {
-        e.preventDefault();
-        setContextMenu({ x: e.clientX, y: e.clientY });
-    }, [setContextMenu]);
+    const handleContextMenu = useCallback(
+        (e: React.MouseEvent) => {
+            e.preventDefault();
+            setContextMenu({ x: e.clientX, y: e.clientY });
+        },
+        [setContextMenu],
+    );
 
     // ── Close context menu on outside click (Task 5.4) ───────────────────────
     useEffect(() => {
@@ -482,11 +483,11 @@ export const DownloadItem = React.memo(function DownloadItem({
                         aria-label={
                             expanded
                                 ? intl.formatMessage({
-                                    id: 'downloads.actions.collapseFilesAriaLabel',
-                                })
+                                      id: 'downloads.actions.collapseFilesAriaLabel',
+                                  })
                                 : intl.formatMessage({
-                                    id: 'downloads.actions.expandFilesAriaLabel',
-                                })
+                                      id: 'downloads.actions.expandFilesAriaLabel',
+                                  })
                         }
                         aria-expanded={expanded}
                     >
@@ -501,11 +502,11 @@ export const DownloadItem = React.memo(function DownloadItem({
                         aria-label={
                             trackersExpanded
                                 ? intl.formatMessage({
-                                    id: 'downloads.actions.collapseTrackersAriaLabel',
-                                })
+                                      id: 'downloads.actions.collapseTrackersAriaLabel',
+                                  })
                                 : intl.formatMessage({
-                                    id: 'downloads.actions.expandTrackersAriaLabel',
-                                })
+                                      id: 'downloads.actions.expandTrackersAriaLabel',
+                                  })
                         }
                         aria-expanded={trackersExpanded}
                     >
@@ -520,17 +521,16 @@ export const DownloadItem = React.memo(function DownloadItem({
                     aria-label={
                         detailsExpanded
                             ? intl.formatMessage({
-                                id: 'downloads.actions.collapseDetailsAriaLabel',
-                            })
+                                  id: 'downloads.actions.collapseDetailsAriaLabel',
+                              })
                             : intl.formatMessage({
-                                id: 'downloads.actions.expandDetailsAriaLabel',
-                            })
+                                  id: 'downloads.actions.expandDetailsAriaLabel',
+                              })
                     }
                     aria-expanded={detailsExpanded}
                     disabled={!isExpandable(item.status)}
                 >
-                    <VscInfo />{' '}
-                    {intl.formatMessage({ id: 'downloads.actions.expandDetails' })}
+                    <VscInfo /> {intl.formatMessage({ id: 'downloads.actions.expandDetails' })}
                 </button>
                 {isCompleted && (
                     <button
@@ -554,8 +554,7 @@ export const DownloadItem = React.memo(function DownloadItem({
                             { name: item.name },
                         )}
                     >
-                        <VscGoToFile />{' '}
-                        {intl.formatMessage({ id: 'downloads.actions.openFile' })}
+                        <VscGoToFile /> {intl.formatMessage({ id: 'downloads.actions.openFile' })}
                     </button>
                 )}
                 {item.status === 'downloading' && (
@@ -612,6 +611,14 @@ export const DownloadItem = React.memo(function DownloadItem({
             )}
 
             {/* Expanded file selector section (Task 6.2) */}
+            {item.pauseReason === 'disk-space' && (
+                <div className={styles.actionError} role="alert">
+                    {resolveErrorMessage(
+                        intl,
+                        item.errorMessage ?? 'error.destination.diskSpaceLow',
+                    )}
+                </div>
+            )}
             {expanded && (
                 <div className={styles.fileSelectorSection}>
                     {filesLoading && !files.length && (

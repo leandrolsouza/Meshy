@@ -214,5 +214,19 @@
     "error.destination.notCompleted": "Download not completed",
     "error.rateLimit": "Too many requests. Please try again shortly.",
     "error.operation.failed": "An unexpected error occurred.",
-    "downloads.speedLimits.error": "Error applying file selection."
+    "downloads.speedLimits.error": "Error applying file selection.",
+    "addTorrent.preparing": "Fetching the file list. Content will only download after you confirm.",
+    "addTorrent.remaining": "{count, plural, one {# more torrent awaiting review} other {# more torrents awaiting review}}",
+    "addTorrent.selectedSize": "Selected size: {size}",
+    "addTorrent.checkingSpace": "Checking disk space…",
+    "addTorrent.availableSpace": "Free space: {size}",
+    "addTorrent.reservedSpace": "Other downloads on this volume: {size}. Safety margin: {margin}.",
+    "addTorrent.startDownload": "Start download",
+    "addTorrent.review": "Review files",
+    "addTorrent.retryPreparation": "Try fetching files again",
+    "error.destination.diskSpaceLow": "Not enough space for the selected files and pending downloads. Free up space or choose another folder before starting or resuming.",
+    "error.destination.diskSpaceUnavailable": "Could not check disk space. Make sure the folder is accessible and try again.",
+    "error.torrent.preparationCancelled": "Preparation was cancelled.",
+    "error.torrent.preparationExpired": "The review expired. Fetch the file list again.",
+    "error.torrent.metadataTimeout": "Could not fetch metadata within one minute. Check your connection and try again."
 }
