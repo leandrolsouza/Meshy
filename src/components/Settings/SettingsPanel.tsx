@@ -8,6 +8,11 @@ import { GeneralSettings } from './GeneralSettings';
 import { TransferSettings, validateTransferFields } from './TransferSettings';
 import { NetworkSettings } from './NetworkSettings';
 import { TrackerSettings } from './TrackerSettings';
+import { BandwidthSettings } from './BandwidthSettings';
+import {
+    createDefaultBandwidthSettings,
+    isValidBandwidthSettings,
+} from '../../../shared/bandwidth';
 import styles from './SettingsPanel.module.css';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -53,6 +58,8 @@ export function SettingsPanel({
     const [uploadLimitError, setUploadLimitError] = useState<string | null>(null);
     const [maxConcurrentError, setMaxConcurrentError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [bandwidth, setBandwidth] = useState(createDefaultBandwidthSettings);
+    const [bandwidthError, setBandwidthError] = useState<string | null>(null);
     const [currentThemeId, setCurrentThemeId] = useState(DEFAULT_THEME_ID);
 
     // ── Estado de rede avançada ───────────────────────────────────────────────
@@ -75,6 +82,7 @@ export function SettingsPanel({
             setDhtEnabled(settings.dhtEnabled);
             setPexEnabled(settings.pexEnabled);
             setUtpEnabled(settings.utpEnabled);
+            setBandwidth(settings.bandwidth ?? createDefaultBandwidthSettings());
             if (settings.theme) {
                 setCurrentThemeId(settings.theme);
             }
@@ -140,6 +148,11 @@ export function SettingsPanel({
             );
 
             if (!transferValid) return;
+            if (!isValidBandwidthSettings(bandwidth)) {
+                setBandwidthError(intl.formatMessage({ id: 'bandwidth.invalid' }));
+                return;
+            }
+            setBandwidthError(null);
 
             // Detectar se configurações de rede mudaram
             const networkChanged =
@@ -155,6 +168,12 @@ export function SettingsPanel({
             setIsSaving(true);
 
             try {
+                // O botão rápido pode ter alterado o modo manual enquanto este formulário estava aberto.
+                const current = await window.meshy.getSettings();
+                if (!current.success) {
+                    setBandwidthError(intl.formatMessage({ id: 'error.operation.failed' }));
+                    return;
+                }
                 const success = await updateSettings({
                     downloadSpeedLimit: Number(downloadLimit),
                     uploadSpeedLimit: Number(uploadLimit),
@@ -163,11 +182,17 @@ export function SettingsPanel({
                     dhtEnabled,
                     pexEnabled,
                     utpEnabled,
+                    bandwidth: {
+                        ...bandwidth,
+                        manualEnabled: current.data.bandwidth?.manualEnabled ?? false,
+                    },
                 });
 
                 if (!success && networkChanged) {
                     setRestartError(error ?? intl.formatMessage({ id: 'settings.restartError' }));
                 }
+            } catch {
+                setBandwidthError(intl.formatMessage({ id: 'error.operation.failed' }));
             } finally {
                 setIsSaving(false);
                 setIsRestarting(false);
@@ -181,6 +206,7 @@ export function SettingsPanel({
             dhtEnabled,
             pexEnabled,
             utpEnabled,
+            bandwidth,
             settings,
             error,
             updateSettings,
@@ -210,20 +236,27 @@ export function SettingsPanel({
                 );
             case 'transfer':
                 return (
-                    <TransferSettings
-                        downloadLimit={downloadLimit}
-                        uploadLimit={uploadLimit}
-                        maxConcurrent={maxConcurrent}
-                        downloadLimitError={downloadLimitError}
-                        uploadLimitError={uploadLimitError}
-                        maxConcurrentError={maxConcurrentError}
-                        onDownloadLimitChange={setDownloadLimit}
-                        onUploadLimitChange={setUploadLimit}
-                        onMaxConcurrentChange={setMaxConcurrent}
-                        onDownloadLimitErrorChange={setDownloadLimitError}
-                        onUploadLimitErrorChange={setUploadLimitError}
-                        onMaxConcurrentErrorChange={setMaxConcurrentError}
-                    />
+                    <>
+                        <TransferSettings
+                            downloadLimit={downloadLimit}
+                            uploadLimit={uploadLimit}
+                            maxConcurrent={maxConcurrent}
+                            downloadLimitError={downloadLimitError}
+                            uploadLimitError={uploadLimitError}
+                            maxConcurrentError={maxConcurrentError}
+                            onDownloadLimitChange={setDownloadLimit}
+                            onUploadLimitChange={setUploadLimit}
+                            onMaxConcurrentChange={setMaxConcurrent}
+                            onDownloadLimitErrorChange={setDownloadLimitError}
+                            onUploadLimitErrorChange={setUploadLimitError}
+                            onMaxConcurrentErrorChange={setMaxConcurrentError}
+                        />
+                        <BandwidthSettings
+                            value={bandwidth}
+                            onChange={setBandwidth}
+                            error={bandwidthError}
+                        />
+                    </>
                 );
             case 'network':
                 return (

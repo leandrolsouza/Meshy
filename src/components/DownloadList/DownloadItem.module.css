@@ -221,3 +221,10 @@
     border-style: dashed;
     border-color: var(--color-accent);
 }
+.diagnostic {
+    padding: var(--space-sm);
+    border-left: 2px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+}

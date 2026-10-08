@@ -14,6 +14,11 @@ import type {
 // ─── Expose API via contextBridge ────────────────────────────────────────────
 
 const meshyAPI: MeshyAPI = {
+    getBandwidthStatus: () => ipcRenderer.invoke('bandwidth:get-status'),
+    setLightMode: (enabled) => ipcRenderer.invoke('bandwidth:set-light', { enabled }),
+    batchAction: (infoHashes, operation, deleteFiles) =>
+        ipcRenderer.invoke('torrent:batch-action', { infoHashes, operation, deleteFiles }),
+    selectTorrentFiles: () => ipcRenderer.invoke('dialog:select-torrent-files'),
     manageFiles: (infoHash, operation, destinationFolder) =>
         ipcRenderer.invoke('torrent:manage-files', { infoHash, operation, destinationFolder }),
     getExternalTorrentRequests: () => ipcRenderer.invoke('app:get-external-torrents'),

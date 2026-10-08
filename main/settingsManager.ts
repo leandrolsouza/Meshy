@@ -1,5 +1,6 @@
 import ElectronStoreDefault from 'electron-store';
 import type { AppSettings } from '../shared/types';
+import { createDefaultBandwidthSettings, isValidBandwidthSettings } from '../shared/bandwidth';
 import {
     DEFAULT_MAX_CONCURRENT_DOWNLOADS,
     isValidTrackerUrl,
@@ -15,6 +16,7 @@ export type { AppSettings } from '../shared/types';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface PersistedSettings {
+    bandwidth?: AppSettings['bandwidth'];
     closeToTray: boolean;
     destinationFolder: string;
     downloadSpeedLimit: number;
@@ -145,6 +147,9 @@ export function createSettingsManager(options: CreateSettingsManagerOptions = {}
                 pexEnabled: store.get('pexEnabled') ?? true,
                 utpEnabled: store.get('utpEnabled') ?? true,
                 closeToTray: store.get('closeToTray') ?? false,
+                bandwidth: structuredClone(
+                    store.get('bandwidth') ?? createDefaultBandwidthSettings(),
+                ),
             };
         },
 
@@ -163,6 +168,7 @@ export function createSettingsManager(options: CreateSettingsManagerOptions = {}
                 'pexEnabled',
                 'utpEnabled',
                 'closeToTray',
+                'bandwidth',
             ];
 
             for (const key of settableKeys) {
@@ -220,6 +226,9 @@ export function createSettingsManager(options: CreateSettingsManagerOptions = {}
  * Loga um warning para cada correção aplicada.
  */
 function sanitizeOnLoad(store: SettingsStore, getDownloadsPath: () => string, log: Logger): void {
+    const bandwidth = store.get('bandwidth');
+    if (bandwidth !== undefined && !isValidBandwidthSettings(bandwidth))
+        store.set('bandwidth', createDefaultBandwidthSettings());
     const closeToTray = store.get('closeToTray');
     if (closeToTray !== undefined && typeof closeToTray !== 'boolean')
         store.set('closeToTray', false);
@@ -306,6 +315,7 @@ function createElectronStore(): SettingsStore {
     const store = new ElectronStoreDefault<PersistedSettings>({
         name: 'settings',
         defaults: {
+            bandwidth: createDefaultBandwidthSettings(),
             closeToTray: false,
             destinationFolder: '',
             downloadSpeedLimit: 0,

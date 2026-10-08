@@ -4,6 +4,7 @@
 // Retorna o código de erro apropriado ou null se tudo estiver válido.
 
 import type { AppSettings } from '../shared/types';
+import { isValidBandwidthSettings } from '../shared/bandwidth';
 import {
     isValidSpeedLimit,
     isValidMaxConcurrentDownloads,
@@ -25,6 +26,7 @@ interface SettingsFieldRule {
  * Campos não listados aqui não são validados (ex: globalTrackers, autoApplyGlobalTrackers).
  */
 const settingsRules: Record<string, SettingsFieldRule> = {
+    bandwidth: { validate: isValidBandwidthSettings, errorCode: ErrorCodes.INVALID_PARAMS },
     closeToTray: {
         validate: (value) => typeof value === 'boolean',
         errorCode: ErrorCodes.INVALID_PARAMS,

@@ -106,6 +106,10 @@ afterEach(() => {
 
 describe('registerIpcHandlers — IPC channel registration (Requirement 8.1)', () => {
     const EXPECTED_CHANNELS = [
+        'bandwidth:get-status',
+        'bandwidth:set-light',
+        'torrent:batch-action',
+        'dialog:select-torrent-files',
         'torrent:manage-files',
         'app:get-external-torrents',
         'app:acknowledge-external-torrent',

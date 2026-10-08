@@ -113,7 +113,7 @@
     flex-direction: column;
 }
 
-.group+.group {
+.group + .group {
     margin-top: var(--space-xs);
 }
 
@@ -216,4 +216,13 @@
     font-size: var(--font-size-sm);
     color: var(--color-text, #ccc);
     opacity: 0.9;
+}
+.batch {
+    margin: var(--space-sm) 0;
+    font-size: var(--font-size-sm);
+}
+.batch .actionsBar {
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    align-items: center;
 }

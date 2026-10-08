@@ -66,6 +66,8 @@ export function DropZone(): React.JSX.Element {
         }
         if (
             !files.length ||
+            files.length > 200 ||
+            files.reduce((sum, file) => sum + file.size, 0) > 64 * 1024 * 1024 ||
             files.some(
                 (file) =>
                     !file.name.toLowerCase().endsWith('.torrent') || file.size > MAX_TORRENT_BYTES,
@@ -78,7 +80,11 @@ export function DropZone(): React.JSX.Element {
         try {
             const inputs: TorrentSource[] = [];
             for (const file of files)
-                inputs.push({ kind: 'buffer', buffer: new Uint8Array(await file.arrayBuffer()) });
+                inputs.push({
+                    kind: 'buffer',
+                    buffer: new Uint8Array(await file.arrayBuffer()),
+                    name: file.name,
+                });
             if (mounted.current) setSources(inputs);
         } catch {
             if (mounted.current) setError(intl.formatMessage({ id: 'dropZone.errorGeneric' }));

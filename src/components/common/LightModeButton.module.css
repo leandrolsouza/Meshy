@@ -1,0 +1,20 @@
+.control {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    -webkit-app-region: no-drag;
+    margin-left: auto;
+}
+.control button {
+    padding: 1px var(--space-sm);
+    font-size: var(--font-size-xs);
+}
+.mode {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+}
+.error {
+    color: var(--color-danger);
+    font-size: var(--font-size-xs);
+    max-width: 240px;
+}

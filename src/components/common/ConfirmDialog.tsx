@@ -46,11 +46,15 @@ export function ConfirmDialog({
     // ── Mover foco para o primeiro elemento focalizável ao abrir ──────────
     useEffect(() => {
         if (!isOpen) return;
+        const previousFocus = document.activeElement as HTMLElement | null;
         const frameId = requestAnimationFrame(() => {
             const el = panelRef.current?.querySelector<HTMLElement>(FOCUSABLE_SEL);
             el?.focus();
         });
-        return () => cancelAnimationFrame(frameId);
+        return () => {
+            cancelAnimationFrame(frameId);
+            previousFocus?.focus();
+        };
     }, [isOpen]);
 
     // ── Fechar ao pressionar Escape ───────────────────────────────────────
@@ -59,6 +63,20 @@ export function ConfirmDialog({
             if (e.key === 'Escape') {
                 e.stopPropagation();
                 onCancel();
+            }
+            if (e.key === 'Tab') {
+                const controls = Array.from(
+                    panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SEL) ?? [],
+                );
+                const first = controls[0];
+                const last = controls[controls.length - 1];
+                if (e.shiftKey && document.activeElement === first) {
+                    e.preventDefault();
+                    last?.focus();
+                } else if (!e.shiftKey && document.activeElement === last) {
+                    e.preventDefault();
+                    first?.focus();
+                }
             }
         },
         [onCancel],

@@ -13,6 +13,8 @@ import { createDiskSpaceService } from './diskSpace';
 import { createExternalTorrentInbox } from './externalTorrents';
 import { createBackgroundController } from './backgroundController';
 import { randomUUID } from 'crypto';
+import { createBandwidthController } from './bandwidthController';
+import { createDownloadDiagnostics } from './downloadDiagnostics';
 
 import ElectronStore from 'electron-store';
 
@@ -259,6 +261,15 @@ app.whenReady()
                 .catch((error) => logger.warn('[Main] Falha na proteção de espaço:', error));
         }, 5000);
         diskTimer.unref();
+        const bandwidth = createBandwidthController({
+            settings: settingsManager,
+            engine: torrentEngine,
+        });
+        const diagnostics = createDownloadDiagnostics({
+            manager: downloadManager,
+            engine: torrentEngine,
+        });
+        void diagnostics.refresh();
 
         // Restore previous session — falha não é fatal; o app inicia com estado vazio
         try {
@@ -275,6 +286,8 @@ app.whenReady()
         app.on('before-quit', () => {
             desktopReady = false;
             background?.dispose();
+            bandwidth.dispose();
+            diagnostics.dispose();
             clearInterval(diskTimer);
             preparation.dispose();
             downloadManager?.persistSession();
@@ -286,6 +299,8 @@ app.whenReady()
 
         // Register IPC handlers ONCE (global — survives window close/reopen on macOS).
         registerIpcHandlers(downloadManager, settingsManager, torrentEngine, preparation, {
+            bandwidth,
+            diagnostics,
             inbox: externalTorrents,
             registerMagnetHandler: () =>
                 process.defaultApp && process.argv[1]
@@ -296,7 +311,7 @@ app.whenReady()
         });
 
         // Attach per-window resources (progress interval, error forwarding).
-        attachWindowEvents(downloadManager, torrentEngine, mainWindow);
+        attachWindowEvents(downloadManager, torrentEngine, mainWindow, diagnostics);
 
         // ── Detectar crash do renderer process ────────────────────────────────────
         attachRendererCrashHandler(mainWindow);
@@ -308,7 +323,7 @@ app.whenReady()
             if (!window) {
                 const newWindow = createMainWindow();
                 // Only attach per-window events — IPC handlers are already registered.
-                attachWindowEvents(downloadManager!, torrentEngine, newWindow);
+                attachWindowEvents(downloadManager!, torrentEngine, newWindow, diagnostics);
                 attachRendererCrashHandler(newWindow);
                 background?.attachWindow(newWindow);
                 window = newWindow;

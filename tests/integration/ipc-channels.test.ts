@@ -41,6 +41,10 @@ const { ipcMain: mockIpcMain, dialog: mockDialog } = require('electron') as {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const EXPECTED_CHANNELS = [
+    'bandwidth:get-status',
+    'bandwidth:set-light',
+    'torrent:batch-action',
+    'dialog:select-torrent-files',
     'torrent:manage-files',
     'app:get-external-torrents',
     'app:acknowledge-external-torrent',

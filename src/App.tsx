@@ -14,6 +14,7 @@ import { DropZone } from './components/AddTorrent/DropZone';
 import { AddTorrentModal } from './components/AddTorrent/AddTorrentModal';
 import { ExternalTorrentImporter } from './components/AddTorrent/ExternalTorrentImporter';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
+import { LightModeButton } from './components/common/LightModeButton';
 import { FilterSidebar } from './components/DownloadList/FilterSidebar';
 import { applyTheme } from './themes/themeApplier';
 import { DEFAULT_THEME_ID } from './themes/themeRegistry';
@@ -109,6 +110,7 @@ function App(): React.JSX.Element {
                 <span className={styles.titleBarText}>
                     {intl.formatMessage({ id: 'app.title' })}
                 </span>
+                <LightModeButton />
             </header>
 
             {/* ── Activity Bar ──────────────────────────────────────────── */}

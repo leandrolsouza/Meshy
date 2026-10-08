@@ -4,6 +4,11 @@ import { resolve, basename } from 'path';
 import type { DownloadManager } from './downloadManager';
 import type { SettingsManager } from './settingsManager';
 import type { TorrentEngine } from './torrentEngine';
+import type { BandwidthController } from './bandwidthController';
+import type { DownloadDiagnostics } from './downloadDiagnostics';
+import { createDefaultBandwidthSettings, getEffectiveBandwidth } from '../shared/bandwidth';
+import { performBatchAction } from './batchActions';
+import type { BatchAction, BatchActionResult, BandwidthStatus } from '../shared/types';
 import type {
     DownloadItem,
     AppSettings,
@@ -206,11 +211,13 @@ export function attachWindowEvents(
     downloadManager: DownloadManager,
     torrentEngine: TorrentEngine,
     mainWindow: BrowserWindow,
+    diagnostics?: DownloadDiagnostics,
 ): void {
     // ── Progress interval (1 s) ───────────────────────────────────────────────
     const progressInterval = setInterval(() => {
         if (!mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('torrent:progress', downloadManager.getAll());
+            const items = downloadManager.getAll();
+            mainWindow.webContents.send('torrent:progress', diagnostics?.enrich(items) ?? items);
         }
     }, 1000);
 
@@ -258,7 +265,12 @@ export function registerIpcHandlers(
     settingsManager: SettingsManager,
     torrentEngine?: TorrentEngine,
     preparation?: TorrentPreparation,
-    desktop?: { inbox: ExternalTorrentInbox; registerMagnetHandler: () => boolean },
+    desktop?: {
+        inbox: ExternalTorrentInbox;
+        registerMagnetHandler: () => boolean;
+        bandwidth?: BandwidthController;
+        diagnostics?: DownloadDiagnostics;
+    },
 ): void {
     // ── Wrapper para tracking automático de métricas ──────────────────────────
     // Intercepta ipcMain.handle para medir latência e contar erros de cada canal.
@@ -276,6 +288,102 @@ export function registerIpcHandlers(
             return withMetrics(channel, cid, () => handler(event, payload));
         });
     };
+
+    const applyBandwidth = (force = false) => {
+        if (desktop?.bandwidth) return desktop.bandwidth.refresh(force);
+        const status = getEffectiveBandwidth(settingsManager.get());
+        torrentEngine?.setDownloadSpeedLimit?.(status.downloadLimit);
+        torrentEngine?.setUploadSpeedLimit?.(status.uploadLimit);
+        return status;
+    };
+    trackedHandle('bandwidth:get-status', async (): Promise<IPCResponse<BandwidthStatus>> => {
+        try {
+            return ok(
+                desktop?.bandwidth?.getStatus() ?? getEffectiveBandwidth(settingsManager.get()),
+            );
+        } catch (error) {
+            return failWithLog('bandwidth:get-status', error);
+        }
+    });
+    trackedHandle(
+        'bandwidth:set-light',
+        async (_event, payload): Promise<IPCResponse<BandwidthStatus>> => {
+            try {
+                if (
+                    !payload ||
+                    typeof payload !== 'object' ||
+                    typeof (payload as { enabled?: unknown }).enabled !== 'boolean'
+                )
+                    return fail(ErrorCodes.INVALID_PARAMS);
+                if (torrentEngine?.isRestarting()) return fail(ErrorCodes.ENGINE_RESTARTING);
+                settingsManager.set({
+                    bandwidth: {
+                        ...(settingsManager.get().bandwidth ?? createDefaultBandwidthSettings()),
+                        manualEnabled: (payload as { enabled: boolean }).enabled,
+                    },
+                });
+                return ok(applyBandwidth());
+            } catch (error) {
+                return failWithLog('bandwidth:set-light', error);
+            }
+        },
+    );
+    let batchBusy = false;
+    trackedHandle(
+        'torrent:batch-action',
+        async (_event, payload): Promise<IPCResponse<BatchActionResult[]>> => {
+            if (!payload || typeof payload !== 'object') return fail(ErrorCodes.INVALID_PARAMS);
+            const { infoHashes, operation, deleteFiles } = payload as {
+                infoHashes?: unknown;
+                operation?: unknown;
+                deleteFiles?: unknown;
+            };
+            if (
+                !Array.isArray(infoHashes) ||
+                !infoHashes.length ||
+                infoHashes.length > 200 ||
+                !infoHashes.every(
+                    (hash) => typeof hash === 'string' && /^[a-f0-9]{40}$/i.test(hash),
+                ) ||
+                new Set(infoHashes).size !== infoHashes.length ||
+                !['pause', 'resume', 'remove'].includes(operation as string) ||
+                (deleteFiles !== undefined && typeof deleteFiles !== 'boolean') ||
+                (operation === 'remove' && typeof deleteFiles !== 'boolean')
+            )
+                return fail(ErrorCodes.INVALID_PARAMS);
+            if (batchBusy) return fail(ErrorCodes.OPERATION_FAILED);
+            batchBusy = true;
+            try {
+                return ok(
+                    await performBatchAction(
+                        downloadManager,
+                        infoHashes,
+                        operation as BatchAction,
+                        deleteFiles === true,
+                        () => torrentEngine?.isRestarting() ?? false,
+                    ),
+                );
+            } catch (error) {
+                return failWithLog('torrent:batch-action', error);
+            } finally {
+                batchBusy = false;
+            }
+        },
+    );
+
+    trackedHandle('dialog:select-torrent-files', async (): Promise<IPCResponse<string[]>> => {
+        try {
+            const result = await dialog.showOpenDialog({
+                properties: ['openFile', 'multiSelections'],
+                filters: [{ name: 'Torrent', extensions: ['torrent'] }],
+            });
+            if (result.canceled || !result.filePaths.length)
+                return fail(ErrorCodes.NO_FILE_SELECTED);
+            return ok(result.filePaths.slice(0, 200));
+        } catch (error) {
+            return failWithLog('dialog:select-torrent-files', error);
+        }
+    });
 
     // ── torrent:add-file ──────────────────────────────────────────────────────
     const requestSchema = { requestId: { type: 'string' as const, nonEmpty: true } };
@@ -663,7 +771,7 @@ export function registerIpcHandlers(
     trackedHandle('torrent:get-all', async (_event): Promise<IPCResponse<DownloadItem[]>> => {
         try {
             const items = downloadManager.getAll();
-            return ok(items);
+            return ok(desktop?.diagnostics?.enrich(items) ?? items);
         } catch (err) {
             return failWithLog('torrent:get-all', err);
         }
@@ -746,6 +854,7 @@ export function registerIpcHandlers(
                 }
 
                 const updated = settingsManager.get();
+                applyBandwidth(networkChanged);
                 return ok(updated);
             } catch (err) {
                 return failWithLog('settings:set', err);

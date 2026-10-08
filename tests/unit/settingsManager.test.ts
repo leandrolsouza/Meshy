@@ -67,6 +67,7 @@ describe('SettingsManager.get()', () => {
         expect(Object.keys(settings).sort()).toEqual(
             [
                 'autoApplyGlobalTrackers',
+                'bandwidth',
                 'closeToTray',
                 'destinationFolder',
                 'dhtEnabled',

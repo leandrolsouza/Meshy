@@ -66,6 +66,9 @@ const STATUS_LABEL_KEYS: Record<DownloadItemType['status'], string> = {
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface DownloadItemProps {
+    selected?: boolean;
+    onSelectionToggle?: ((infoHash: string) => void) | undefined;
+    selectionDisabled?: boolean;
     item: DownloadItemType;
     queueSize: number; // Tamanho total da fila (para desabilitar "mover para baixo")
     onPause: (infoHash: string) => Promise<unknown>;
@@ -92,6 +95,9 @@ export const DownloadItem = React.memo(function DownloadItem({
     onDragStart,
     onDragEnd,
     isDragging,
+    selected = false,
+    onSelectionToggle,
+    selectionDisabled = false,
 }: DownloadItemProps): React.JSX.Element {
     const intl = useIntl();
     const progressPercent = Math.round(item.progress * 100);
@@ -355,6 +361,7 @@ export const DownloadItem = React.memo(function DownloadItem({
         <div
             className={cardClassName}
             role="listitem"
+            inert={selectionDisabled}
             onContextMenu={handleContextMenu}
             draggable={item.status === 'queued'}
             onDragStart={handleDragStart}
@@ -362,6 +369,18 @@ export const DownloadItem = React.memo(function DownloadItem({
         >
             {/* Name and status */}
             <div className={styles.header}>
+                {onSelectionToggle && (
+                    <input
+                        type="checkbox"
+                        checked={selected}
+                        disabled={selectionDisabled || !!item.fileOperation}
+                        onChange={() => onSelectionToggle(item.infoHash)}
+                        aria-label={intl.formatMessage(
+                            { id: 'batch.selectTorrent' },
+                            { name: item.name },
+                        )}
+                    />
+                )}
                 <span className={styles.name} title={item.name}>
                     {displayName(item.name)}
                 </span>
@@ -448,6 +467,43 @@ export const DownloadItem = React.memo(function DownloadItem({
             </div>
 
             {/* Actions */}
+            {item.diagnostic && (
+                <aside className={styles.diagnostic}>
+                    <p>
+                        {intl.formatMessage(
+                            {
+                                id: `diagnostic.${item.diagnostic.replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase())}`,
+                            },
+                            { position: item.queuePosition ?? '?' },
+                        )}
+                    </p>
+                    {item.diagnostic === 'folder-unavailable' && (
+                        <button className="btn" onClick={() => setFilesDialogOpen(true)}>
+                            {intl.formatMessage({ id: 'diagnostic.locate' })}
+                        </button>
+                    )}
+                    {['no-peers', 'trackers-error'].includes(item.diagnostic) && canExpand && (
+                        <button className="btn" onClick={() => setTrackersExpanded(true)}>
+                            {intl.formatMessage({ id: 'diagnostic.trackers' })}
+                        </button>
+                    )}
+                    {item.diagnostic === 'no-selection' && (
+                        <button
+                            className="btn"
+                            onClick={() => {
+                                if (!expanded) void handleToggleExpand();
+                            }}
+                        >
+                            {intl.formatMessage({ id: 'diagnostic.selectFiles' })}
+                        </button>
+                    )}
+                    {item.diagnostic === 'stalled' && (
+                        <button className="btn" onClick={() => setDetailsExpanded(true)}>
+                            {intl.formatMessage({ id: 'diagnostic.details' })}
+                        </button>
+                    )}
+                </aside>
+            )}
             <div className={styles.actions}>
                 {/* Botões de reordenação na fila (Task 6.3) */}
                 {isQueued && (

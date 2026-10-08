@@ -63,6 +63,42 @@ export interface DownloadItem {
     queuePosition?: number; // posição na fila (1-based), undefined para não-enfileirados
     pauseReason?: 'disk-space';
     fileOperation?: FileOperation;
+    diagnostic?: DownloadDiagnostic;
+}
+
+export type DownloadDiagnostic =
+    | 'metadata'
+    | 'metadata-failed'
+    | 'queued'
+    | 'disk-space'
+    | 'folder-unavailable'
+    | 'trackers-error'
+    | 'no-peers'
+    | 'no-selection'
+    | 'stalled';
+
+export type BatchAction = 'pause' | 'resume' | 'remove';
+export interface BatchActionResult {
+    infoHash: string;
+    name: string;
+    success: boolean;
+    error?: string;
+}
+
+export interface BandwidthSettings {
+    manualEnabled: boolean;
+    downloadLimit: number; // KB/s, positivo
+    uploadLimit: number; // KB/s, positivo
+    scheduleEnabled: boolean;
+    days: number[]; // dias locais em que o intervalo começa: domingo = 0
+    start: string; // HH:mm, horário local
+    end: string; // HH:mm; menor que start atravessa a meia-noite
+}
+export interface BandwidthStatus {
+    mode: 'normal' | 'manual' | 'scheduled';
+    downloadLimit: number; // KB/s, 0 = ilimitado
+    uploadLimit: number; // KB/s, 0 = ilimitado
+    manualEnabled: boolean;
 }
 
 // ─── PersistedDownloadItem ────────────────────────────────────────────────────
@@ -107,7 +143,7 @@ export interface TorrentPreview {
 export type TorrentSource =
     | { kind: 'magnet'; magnetUri: string }
     | { kind: 'file'; filePath: string }
-    | { kind: 'buffer'; buffer: Uint8Array };
+    | { kind: 'buffer'; buffer: Uint8Array; name?: string };
 
 export interface DiskSpaceInfo {
     freeBytes: number;
@@ -134,6 +170,7 @@ export interface AppSettings {
     pexEnabled: boolean; // PEX — Peer Exchange (padrão: true)
     utpEnabled: boolean; // uTP — Micro Transport Protocol (padrão: true)
     closeToTray: boolean; // continuar baixando ao fechar a janela (padrão: false)
+    bandwidth?: BandwidthSettings; // ausente em sessões anteriores; default desativado
 }
 
 // ─── TorrentMetadata ──────────────────────────────────────────────────────────
@@ -172,6 +209,14 @@ export type IPCResponse<T> = { success: true; data: T } | { success: false; erro
 // ─── MeshyAPI ─────────────────────────────────────────────────────────────────
 
 export interface MeshyAPI {
+    getBandwidthStatus(): Promise<IPCResponse<BandwidthStatus>>;
+    setLightMode(enabled: boolean): Promise<IPCResponse<BandwidthStatus>>;
+    batchAction(
+        infoHashes: string[],
+        operation: BatchAction,
+        deleteFiles?: boolean,
+    ): Promise<IPCResponse<BatchActionResult[]>>;
+    selectTorrentFiles(): Promise<IPCResponse<string[]>>;
     prepareTorrent(requestId: string, source: TorrentSource): Promise<IPCResponse<TorrentPreview>>;
     cancelTorrentPreparation(requestId: string): Promise<IPCResponse<void>>;
     getDiskSpace(

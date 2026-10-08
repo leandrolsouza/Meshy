@@ -7,6 +7,7 @@ import { applyFilters, groupByStatus } from '../../utils/downloadFilters';
 import type { StatusGroup } from '../../utils/downloadFilters';
 import { DownloadItem } from './DownloadItem';
 import { ConfirmDialog } from '../common/ConfirmDialog';
+import { BatchActions } from './BatchActions';
 import styles from './DownloadList.module.css';
 
 // ── Tempo mínimo que o overlay fica visível (ms) ─────────────────────────────
@@ -33,6 +34,20 @@ export const DownloadList = React.memo(function DownloadList(): React.JSX.Elemen
     const resetFilters = useFilterStore((s) => s.resetFilters);
 
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+    const [selectionMode, setSelectionMode] = useState(false);
+    const [selectedHashes, setSelectedHashes] = useState<Set<string>>(new Set());
+    const [batchBusy, setBatchBusy] = useState(false);
+    const selectHashes = useCallback((hashes: string[]) => setSelectedHashes(new Set(hashes)), []);
+    const toggleSelection = useCallback(
+        (hash: string) =>
+            setSelectedHashes((previous) => {
+                const next = new Set(previous);
+                if (next.has(hash)) next.delete(hash);
+                else next.add(hash);
+                return next;
+            }),
+        [],
+    );
     const [collapsedGroups, setCollapsedGroups] = useState<Set<StatusGroup>>(new Set());
 
     // ── Overlay de loading durante operações ─────────────────────────────────
@@ -102,10 +117,7 @@ export const DownloadList = React.memo(function DownloadList(): React.JSX.Elemen
     );
 
     // Contagem de itens enfileirados (para desabilitar botão "mover para baixo" no último)
-    const queueSize = useMemo(
-        () => items.filter((i) => i.status === 'queued').length,
-        [items],
-    );
+    const queueSize = useMemo(() => items.filter((i) => i.status === 'queued').length, [items]);
 
     // Callback para mover item para cima na fila
     const handleMoveUp = useCallback(
@@ -230,8 +242,8 @@ export const DownloadList = React.memo(function DownloadList(): React.JSX.Elemen
         filteredItems.length === 0
             ? intl.formatMessage({ id: 'downloads.ariaLive.none' })
             : filteredItems.length === 1
-                ? intl.formatMessage({ id: 'downloads.ariaLive.one' })
-                : intl.formatMessage(
+              ? intl.formatMessage({ id: 'downloads.ariaLive.one' })
+              : intl.formatMessage(
                     { id: 'downloads.ariaLive.many' },
                     { count: filteredItems.length },
                 );
@@ -251,10 +263,32 @@ export const DownloadList = React.memo(function DownloadList(): React.JSX.Elemen
                 </div>
             )}
             {/* Barra de ações inline (limpar concluídos) */}
+            <button
+                className="btn"
+                type="button"
+                disabled={batchBusy || isBusy}
+                aria-pressed={selectionMode}
+                onClick={() => {
+                    setSelectionMode(!selectionMode);
+                    setSelectedHashes(new Set());
+                }}
+            >
+                {intl.formatMessage({ id: selectionMode ? 'batch.finish' : 'batch.select' })}
+            </button>
+            {selectionMode && (
+                <BatchActions
+                    visibleItems={filteredItems}
+                    selectedHashes={selectedHashes}
+                    onSelect={selectHashes}
+                    onClear={() => setSelectedHashes(new Set())}
+                    onBusy={setBatchBusy}
+                />
+            )}
             {completedCount > 0 && (
                 <div className={styles.actionsBar}>
                     <button
                         className="btn btn--danger"
+                        disabled={batchBusy || isBusy}
                         onClick={() => setIsConfirmOpen(true)}
                         aria-label={intl.formatMessage({ id: 'downloads.clearCompletedAriaLabel' })}
                     >
@@ -339,11 +373,12 @@ export const DownloadList = React.memo(function DownloadList(): React.JSX.Elemen
                                         role="list"
                                         {...(group.id === 'waiting'
                                             ? {
-                                                onDragOver: (e: React.DragEvent<HTMLDivElement>) =>
-                                                    handleDragOver(e, group.items),
-                                                onDrop: handleDrop,
-                                                onDragLeave: handleDragLeave,
-                                            }
+                                                  onDragOver: (
+                                                      e: React.DragEvent<HTMLDivElement>,
+                                                  ) => handleDragOver(e, group.items),
+                                                  onDrop: handleDrop,
+                                                  onDragLeave: handleDragLeave,
+                                              }
                                             : {})}
                                     >
                                         {group.items.map((item, index) => (
@@ -356,6 +391,11 @@ export const DownloadList = React.memo(function DownloadList(): React.JSX.Elemen
                                                     )}
                                                 <DownloadItem
                                                     item={item}
+                                                    selected={selectedHashes.has(item.infoHash)}
+                                                    onSelectionToggle={
+                                                        selectionMode ? toggleSelection : undefined
+                                                    }
+                                                    selectionDisabled={batchBusy || isBusy}
                                                     queueSize={queueSize}
                                                     onPause={handlePause}
                                                     onResume={handleResume}
@@ -364,9 +404,7 @@ export const DownloadList = React.memo(function DownloadList(): React.JSX.Elemen
                                                     onMoveDown={handleMoveDown}
                                                     onDragStart={handleDragStart}
                                                     onDragEnd={handleDragEnd}
-                                                    isDragging={
-                                                        draggedInfoHash === item.infoHash
-                                                    }
+                                                    isDragging={draggedInfoHash === item.infoHash}
                                                 />
                                             </React.Fragment>
                                         ))}

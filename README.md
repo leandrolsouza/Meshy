@@ -23,6 +23,9 @@ Meshy é um cliente BitTorrent desktop com interface moderna inspirada no VS Cod
 - Localizar, mover e verificar arquivos existentes, com retomada apenas do conteúdo pendente
 - Abrir magnets e arquivos `.torrent` pelo sistema, sempre passando pela revisão
 - Opção para continuar baixando na bandeja, com controles para pausar, retomar e encerrar
+- Modo de conexão leve com botão rápido, limites próprios e horários por dia da semana
+- Seleção e ações em lote, importação múltipla com revisão e resultados individuais
+- Explicações e ações para fila, ausência de peers, trackers com erro e pasta indisponível
 - Limites configuráveis de velocidade de download e upload e máximo de downloads simultâneos
 - Progresso, velocidade e contagem de peers em tempo real (atualização a cada segundo)
 - Persistência de sessão — downloads são restaurados ao reabrir o app
@@ -57,6 +60,29 @@ durante a inicialização ou enquanto outro torrent está sendo revisado. As ass
 são declaradas no instalador; execute o aplicativo instalado e escolha Meshy em **Abrir com** ou
 nas configurações de aplicativos padrão. O funcionamento em desenvolvimento varia por sistema.
 Veja a [documentação de integração do Electron](https://www.electronjs.org/docs/latest/tutorial/launch-app-from-url-in-another-app).
+
+Use **Modo leve**, na barra superior, para reduzir temporariamente download e upload. Em
+**Configurações → Transferências**, escolha os limites e, opcionalmente, dias e horários.
+O modo leve nunca aumenta um limite normal menor. Ao desativar o modo manual, o horário
+configurado continua valendo; fora do intervalo, os limites normais voltam. Os horários usam
+o fuso local do computador e são conferidos a cada dez segundos, inclusive na bandeja.
+Para `22:00 → 06:00`, marque o dia em que o intervalo começa. O aplicativo precisa estar aberto.
+
+Em **Selecionar torrents**, marque os downloads e use **Selecionar visíveis**, **Pausar**,
+**Retomar** ou **Remover selecionados**. Somente os selecionados visíveis no filtro atual e
+compatíveis com a ação participam. Há um limite de 200 torrents por operação; recuperação de
+arquivos impede ações concorrentes. A remoção exige escolher entre manter ou excluir arquivos,
+e cada torrent recebe um resultado. Falhas não impedem os demais de serem processados.
+
+O seletor de `.torrent` aceita vários arquivos, assim como arrastar e soltar e magnets em linhas
+separadas. Cada entrada passa pela sua própria confirmação. Use **Pular este torrent** para
+continuar após um problema; o resumo mostra adições, entradas puladas e falhas. Arquivos
+arrastados têm um limite total de 64 MiB de metadados por lote.
+
+Explicações na lista usam observações do main: pasta sem acesso, fila, metadados, seleção vazia,
+ausência de peers e trackers com erro. Com peers conectados, 30 segundos sem avanço exibem
+uma orientação para conferir conexões. Ausência de peers não comprova ausência de seeders;
+as explicações oferecem ações pertinentes sem alterar o torrent automaticamente.
 
 ### Stack
 
