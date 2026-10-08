@@ -64,48 +64,77 @@ atualização é segura ou pode gerar breaking changes. Produza um relatório em
 
 **Arquivos relevantes:** `package.json`, `electron.vite.config.ts`, `tsconfig*.json`
 
+**Ferramentas utilizadas:** [`npm-check-updates`](https://www.npmjs.com/package/npm-check-updates) — verifica todas as dependências contra o registro npm e atualiza o `package.json` de forma controlada, sem instalar nada até você decidir.
+
+Comandos de referência:
+```bash
+npx npm-check-updates              # lista tudo que está desatualizado
+npx npm-check-updates <pacote>     # verifica um pacote específico
+npx npm-check-updates -u <pacote>  # atualiza a versão no package.json (sem instalar)
+npx npm-check-updates --target minor  # somente minor/patch (ignora major)
+```
+
 **Prompt:**
 
 ```
-Você é um engenheiro sênior especialista em Electron. Analise o projeto Meshy em
-`e:\Desenvolvimento\GiHub\Meshy` e execute uma atualização completa da stack,
-seguindo esta ordem de prioridade:
+Você é um engenheiro sênior especialista em Electron. Execute uma atualização
+completa da stack do projeto Meshy em `e:\Desenvolvimento\GiHub\Meshy`.
 
-**1. Electron**
-- Consulte https://releases.electronjs.org/ e identifique a versão estável mais recente.
-- Verifique a versão de Node.js e Chromium embutida nessa release e confirme que não
-  há breaking changes de API que afetem `main/`, `electron/preload.ts` ou as
-  configurações de segurança (contextIsolation, sandbox, etc.).
-- Atualize `electron` no package.json e ajuste `allowScripts` se necessário.
+**0. Levantamento com npm-check-updates**
+- Execute `npx npm-check-updates` para obter a lista completa de pacotes
+  desatualizados. Use esse relatório como ponto de partida para as etapas abaixo.
+- Não execute `-u` em massa ainda — cada grupo será atualizado e verificado
+  individualmente.
 
-**2. electron-vite e Vite**
-- Verifique a compatibilidade entre electron-vite e a versão do Electron escolhida.
-- Atualize `electron-vite` e `vite` juntos para as versões compatíveis mais recentes.
-- Confirme que `electron.vite.config.ts` não precisa de ajustes para a nova API.
+**1. Electron (atualizar primeiro — puxa Node.js e Chromium)**
+- Verifique a versão mais recente com `npx npm-check-updates electron`.
+- Consulte https://releases.electronjs.org/ e confirme as versões de Node.js e
+  Chromium embutidas na nova release.
+- Verifique se há breaking changes que afetem `main/`, `electron/preload.ts` ou
+  configurações de segurança (contextIsolation, sandbox, CSP).
+- Aplique com `npx npm-check-updates -u electron`, ajuste `allowScripts` se
+  necessário e execute `npm install`.
+
+**2. electron-vite e Vite (acoplados ao Electron)**
+- Verifique compatibilidade entre a nova versão do electron-vite e o Electron
+  escolhido no passo anterior.
+- Aplique `npx npm-check-updates -u electron-vite vite` e execute `npm install`.
+- Confirme que `electron.vite.config.ts` não precisa de ajustes de API.
+- Execute `npm run build` para validar.
 
 **3. TypeScript**
-- Atualize para a versão estável mais recente do TypeScript.
-- Execute `npm run typecheck` e corrija qualquer erro de tipo introduzido pela
-  nova versão do compilador.
+- Aplique `npx npm-check-updates -u typescript` e execute `npm install`.
+- Execute `npx tsc --noEmit -p tsconfig.node.json`, `tsconfig.web.json` e
+  `tsconfig.jest.json` separadamente (o script `typecheck` raiz não garante
+  cobertura completa dos três projetos).
+- Corrija qualquer erro de tipo introduzido pelo novo compilador.
 
 **4. WebTorrent**
 - Verifique o changelog de `webtorrent` entre a versão atual e a mais recente.
 - Se houver breaking changes de API, atualize os usos em `main/torrentEngine.ts`
-  e `main/webtorrentInternals.ts`.
+  e `main/webtorrentInternals.ts` antes de instalar.
+- Aplique `npx npm-check-updates -u webtorrent` e execute `npm install`.
 
 **5. Demais dependências**
-- Atualize as dependências restantes uma categoria por vez
-  (runtime → devDependencies → @types).
-- Após cada grupo, execute `npm run build` e `npm run typecheck`.
+- Use `npx npm-check-updates --target minor` para identificar atualizações
+  minor/patch de baixo risco em runtime e devDependencies.
+- Aplique e instale grupo a grupo (runtime, devDependencies, @types).
+- Para upgrades major restantes, avalie o changelog individualmente antes de
+  aplicar.
+- Após cada grupo, execute `npm run build` e os três `tsc --noEmit`.
 
 **Verificação final:**
-- `npm run typecheck` — zero erros
+- `npx tsc --noEmit -p tsconfig.node.json` — zero erros
+- `npx tsc --noEmit -p tsconfig.web.json` — zero erros
+- `npx tsc --noEmit -p tsconfig.jest.json` — zero erros
 - `npm run lint` — zero warnings novos
-- `npm run test` — todos os testes passando
+- `npm test -- --runInBand` — todos os testes passando
 - `npm run build` — build de produção bem-sucedido
 
-Documente em `.agents/tasks/stack-update.md` o que foi atualizado, o que foi
-mantido fixo intencionalmente e qualquer breaking change tratado.
+Documente em `.agents/tasks/stack-update.md`:
+- O que foi atualizado (de → para)
+- O que foi mantido fixo intencionalmente e o motivo
+- Breaking changes encontrados e como foram tratados
 ```
 
 ---

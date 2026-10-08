@@ -16,7 +16,7 @@ dist/
 *.swo
 
 # Kiro
-.kiro/
+.kiro/specs
 
 # OS files
 Thumbs.db
