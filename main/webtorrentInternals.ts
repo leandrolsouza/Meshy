@@ -1,7 +1,7 @@
 // ─── Abstração de propriedades internas do WebTorrent ─────────────────────────
 //
-// O WebTorrent 2.x expõe propriedades internas não tipadas (announce, _trackers,
-// wires, addTracker) que o Meshy precisa acessar. Este módulo centraliza todos
+// O WebTorrent 2.x expõe propriedades internas não tipadas (announce, discovery,
+// wires, _startDiscovery) que o Meshy precisa acessar. Este módulo centraliza todos
 // os acessos inseguros com type guards, evitando casts `as unknown as { ... }`
 // espalhados pelo código.
 //
@@ -9,13 +9,214 @@
 // módulo precisa ser atualizado.
 
 import type { Torrent } from 'webtorrent';
+import type { TrackerStatus } from '../shared/types';
 
 // ─── Tipos internos ──────────────────────────────────────────────────────────
 
 /** Representação interna de um tracker no WebTorrent */
 export interface InternalTracker {
+    announceUrl?: string;
     destroyed?: boolean;
-    destroy?: () => void;
+    destroy?: (callback: (err?: Error | null) => void) => void;
+}
+
+interface Discovery {
+    destroyed?: boolean;
+    tracker?: {
+        _trackers: InternalTracker[];
+        destroy(callback: (err?: Error | null) => void): void;
+    } | null;
+    _announce: string[];
+    _createTracker(): NonNullable<Discovery['tracker']>;
+    destroy(callback: (err?: Error | null) => void): void;
+}
+
+export const MAX_TRACKERS_PER_TORRENT = 20;
+const configured = new WeakSet<Torrent>();
+const stopping = new WeakMap<Torrent, Promise<void>>();
+const trackerUpdates = new WeakSet<Torrent>();
+const trackerStatuses = new WeakMap<InternalTracker, TrackerStatus>();
+const watchedTrackers = new WeakSet<object>();
+const scheduledBudgets = new WeakSet<NetworkBudget>();
+const watchedConnections = new WeakSet<object>();
+
+export interface NetworkBudget {
+    maxPerTorrent: number;
+    maxTotal: number;
+    torrents(): Torrent[];
+}
+
+function connectionCount(torrent: Torrent, limit: number): number {
+    const peers = asRecord(torrent)._peers;
+    if (!(peers instanceof Map)) return 0;
+    let count = 0;
+    for (const peer of peers.values()) {
+        if (!peer.destroyed && (peer.conn || peer.connected) && ++count >= limit) break;
+    }
+    return count;
+}
+
+function hasConnectionSlot(torrent: Torrent, budget: NetworkBudget): boolean {
+    if (connectionCount(torrent, budget.maxPerTorrent) >= budget.maxPerTorrent) return false;
+    let total = 0;
+    for (const item of budget.torrents()) {
+        total += connectionCount(item, budget.maxTotal - total);
+        if (total >= budget.maxTotal) return false;
+    }
+    return true;
+}
+
+function scheduleDrain(budget: NetworkBudget): void {
+    if (scheduledBudgets.has(budget)) return;
+    scheduledBudgets.add(budget);
+    queueMicrotask(() => {
+        scheduledBudgets.delete(budget);
+        for (const torrent of budget.torrents()) {
+            const t = asRecord(torrent);
+            if (!t.destroyed && !t.paused && typeof t._drain === 'function') t._drain.call(torrent);
+        }
+    });
+}
+
+function watchConnection(conn: unknown, budget: NetworkBudget): void {
+    if (!conn || typeof conn !== 'object' || watchedConnections.has(conn)) return;
+    const socket = conn as { once?: (event: string, fn: () => void) => void };
+    if (!socket.once) return;
+    watchedConnections.add(conn);
+    socket.once('close', () => scheduleDrain(budget));
+}
+
+export function getInternalTrackerStatus(tracker: InternalTracker): TrackerStatus {
+    return tracker.destroyed ? 'error' : (trackerStatuses.get(tracker) ?? 'pending');
+}
+
+function watchTrackerStatus(torrent: Torrent): void {
+    const discovery = asRecord(torrent).discovery as Discovery | undefined;
+    const client = discovery?.tracker as
+        | (NonNullable<Discovery['tracker']> & {
+              on?: (
+                  event: string,
+                  listener: (value: { announce?: string } | Error) => void,
+              ) => void;
+          })
+        | undefined;
+    if (!client?.on || watchedTrackers.has(client)) return;
+    watchedTrackers.add(client);
+    client.on('update', (value) => {
+        const url = (value as { announce?: string }).announce;
+        const tracker = client._trackers.find((item) => item.announceUrl === url);
+        if (tracker) trackerStatuses.set(tracker, 'connected');
+    });
+    client.on('warning', (value) => {
+        for (const tracker of client._trackers) {
+            if (tracker.announceUrl && String(value).includes(tracker.announceUrl))
+                trackerStatuses.set(tracker, 'error');
+        }
+    });
+}
+
+/** Guard discovery before metadata is available, including torrents born paused. */
+export function configureTorrentNetwork(torrent: Torrent, budget?: NetworkBudget): void {
+    if (configured.has(torrent)) return;
+    configured.add(torrent);
+    const t = asRecord(torrent);
+    if (budget) {
+        const drain = t._drain;
+        if (typeof drain === 'function') {
+            t._drain = function () {
+                if (!hasConnectionSlot(torrent, budget)) return;
+                const queue = t._queue as Array<{ conn?: unknown }> | undefined;
+                const peer = queue?.[0];
+                const result = drain.call(torrent);
+                watchConnection(peer?.conn, budget);
+                return result;
+            };
+        }
+        const register = t._registerPeer;
+        if (typeof register === 'function') {
+            t._registerPeer = function (peer: {
+                conn?: unknown;
+                connected?: boolean;
+                once(event: string, fn: () => void): void;
+                destroy(err?: Error): void;
+            }) {
+                // Incoming and WebRTC peers already own a connection at registration.
+                if ((peer.conn || peer.connected) && !hasConnectionSlot(torrent, budget)) {
+                    peer.destroy(new Error('Limite de conexões atingido'));
+                    return;
+                }
+                peer.once('disconnect', () => scheduleDrain(budget));
+                watchConnection(peer.conn, budget);
+                return register.call(torrent, peer);
+            };
+        }
+    }
+    for (const method of ['_startDiscovery', '_getMetadataFromServer', 'addWebSeed']) {
+        const original = t[method];
+        if (typeof original !== 'function') continue;
+        t[method] = function (...args: unknown[]) {
+            if (t.paused || t.destroyed) return;
+            if (method === '_startDiscovery') {
+                setAnnounceList(
+                    torrent,
+                    [...new Set(getAnnounceList(torrent).map(normalizeUrl))].slice(
+                        0,
+                        MAX_TRACKERS_PER_TORRENT,
+                    ),
+                );
+            }
+            const result = original.apply(torrent, args);
+            if (method === '_startDiscovery') watchTrackerStatus(torrent);
+            return result;
+        };
+    }
+}
+
+function normalizeUrl(url: string): string {
+    return url.trim().replace(/\/+$/, '');
+}
+
+/** Stop future announces, pending sockets and connected wires without deleting data. */
+export function stopTorrentNetwork(torrent: Torrent): Promise<void> {
+    const pending = stopping.get(torrent);
+    if (pending) return pending;
+    configureTorrentNetwork(torrent);
+    torrent.pause();
+    const t = asRecord(torrent);
+    const peers = t._peers;
+    if (peers instanceof Map) {
+        for (const peer of [...peers.values()]) peer.destroy();
+    }
+    // Peer.destroy removes the map entry but leaves outgoing queue entries behind.
+    if (Array.isArray(t._queue)) t._queue.length = 0;
+    destroyAllWires(torrent);
+    clearInterval(t._noPeersIntervalId as ReturnType<typeof setInterval>);
+    (t._xsRequestsController as AbortController | undefined)?.abort();
+    const discovery = t.discovery as Discovery | undefined;
+    const result = new Promise<void>((resolve, reject) => {
+        if (!discovery || discovery.destroyed) return resolve();
+        discovery.destroy((err) => {
+            if (t.discovery === discovery) t.discovery = null;
+            if (err) reject(err);
+            else resolve();
+        });
+    });
+    stopping.set(torrent, result);
+    result.finally(() => stopping.delete(torrent)).catch(() => {});
+    return result;
+}
+
+export async function resumeTorrentNetwork(torrent: Torrent): Promise<void> {
+    await stopping.get(torrent);
+    const t = asRecord(torrent);
+    torrent.resume();
+    if (typeof t._startDiscovery === 'function') t._startDiscovery.call(torrent);
+    if (!t.metadata && t.xs && typeof t._getMetadataFromServer === 'function') {
+        t._getMetadataFromServer.call(torrent);
+    }
+    if (Array.isArray(t.urlList) && typeof t.addWebSeed === 'function') {
+        for (const url of t.urlList) t.addWebSeed.call(torrent, url);
+    }
 }
 
 /** Wire com extensão ut_pex */
@@ -67,18 +268,20 @@ export function setAnnounceList(torrent: Torrent, urls: string[]): void {
     asRecord(torrent).announce = urls;
 }
 
-// ─── _trackers (mapa interno de conexões com trackers) ────────────────────────
+// ─── discovery.tracker._trackers (array interno de conexões) ──────────────────
 
 /**
- * Retorna o mapa interno de trackers (_trackers) de um torrent.
+ * Indexa por URL o array de trackers da descoberta do torrent.
  * Retorna objeto vazio se a propriedade não existir.
  */
 export function getInternalTrackers(torrent: Torrent): Record<string, InternalTracker> {
     const t = asRecord(torrent);
-    if (t._trackers && typeof t._trackers === 'object') {
-        return t._trackers as Record<string, InternalTracker>;
-    }
-    return {};
+    const trackers = (t.discovery as Discovery | undefined)?.tracker?._trackers ?? [];
+    return Object.fromEntries(
+        trackers
+            .filter((tracker) => tracker.announceUrl)
+            .map((tracker) => [tracker.announceUrl!, tracker]),
+    );
 }
 
 /**
@@ -90,39 +293,54 @@ export function destroyInternalTracker(
     normalizedUrl: string,
     matchFn: (existingUrl: string) => string,
 ): boolean {
-    const trackers = getInternalTrackers(torrent);
-
-    for (const [key, tracker] of Object.entries(trackers)) {
-        if (matchFn(key) === normalizedUrl) {
-            if (typeof tracker.destroy === 'function') {
-                tracker.destroy();
-            }
-            delete trackers[key];
-            return true;
-        }
+    const discovery = asRecord(torrent).discovery as Discovery | undefined;
+    const trackers = discovery?.tracker?._trackers;
+    const index =
+        trackers?.findIndex((tracker) => matchFn(tracker.announceUrl ?? '') === normalizedUrl) ??
+        -1;
+    if (trackers && index >= 0) {
+        const [tracker] = trackers.splice(index, 1);
+        tracker.destroy?.(() => {});
+        if (discovery) discovery._announce = [...getAnnounceList(torrent)];
+        return true;
     }
     return false;
 }
 
-// ─── addTracker (método nativo do WebTorrent) ─────────────────────────────────
+// ─── Atualização do cliente de trackers ──────────────────────────────────────
 
 /**
- * Tenta usar o método nativo `addTracker` do WebTorrent.
- * Se não disponível, adiciona manualmente ao array announce.
- * Retorna true se usou o método nativo, false se fez fallback.
+ * Atualiza announce e recria o cliente de trackers uma vez por lote.
+ * Torrents pausados só aplicam a lista ao retomar a descoberta.
  */
 export function addTrackerToTorrent(torrent: Torrent, url: string): boolean {
-    const t = asRecord(torrent);
-    if (typeof t.addTracker === 'function') {
-        (t.addTracker as (url: string) => void)(url);
-        return true;
-    }
-
-    // Fallback: adiciona manualmente ao announce
     const announce = getAnnounceList(torrent);
+    if (announce.length >= MAX_TRACKERS_PER_TORRENT) {
+        throw new Error(`Limite de ${MAX_TRACKERS_PER_TORRENT} trackers por torrent atingido`);
+    }
     announce.push(url);
     setAnnounceList(torrent, announce);
-    return false;
+    // Batch favorites applied in the same tick into one tracker client update.
+    if (!trackerUpdates.has(torrent)) {
+        trackerUpdates.add(torrent);
+        queueMicrotask(() => {
+            trackerUpdates.delete(torrent);
+            const t = asRecord(torrent);
+            const discovery = t.discovery as Discovery | undefined;
+            if (t.paused || t.destroyed || !discovery || discovery.destroyed || !discovery.tracker)
+                return;
+            discovery._announce = [...getAnnounceList(torrent)];
+            try {
+                const old = discovery.tracker;
+                if (old) old.destroy(() => {});
+                discovery.tracker = discovery._createTracker();
+                watchTrackerStatus(torrent);
+            } catch (err) {
+                torrent.emit('warning', err);
+            }
+        });
+    }
+    return true;
 }
 
 // ─── Wires (conexões de peers) ────────────────────────────────────────────────

@@ -5,21 +5,33 @@ import WebTorrent from 'webtorrent';
 import type { Torrent } from 'webtorrent';
 import { isValidMagnetUri, hasTorrentMagicBytes } from './validators';
 import { isValidTrackerUrl, normalizeTrackerUrl } from '../shared/validators';
-import type { TorrentStatus, TorrentFileInfo, TrackerInfo, TrackerStatus, TorrentMetadata, PeerInfo, PieceStatus } from '../shared/types';
+import { logger } from './logger';
+import type {
+    TorrentStatus,
+    TorrentFileInfo,
+    TrackerInfo,
+    TrackerStatus,
+    TorrentMetadata,
+    PeerInfo,
+    PieceStatus,
+} from '../shared/types';
 import {
     getAnnounceList,
     setAnnounceList,
     getInternalTrackers,
+    getInternalTrackerStatus,
     destroyInternalTracker,
     addTrackerToTorrent,
-    destroyAllWires,
+    configureTorrentNetwork,
+    stopTorrentNetwork,
+    resumeTorrentNetwork,
     getNumSeeders,
     getBitfield,
     getPiecesCount,
     getTorrentCreatedInfo,
     getWiresWithPeerInfo,
 } from './webtorrentInternals';
-import type { WireWithPex } from './webtorrentInternals';
+import type { NetworkBudget } from './webtorrentInternals';
 
 export type { TorrentStatus } from '../shared/types';
 export type { TorrentFileInfo } from '../shared/types';
@@ -28,6 +40,7 @@ export type { TrackerInfo } from '../shared/types';
 // The @types/webtorrent package doesn't include throttleDownload/throttleUpload,
 // but they exist in the actual webtorrent@2.x library.
 interface WebTorrentInstanceWithThrottle extends WebTorrent.Instance {
+    utPex: boolean;
     throttleDownload(rate: number): void;
     throttleUpload(rate: number): void;
 }
@@ -56,9 +69,9 @@ export interface TorrentInfo {
 }
 
 export interface TorrentEngine {
-    addTorrentFile(filePath: string): Promise<TorrentInfo>;
-    addTorrentBuffer(buffer: Buffer): Promise<TorrentInfo>;
-    addMagnetLink(magnetUri: string): Promise<TorrentInfo>;
+    addTorrentFile(filePath: string, paused?: boolean): Promise<TorrentInfo>;
+    addTorrentBuffer(buffer: Buffer, paused?: boolean): Promise<TorrentInfo>;
+    addMagnetLink(magnetUri: string, paused?: boolean): Promise<TorrentInfo>;
     pause(infoHash: string): Promise<void>;
     resume(infoHash: string): Promise<void>;
     remove(infoHash: string, deleteFiles: boolean): Promise<void>;
@@ -90,6 +103,8 @@ export interface TorrentEngine {
     on(event: 'progress', listener: (info: TorrentInfo) => void): void;
     on(event: 'done', listener: (infoHash: string) => void): void;
     on(event: 'error', listener: (infoHash: string, err: Error) => void): void;
+    on(event: 'restarted', listener: () => void): void;
+    on(event: 'restarting', listener: () => void): void;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     removeListener(event: string, listener: (...args: any[]) => void): void;
 }
@@ -138,6 +153,14 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
     private readonly statusMap = new Map<string, TorrentStatus>();
     /** Tracks selected file indices per torrent */
     private readonly selectionMap = new Map<string, Set<number>>();
+    private readonly pendingMagnets = new Map<string, Torrent>();
+    private readonly warningTimes = new Map<string, number>();
+    private clientClosed = false;
+    private readonly networkBudget: NetworkBudget = {
+        maxPerTorrent: 24,
+        maxTotal: 96,
+        torrents: () => this.client.torrents,
+    };
     /** Armazena as opções para uso posterior (ex: restart) */
     private options: TorrentEngineOptions;
     /** Timestamp de criação do engine (para health check) */
@@ -151,214 +174,167 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
         this.downloadPath = options.downloadPath;
         this.options = options;
 
-        // Passa opções de rede ao construtor do WebTorrent.
-        // PEX não é uma opção do construtor — é controlado via wire extension (ut_pex).
-        this.client = (client ??
-            new WebTorrent({
-                dht: options.dhtEnabled,
-                utp: options.utpEnabled,
-            })) as WebTorrentInstanceWithThrottle;
+        this.client = (client ?? this._createClient(options)) as WebTorrentInstanceWithThrottle;
+        this.client.utPex = options.pexEnabled;
+        this._configureClient();
+    }
 
-        // Apply initial speed limits
-        if (options.downloadSpeedLimit > 0) {
-            this.client.throttleDownload(options.downloadSpeedLimit * 1024);
-        }
-        if (options.uploadSpeedLimit > 0) {
-            this.client.throttleUpload(options.uploadSpeedLimit * 1024);
-        }
+    private _createClient(options: TorrentEngineOptions): WebTorrentInstanceWithThrottle {
+        const networkOptions = {
+            dht: options.dhtEnabled,
+            utp: options.utpEnabled,
+            utPex: options.pexEnabled,
+            maxConns: 24,
+            seedOutgoingConnections: false,
+        };
+        return new WebTorrent(networkOptions) as WebTorrentInstanceWithThrottle;
+    }
 
-        // Desabilitar PEX removendo a extensão ut_pex dos wires quando pexEnabled é false
-        if (!options.pexEnabled) {
-            this._setupPexDisable();
-        }
+    private _configureClient(): void {
+        if (this.options.downloadSpeedLimit > 0)
+            this.setDownloadSpeedLimit(this.options.downloadSpeedLimit);
+        if (this.options.uploadSpeedLimit > 0)
+            this.setUploadSpeedLimit(this.options.uploadSpeedLimit);
+        this.client.on('error', (err) => {
+            for (const torrent of this.client.torrents) this.emit('error', torrent.infoHash, err);
+        });
     }
 
     // ── addTorrentFile ──────────────────────────────────────────────────────────
 
-    async addTorrentFile(filePath: string): Promise<TorrentInfo> {
+    async addTorrentFile(filePath: string, paused = false): Promise<TorrentInfo> {
         // Leitura assíncrona para não bloquear o event loop com arquivos grandes
         let buffer: Buffer;
         try {
             buffer = await readFile(filePath);
         } catch (err) {
-            const wrapped = new Error(
-                `Não foi possível ler o arquivo: ${(err as Error).message}`,
-            );
+            const wrapped = new Error(`Não foi possível ler o arquivo: ${(err as Error).message}`);
             (wrapped as unknown as { cause: unknown }).cause = err;
             throw wrapped;
         }
 
-        return this.addTorrentBuffer(buffer);
+        return this.addTorrentBuffer(buffer, paused);
     }
 
     // ── addTorrentBuffer ────────────────────────────────────────────────────────
 
-    addTorrentBuffer(buffer: Buffer): Promise<TorrentInfo> {
+    addTorrentBuffer(buffer: Buffer, paused = false): Promise<TorrentInfo> {
         if (!hasTorrentMagicBytes(buffer)) {
-            throw new Error(
-                'Arquivo inválido: não é um arquivo .torrent válido (magic bytes incorretos)',
-            );
+            return Promise.reject(new Error('Arquivo inválido: não é um arquivo .torrent válido'));
         }
-
         return new Promise((resolve, reject) => {
             let settled = false;
-
-            const torrent = this.client.add(
-                buffer,
-                { path: this.downloadPath },
-                (addedTorrent) => {
-                    if (settled) return;
-                    settled = true;
-                    this.statusMap.set(addedTorrent.infoHash, 'downloading');
-                    this._initSelectionMap(addedTorrent);
-                    this._attachTorrentListeners(addedTorrent);
-                    resolve(torrentToInfo(addedTorrent, 'downloading'));
-                },
-            );
-
-            // Escutar erro no torrent específico em vez do client global.
-            // Isso evita que um erro de outro torrent rejeite esta Promise.
-            torrent.once('error', (err) => {
+            let torrent: Torrent;
+            const finish = (err?: Error, ready?: Torrent): void => {
                 if (settled) return;
                 settled = true;
-                reject(err instanceof Error ? err : new Error(String(err)));
-            });
+                clearTimeout(timer);
+                if (err) {
+                    if (torrent && !(torrent as Torrent & { destroyed?: boolean }).destroyed)
+                        torrent.destroy({ destroyStore: false }, () => {});
+                    reject(err);
+                } else if (ready) {
+                    this.statusMap.set(ready.infoHash, paused ? 'paused' : 'downloading');
+                    this._initSelectionMap(ready);
+                    resolve(torrentToInfo(ready, paused ? 'paused' : 'downloading'));
+                }
+            };
+            const timer = setTimeout(() => finish(new Error('Adição do torrent expirou')), 20_000);
+            try {
+                torrent = this.client.add(
+                    buffer,
+                    { path: this.downloadPath, paused } as WebTorrent.TorrentOptions,
+                    (ready) => finish(undefined, ready),
+                );
+                configureTorrentNetwork(torrent, this.networkBudget);
+                this._attachTorrentListeners(torrent);
+                torrent.once('error', (err) =>
+                    finish(err instanceof Error ? err : new Error(String(err))),
+                );
+                torrent.once('close', () => finish(new Error('Adição do torrent cancelada')));
+            } catch (err) {
+                finish(err instanceof Error ? err : new Error(String(err)));
+            }
         });
     }
 
-    // ── addMagnetLink ───────────────────────────────────────────────────────────
-
-    addMagnetLink(magnetUri: string): Promise<TorrentInfo> {
-        return new Promise((resolve, reject) => {
-            if (!isValidMagnetUri(magnetUri)) {
-                return reject(
-                    new Error('Formato inválido. Esperado: magnet:?xt=urn:btih:<40 hex chars>'),
-                );
-            }
-
-            // Para magnet links, precisamos escutar o evento 'metadata' ANTES
-            // de chamar client.add(), porque no WebTorrent 2.x o callback do
-            // client.add() pode disparar DEPOIS que os metadados já foram
-            // resolvidos, fazendo com que o torrent.once('metadata') nunca
-            // dispare e o status fique preso em 'resolving-metadata'.
-            //
-            // Estratégia: usamos o evento 'torrent' do client para capturar
-            // o torrent assim que ele é adicionado internamente, registramos
-            // o listener de 'metadata' imediatamente, e resolvemos a Promise
-            // com status 'resolving-metadata'. Se os metadados já estiverem
-            // disponíveis (torrent.length > 0), transicionamos direto.
-
-            let resolved = false;
-
-            const onTorrent = (torrent: Torrent): void => {
-                // Verificar se este é o torrent que acabamos de adicionar
-                const expectedHash = magnetUri.match(/xt=urn:btih:([a-fA-F0-9]{40})/i);
-                if (expectedHash && torrent.infoHash !== expectedHash[1].toLowerCase()) {
-                    return; // Não é o nosso torrent
-                }
-
-                this.client.removeListener('torrent', onTorrent);
-
-                this.statusMap.set(torrent.infoHash, 'resolving-metadata');
-                this._attachTorrentListeners(torrent);
-
-                // Se os metadados já estão disponíveis (torrent.length > 0),
-                // transicionar direto para 'downloading'
-                if (torrent.length > 0) {
-                    this.statusMap.set(torrent.infoHash, 'downloading');
-                    this._initSelectionMap(torrent);
-                    if (!resolved) {
-                        resolved = true;
-                        resolve(torrentToInfo(torrent, 'downloading'));
-                    }
-                    return;
-                }
-
-                // Metadados ainda não disponíveis — escutar o evento
-                torrent.once('metadata', () => {
-                    this.statusMap.set(torrent.infoHash, 'downloading');
-                    this._initSelectionMap(torrent);
-                });
-
-                if (!resolved) {
-                    resolved = true;
-                    resolve(torrentToInfo(torrent, 'resolving-metadata'));
-                }
-            };
-
-            this.client.on('torrent', onTorrent);
-
-            const torrent = this.client.add(magnetUri, { path: this.downloadPath });
-
-            // Escutar erro no torrent específico em vez do client global.
-            // Isso evita que um erro de outro torrent rejeite esta Promise.
-            torrent.once('error', (err) => {
-                this.client.removeListener('torrent', onTorrent);
-                if (!resolved) {
-                    resolved = true;
-                    reject(err instanceof Error ? err : new Error(String(err)));
-                }
+    // client 'torrent' fires after metadata. Use the immediate return value instead.
+    addMagnetLink(magnetUri: string, paused = false): Promise<TorrentInfo> {
+        if (!isValidMagnetUri(magnetUri)) {
+            return Promise.reject(
+                new Error('Formato inválido. Esperado: magnet:?xt=urn:btih:<40 hex chars>'),
+            );
+        }
+        const hash = magnetUri.match(/xt=urn:btih:([a-fA-F0-9]{40})/i)![1].toLowerCase();
+        if (this._getTorrent(hash)) return Promise.reject(new Error('Torrent já existe na lista'));
+        try {
+            const torrent = this.client.add(magnetUri, {
+                path: this.downloadPath,
+                paused,
+            } as WebTorrent.TorrentOptions);
+            this.pendingMagnets.set(hash, torrent);
+            torrent.once('close', () => {
+                if (this.pendingMagnets.get(hash) === torrent) this.pendingMagnets.delete(hash);
             });
-        });
+            configureTorrentNetwork(torrent, this.networkBudget);
+            this.statusMap.set(hash, paused ? 'paused' : 'resolving-metadata');
+            this._attachTorrentListeners(torrent);
+            const ready = (): void => {
+                if ((torrent as Torrent & { destroyed?: boolean }).destroyed) return;
+                const previous = this.statusMap.get(hash);
+                this.statusMap.set(
+                    hash,
+                    previous === 'paused' || previous === 'completed' ? previous : 'downloading',
+                );
+                this._initSelectionMap(torrent);
+                this.emit('progress', {
+                    ...torrentToInfo(torrent, this.statusMap.get(hash)!),
+                    infoHash: hash,
+                });
+            };
+            torrent.once('ready', ready);
+            if (torrent.ready) ready();
+            return Promise.resolve({
+                ...torrentToInfo(torrent, this.statusMap.get(hash)!),
+                infoHash: hash,
+            });
+        } catch (err) {
+            return Promise.reject(err);
+        }
     }
 
     // ── pause ───────────────────────────────────────────────────────────────────
 
-    pause(infoHash: string): Promise<void> {
-        return new Promise((resolve, reject) => {
-            const torrent = this._getTorrent(infoHash);
-            if (!torrent) {
-                // Torrent não está no engine — já está efetivamente parado.
-                // Atualizar o statusMap e resolver como sucesso (consistente com remove()).
-                this.statusMap.set(infoHash, 'paused');
-                return resolve();
-            }
-
-            const timer = setTimeout(() => {
-                reject(new Error('Falha ao pausar: timeout'));
-            }, PAUSE_RESUME_TIMEOUT_MS);
-
-            try {
-                torrent.pause();
-
-                // O torrent.pause() do WebTorrent apenas para de buscar novos peers,
-                // mas NÃO desconecta os peers já conectados — o download continua.
-                // Para realmente parar a transferência, destruímos todos os wires.
-                destroyAllWires(torrent);
-
-                clearTimeout(timer);
-                this.statusMap.set(infoHash, 'paused');
-                resolve();
-            } catch (err) {
-                clearTimeout(timer);
-                reject(err instanceof Error ? err : new Error(String(err)));
-            }
-        });
+    async pause(infoHash: string): Promise<void> {
+        const torrent = this._getTorrent(infoHash);
+        this.statusMap.set(infoHash, 'paused');
+        if (torrent) await this._stopNetwork(torrent);
     }
 
-    // ── resume ──────────────────────────────────────────────────────────────────
+    private async _stopNetwork(torrent: Torrent): Promise<void> {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+            await Promise.race([
+                stopTorrentNetwork(torrent),
+                new Promise<never>((_, reject) => {
+                    timer = setTimeout(
+                        () => reject(new Error('Falha ao pausar: timeout')),
+                        PAUSE_RESUME_TIMEOUT_MS,
+                    );
+                }),
+            ]);
+        } finally {
+            clearTimeout(timer);
+        }
+    }
 
-    resume(infoHash: string): Promise<void> {
-        return new Promise((resolve, reject) => {
-            const torrent = this._getTorrent(infoHash);
-            if (!torrent) {
-                return reject(new Error(`Torrent não encontrado: ${infoHash}`));
-            }
-
-            const timer = setTimeout(() => {
-                reject(new Error('Falha ao retomar: timeout'));
-            }, PAUSE_RESUME_TIMEOUT_MS);
-
-            try {
-                torrent.resume();
-                clearTimeout(timer);
-                this.statusMap.set(infoHash, 'downloading');
-                resolve();
-            } catch (err) {
-                clearTimeout(timer);
-                reject(err instanceof Error ? err : new Error(String(err)));
-            }
-        });
+    async resume(infoHash: string): Promise<void> {
+        const torrent = this._getTorrent(infoHash);
+        if (!torrent) throw new Error('Torrent não encontrado: ' + infoHash);
+        await resumeTorrentNetwork(torrent);
+        const status = torrent.ready ? 'downloading' : 'resolving-metadata';
+        this.statusMap.set(infoHash, status);
+        this.emit('progress', torrentToInfo(torrent, status));
     }
 
     // ── remove ──────────────────────────────────────────────────────────────────
@@ -409,13 +385,13 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
 
     setDownloadSpeedLimit(kbps: number): void {
         // kbps === 0 means no limit; WebTorrent uses 0 to remove the limit as well
-        this.client.throttleDownload(kbps * 1024);
+        this.client.throttleDownload(kbps === 0 ? -1 : kbps * 1024);
     }
 
     // ── setUploadSpeedLimit ─────────────────────────────────────────────────────
 
     setUploadSpeedLimit(kbps: number): void {
-        this.client.throttleUpload(kbps * 1024);
+        this.client.throttleUpload(kbps === 0 ? -1 : kbps * 1024);
     }
 
     // ── getAll ──────────────────────────────────────────────────────────────────
@@ -432,6 +408,8 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
     on(event: 'progress', listener: (info: TorrentInfo) => void): this;
     on(event: 'done', listener: (infoHash: string) => void): this;
     on(event: 'error', listener: (infoHash: string, err: Error) => void): this;
+    on(event: 'restarted', listener: () => void): this;
+    on(event: 'restarting', listener: () => void): this;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     on(event: string, listener: (...args: any[]) => void): this {
         return super.on(event, listener);
@@ -498,13 +476,7 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
             const tracker = internalTrackers[url];
             let status: TrackerStatus = 'pending';
 
-            if (tracker) {
-                if (tracker.destroyed) {
-                    status = 'error';
-                } else {
-                    status = 'connected';
-                }
-            }
+            if (tracker) status = getInternalTrackerStatus(tracker);
 
             return { url, status };
         });
@@ -660,7 +632,7 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
             const totalPeers = torrents.reduce((sum, t) => sum + (t.numPeers ?? 0), 0);
 
             return {
-                healthy: !this._restarting,
+                healthy: !this._restarting && !this.clientClosed,
                 restarting: this._restarting,
                 activeTorrents,
                 totalPeers,
@@ -680,149 +652,121 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
 
     // ── restart ─────────────────────────────────────────────────────────────────
 
-    async restart(options: TorrentEngineOptions): Promise<void> {
-        this._restarting = true;
+    private restartPromise?: Promise<void>;
 
-        // Timeout de segurança: se o restart travar, criar engine limpo
-        const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => {
-                reject(new Error(`Restart do engine expirou após ${RESTART_TIMEOUT_MS}ms`));
+    restart(options: TorrentEngineOptions): Promise<void> {
+        if (this.restartPromise) return this.restartPromise;
+        this._restarting = true;
+        this.emit('restarting');
+        let cancelled = false;
+        let timer: ReturnType<typeof setTimeout>;
+        const work = this._doRestart(options, () => cancelled);
+        const timeout = new Promise<never>((_, reject) => {
+            timer = setTimeout(() => {
+                cancelled = true;
+                reject(new Error('Restart do engine expirou após ' + RESTART_TIMEOUT_MS + 'ms'));
             }, RESTART_TIMEOUT_MS);
         });
-
-        try {
-            await Promise.race([this._doRestart(options), timeoutPromise]);
-        } catch (err) {
-            // Se o restart falhou ou expirou, tentar criar um engine limpo
-            // para que o app não fique permanentemente bloqueado.
-            try {
-                this.client = new WebTorrent({
-                    dht: options.dhtEnabled,
-                    utp: options.utpEnabled,
-                }) as WebTorrentInstanceWithThrottle;
-
-                this.downloadPath = options.downloadPath;
-                this.options = options;
-
-                if (options.downloadSpeedLimit > 0) {
-                    this.client.throttleDownload(options.downloadSpeedLimit * 1024);
+        const result = Promise.race([work, timeout])
+            .catch((err) => {
+                cancelled = true;
+                for (const torrent of this.client.torrents) {
+                    if (!(torrent as Torrent & { destroyed?: boolean }).destroyed) {
+                        void stopTorrentNetwork(torrent).catch((stopError) =>
+                            logger.warn('[TorrentEngine] Falha ao suspender reinício:', stopError),
+                        );
+                    }
                 }
-                if (options.uploadSpeedLimit > 0) {
-                    this.client.throttleUpload(options.uploadSpeedLimit * 1024);
+                for (const [hash, status] of this.statusMap) {
+                    if (status === 'downloading' || status === 'resolving-metadata') {
+                        this.statusMap.set(hash, 'error');
+                        this.emit('error', hash, err);
+                    }
                 }
-                if (!options.pexEnabled) {
-                    this._setupPexDisable();
-                }
-            } catch {
-                // Se nem o fallback funcionar, pelo menos desbloquear o flag
-            }
-
-            // Marcar todos os torrents ativos como erro
-            for (const [infoHash, status] of this.statusMap.entries()) {
-                if (status === 'downloading' || status === 'resolving-metadata') {
-                    this.statusMap.set(infoHash, 'error');
-                    this.emit(
-                        'error',
-                        infoHash,
-                        new Error('Falha no reinício do engine: ' + (err as Error).message),
-                    );
-                }
-            }
-
-            throw err;
-        } finally {
+                throw err;
+            })
+            .finally(() => clearTimeout(timer));
+        this.restartPromise = result;
+        // On timeout retain ownership until cleanup actually finishes.
+        work.catch(() => {}).finally(() => {
             this._restarting = false;
-        }
+            this.restartPromise = undefined;
+            if (!cancelled) this.emit('restarted');
+        });
+        return result;
     }
 
-    /** Lógica interna do restart, separada para permitir timeout via Promise.race */
-    private async _doRestart(options: TorrentEngineOptions): Promise<void> {
-        // 1. Coletar infoHashes e magnetURIs dos torrents ativos
-        const activeTorrents = this.client.torrents.map((t) => ({
+    private async _doRestart(
+        options: TorrentEngineOptions,
+        cancelled: () => boolean,
+    ): Promise<void> {
+        const previous = this.client;
+        const saved = previous.torrents.map((t) => ({
             infoHash: t.infoHash,
             magnetURI: t.magnetURI,
             status: this.statusMap.get(t.infoHash),
+            selection: this.selectionMap.get(t.infoHash),
+            torrentFile: (t as Torrent & { torrentFile?: Uint8Array }).torrentFile,
         }));
-
-        // 2. Destruir todos os torrents sem deletar arquivos
-        for (const t of this.client.torrents) {
-            await new Promise<void>((resolve) => {
-                t.destroy({ destroyStore: false }, () => resolve());
-            });
+        // The client owns its torrents. Wait for every socket/store to close.
+        if (!this.clientClosed) {
+            await new Promise<void>((resolve, reject) =>
+                previous.destroy((err) => (err ? reject(err) : resolve())),
+            );
+            this.clientClosed = true;
         }
-
-        // 3. Destruir o cliente atual
-        await new Promise<void>((resolve, reject) => {
-            this.client.destroy((err) => {
-                if (err) reject(err);
-                else resolve();
-            });
-        });
-
-        // 4. Criar novo cliente com novas opções
-        this.client = new WebTorrent({
-            dht: options.dhtEnabled,
-            utp: options.utpEnabled,
-        }) as WebTorrentInstanceWithThrottle;
-
+        if (cancelled()) throw new Error('Reinício cancelado');
         this.downloadPath = options.downloadPath;
         this.options = options;
-
-        // Aplicar limites de velocidade
-        if (options.downloadSpeedLimit > 0) {
-            this.client.throttleDownload(options.downloadSpeedLimit * 1024);
-        }
-        if (options.uploadSpeedLimit > 0) {
-            this.client.throttleUpload(options.uploadSpeedLimit * 1024);
-        }
-
-        // Configurar PEX se desabilitado
-        if (!options.pexEnabled) {
-            this._setupPexDisable();
-        }
-
-        // 5. Re-adicionar torrents que estavam ativos (pular pausados/concluídos)
-        for (const torrentInfo of activeTorrents) {
-            if (torrentInfo.status === 'paused' || torrentInfo.status === 'completed') {
-                continue;
-            }
+        this.client = this._createClient(options);
+        this.clientClosed = false;
+        this._configureClient();
+        for (const item of saved) {
+            if (cancelled()) throw new Error('Reinício cancelado');
+            if (item.status === 'completed' || item.status === 'error') continue;
             try {
-                if (torrentInfo.magnetURI) {
-                    await this.addMagnetLink(torrentInfo.magnetURI);
+                if (item.status === 'paused' && item.torrentFile) {
+                    await this.addTorrentBuffer(Buffer.from(item.torrentFile), true);
+                } else {
+                    await this.addMagnetLink(item.magnetURI, item.status === 'paused');
                 }
-            } catch {
-                this.statusMap.set(torrentInfo.infoHash, 'error');
+                if (item.selection) {
+                    const torrent = this._getTorrent(item.infoHash);
+                    torrent?.once('ready', () =>
+                        this.setFileSelection(item.infoHash, [...item.selection!]),
+                    );
+                    if (torrent?.ready) this.setFileSelection(item.infoHash, [...item.selection]);
+                }
+            } catch (err) {
+                this.statusMap.set(item.infoHash, 'error');
                 this.emit(
                     'error',
-                    torrentInfo.infoHash,
-                    new Error('Falha ao re-adicionar torrent após reinício'),
+                    item.infoHash,
+                    new Error('Falha ao re-adicionar torrent: ' + String(err)),
                 );
             }
         }
     }
 
-    // ── _setupPexDisable ────────────────────────────────────────────────────────
-
-    /** Registra listener para desabilitar PEX (ut_pex) nos wires de todos os torrents */
-    private _setupPexDisable(): void {
-        this.client.on('torrent', (torrent) => {
-            torrent.on('wire', (wire) => {
-                const w = wire as unknown as WireWithPex;
-                if (w.ut_pex) {
-                    w.ut_pex.destroy?.();
-                }
-            });
-        });
-    }
-
     // ── _getTorrent ─────────────────────────────────────────────────────────────
 
     private _getTorrent(infoHash: string): Torrent | undefined {
-        return this.client.torrents.find((t) => t.infoHash === infoHash);
+        return (
+            this.client.torrents.find((t) => t.infoHash === infoHash) ??
+            this.pendingMagnets.get(infoHash)
+        );
     }
 
     /** Initializes the selection map with all file indices (all selected by default) */
     private _initSelectionMap(torrent: Torrent): void {
+        const previous = this.selectionMap.get(torrent.infoHash);
+        if (previous) {
+            this.setFileSelection(
+                torrent.infoHash,
+                [...previous].filter((index) => index < torrent.files.length),
+            );
+            return;
+        }
         const allIndices = new Set<number>();
         for (let i = 0; i < torrent.files.length; i++) {
             allIndices.add(i);
@@ -831,6 +775,14 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
     }
 
     private _attachTorrentListeners(torrent: Torrent): void {
+        torrent.on('warning', (err) => {
+            const message = err instanceof Error ? err.message : String(err);
+            const now = Date.now();
+            if (now - (this.warningTimes.get(message) ?? -Infinity) < 60_000) return;
+            if (this.warningTimes.size >= 256) this.warningTimes.clear();
+            this.warningTimes.set(message, now);
+            logger.warn('[TorrentEngine] Aviso de rede:', torrent.infoHash, message);
+        });
         torrent.on('download', () => {
             const status = this.statusMap.get(torrent.infoHash) ?? 'downloading';
             this.emit('progress', torrentToInfo(torrent, status));
@@ -843,16 +795,22 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
 
         torrent.on('done', () => {
             this.statusMap.set(torrent.infoHash, 'completed');
+            void this._stopNetwork(torrent).catch((err) =>
+                this.emit('error', torrent.infoHash, err),
+            );
             this.emit('done', torrent.infoHash);
         });
 
         torrent.on('error', (err) => {
+            const active = this._getTorrent(torrent.infoHash);
+            // WebTorrent destroys a duplicate before emitting its error. Keep the
+            // original torrent's state intact; the addition promise handles rejection.
+            if (active && active !== torrent) return;
             this.statusMap.set(torrent.infoHash, 'error');
             const error = err instanceof Error ? err : new Error(String(err));
             this.emit('error', torrent.infoHash, error);
         });
     }
-
 }
 
 // ─── Factory ──────────────────────────────────────────────────────────────────

@@ -17,5 +17,5 @@
             "@renderer/*": ["src/*"]
         }
     },
-    "include": ["src/**/*", "shared/**/*"]
+    "include": ["src/**/*", "src/**/*.json", "shared/**/*"]
 }

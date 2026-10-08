@@ -43,7 +43,7 @@
         "@types/react-dom": "19.2.3",
         "@types/webtorrent": "^0.109.7",
         "@vitejs/plugin-react": "^5.2.0",
-        "electron": "^41.3.0",
+        "electron": "^41.10.7",
         "electron-vite": "^5.0.0",
         "eslint": "^10.2.1",
         "eslint-config-prettier": "^10.1.8",
@@ -57,5 +57,14 @@
         "typescript": "~5.9.3",
         "typescript-eslint": "^8.59.0",
         "vite": "^7.3.2"
+    },
+    "allowScripts": {
+        "electron@41.10.7": true,
+        "bufferutil@4.1.0": true,
+        "esbuild@0.25.12": true,
+        "esbuild@0.27.7": true,
+        "node-datachannel@0.32.2": true,
+        "utf-8-validate@6.0.6": true,
+        "utp-native@2.5.3": true
     }
 }

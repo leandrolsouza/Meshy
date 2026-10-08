@@ -112,21 +112,21 @@ function createMainWindow(): BrowserWindow {
     window.webContents.session.webRequest.onHeadersReceived((details, callback) => {
         const cspDirectives = isDev
             ? [
-                "default-src 'self'",
-                "script-src 'self' 'unsafe-inline'",
-                "style-src 'self' 'unsafe-inline'",
-                "img-src 'self' data:",
-                "font-src 'self'",
-                "connect-src 'self' ws://localhost:*",
-            ]
+                  "default-src 'self'",
+                  "script-src 'self' 'unsafe-inline'",
+                  "style-src 'self' 'unsafe-inline'",
+                  "img-src 'self' data:",
+                  "font-src 'self'",
+                  "connect-src 'self' ws://localhost:*",
+              ]
             : [
-                "default-src 'self'",
-                "script-src 'self'",
-                "style-src 'self' 'unsafe-inline'",
-                "img-src 'self' data:",
-                "font-src 'self'",
-                "connect-src 'self'",
-            ];
+                  "default-src 'self'",
+                  "script-src 'self'",
+                  "style-src 'self' 'unsafe-inline'",
+                  "img-src 'self' data:",
+                  "font-src 'self'",
+                  "connect-src 'self'",
+              ];
 
         callback({
             responseHeaders: {
@@ -140,8 +140,7 @@ function createMainWindow(): BrowserWindow {
     // Bloqueia qualquer tentativa de navegar para URLs externas dentro da janela
     // principal. Impede que metadata malicioso de torrents redirecione o renderer.
     window.webContents.on('will-navigate', (event, url) => {
-        const isLocal =
-            url.startsWith('file://') || url.startsWith('http://localhost');
+        const isLocal = url.startsWith('file://') || url.startsWith('http://localhost');
         if (!isLocal) {
             event.preventDefault();
             logger.warn('[Security] Navegação externa bloqueada:', url);
@@ -169,7 +168,18 @@ function createMainWindow(): BrowserWindow {
 
 // ─── App lifecycle ────────────────────────────────────────────────────────────
 
+// Multiple processes otherwise restore the same session and duplicate discovery.
+const ownsInstance = app.requestSingleInstanceLock();
+if (!ownsInstance) app.quit();
+app.on('second-instance', () => {
+    const window = BrowserWindow.getAllWindows()[0];
+    if (window?.isMinimized()) window.restore();
+    window?.show();
+    window?.focus();
+});
+
 app.whenReady().then(async () => {
+    if (!ownsInstance) return;
     // ── Habilitar persistência de métricas ─────────────────────────────────────
     try {
         const logsDir = app.getPath('logs');

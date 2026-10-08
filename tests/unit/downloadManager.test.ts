@@ -75,8 +75,23 @@ function makeMockEngine(magnetInfo: TorrentInfo = makeTorrentInfo()): TorrentEng
         removeTracker: jest.fn(),
         restart: jest.fn().mockResolvedValue(undefined),
         isRestarting: jest.fn().mockReturnValue(false),
-        healthCheck: jest.fn().mockReturnValue({ healthy: true, restarting: false, activeTorrents: 0, totalPeers: 0, uptimeMs: 0 }),
-        getMetadata: jest.fn().mockReturnValue({ infoHash: 'a'.repeat(40), creator: null, comment: null, creationDate: null }),
+        healthCheck: jest
+            .fn()
+            .mockReturnValue({
+                healthy: true,
+                restarting: false,
+                activeTorrents: 0,
+                totalPeers: 0,
+                uptimeMs: 0,
+            }),
+        getMetadata: jest
+            .fn()
+            .mockReturnValue({
+                infoHash: 'a'.repeat(40),
+                creator: null,
+                comment: null,
+                creationDate: null,
+            }),
         getPeers: jest.fn().mockReturnValue([]),
         getPieces: jest.fn().mockReturnValue([]),
     });
@@ -139,7 +154,7 @@ describe('DownloadManager — metadata timeout (Requirement 2.5)', () => {
         await manager.addMagnetLink(VALID_MAGNET);
 
         // Advance 60 seconds — the timeout should fire
-        jest.advanceTimersByTime(60_000);
+        await jest.advanceTimersByTimeAsync(60_000);
 
         const lastUpdate = updates[updates.length - 1];
         expect(lastUpdate.status).toBe('metadata-failed');
@@ -221,7 +236,7 @@ describe('DownloadManager — metadata timeout (Requirement 2.5)', () => {
         await manager.remove(INFO_HASH, false);
 
         // Advance past 60s
-        jest.advanceTimersByTime(60_000);
+        await jest.advanceTimersByTimeAsync(60_000);
 
         // No metadata-failed update should have been emitted after removal
         const postRemovalUpdates = updates.filter((u) => u.status === 'metadata-failed');
@@ -241,7 +256,7 @@ describe('DownloadManager — metadata timeout (Requirement 2.5)', () => {
         await manager.addMagnetLink(VALID_MAGNET);
         const callCountBeforeTimeout = updateListener.mock.calls.length;
 
-        jest.advanceTimersByTime(60_000);
+        await jest.advanceTimersByTimeAsync(60_000);
 
         // Should have been called once more with metadata-failed
         expect(updateListener).toHaveBeenCalledTimes(callCountBeforeTimeout + 1);
@@ -257,7 +272,7 @@ describe('DownloadManager — metadata timeout (Requirement 2.5)', () => {
         const manager = createDownloadManager(engine, settings);
 
         await manager.addMagnetLink(VALID_MAGNET);
-        jest.advanceTimersByTime(60_000);
+        await jest.advanceTimersByTimeAsync(60_000);
 
         const all = manager.getAll();
         expect(all).toHaveLength(1);
@@ -1613,11 +1628,11 @@ describe('DownloadManager — Aplicação automática de trackers globais (Requi
 
         // Segundo tracker lança erro (duplicata)
         (engine.addTracker as jest.Mock)
-            .mockImplementationOnce(() => { }) // tracker1 OK
+            .mockImplementationOnce(() => {}) // tracker1 OK
             .mockImplementationOnce(() => {
                 throw new Error('Tracker já presente');
             }) // tracker2 falha
-            .mockImplementationOnce(() => { }); // tracker3 OK
+            .mockImplementationOnce(() => {}); // tracker3 OK
 
         const info = makeTorrentInfo({
             infoHash: INFO_HASH,
@@ -1752,4 +1767,3 @@ describe('DownloadManager — Propriedade 7: Após aplicar trackers globais, sup
         );
     });
 });
-

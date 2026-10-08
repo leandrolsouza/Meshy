@@ -450,6 +450,7 @@ export function registerIpcHandlers(
         'settings:set',
         async (_event, payload: unknown): Promise<IPCResponse<AppSettings>> => {
             try {
+                if (torrentEngine?.isRestarting()) return fail(ErrorCodes.ENGINE_RESTARTING);
                 if (typeof payload !== 'object' || payload === null) {
                     return fail(ErrorCodes.INVALID_SETTINGS_PAYLOAD);
                 }
