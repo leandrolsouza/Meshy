@@ -62,19 +62,25 @@ const { ipcMain: mockIpcMain } = require('electron') as {
 // ─── Geradores fast-check ─────────────────────────────────────────────────────
 
 /** Gera infoHash válido (40 caracteres hexadecimais) */
-const arbInfoHash = fc.hexaString({ minLength: 40, maxLength: 40 });
+const arbInfoHash = fc.string({
+    unit: fc.constantFrom(...'0123456789abcdef'),
+    minLength: 40,
+    maxLength: 40,
+});
 
 /** Gera caminhos de pasta seguros para testes */
-const arbFolderPath = fc.stringOf(
-    fc.constantFrom('a', 'b', 'c', 'd', '/', '_', '-', '0', '1'),
-    { minLength: 1, maxLength: 50 },
-);
+const arbFolderPath = fc.string({
+    unit: fc.constantFrom('a', 'b', 'c', 'd', '/', '_', '-', '0', '1'),
+    minLength: 1,
+    maxLength: 50,
+});
 
 /** Gera caminhos de arquivo relativos seguros para testes */
-const arbFilePath = fc.stringOf(
-    fc.constantFrom('a', 'b', 'c', '.', '/', '_', '-', 'm', 'p', '4'),
-    { minLength: 1, maxLength: 50 },
-);
+const arbFilePath = fc.string({
+    unit: fc.constantFrom('a', 'b', 'c', '.', '/', '_', '-', 'm', 'p', '4'),
+    minLength: 1,
+    maxLength: 50,
+});
 
 /** Gera status de torrent (todos os possíveis) */
 const arbTorrentStatus: fc.Arbitrary<TorrentStatus> = fc.constantFrom(
@@ -181,10 +187,7 @@ function makeMockSettingsManager(): SettingsManager {
     } as unknown as SettingsManager;
 }
 
-function makeMockTorrentEngine(
-    files: TorrentFileInfo[] = [],
-    isRestarting = false,
-) {
+function makeMockTorrentEngine(files: TorrentFileInfo[] = [], isRestarting = false) {
     return {
         getTrackers: jest.fn().mockReturnValue([]),
         addTracker: jest.fn(),
@@ -204,9 +207,7 @@ function getHandler(
     channel: string,
 ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
     const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
-    return call
-        ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
-        : undefined;
+    return call ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>) : undefined;
 }
 
 // ─── Testes de Propriedade ─────────────────────────────────────────────────────

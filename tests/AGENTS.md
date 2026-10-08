@@ -5,6 +5,8 @@ Aplica-se a `tests/`, em complemento ao [guia da raiz](../AGENTS.md).
 ## Ambiente e organização
 
 - Jest usa `ts-jest` com `tsconfig.jest.json` e ambiente padrão `node`.
+  A resolução é `NodeNext`, com `isolatedModules`; `npm run typecheck` verifica os
+  tipos separadamente. React Intl e suas dependências ESM passam pelo `babel-jest`.
   Para componentes/hooks que usam DOM, coloque `/** @jest-environment jsdom */`
   no início do arquivo. Use Testing Library e importe jest-dom quando necessário.
 - `tests/setup.ts` é carregado em `setupFiles` e mocka electron-log/electron-store.

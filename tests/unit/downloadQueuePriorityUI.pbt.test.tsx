@@ -147,8 +147,8 @@ beforeEach(() => {
         setSettings: jest.fn(),
         selectFolder: jest.fn(),
         retryDownload: jest.fn(),
-        onProgress: jest.fn().mockReturnValue(() => { }),
-        onError: jest.fn().mockReturnValue(() => { }),
+        onProgress: jest.fn().mockReturnValue(() => {}),
+        onError: jest.fn().mockReturnValue(() => {}),
         reportError: jest.fn(),
         getMetrics: jest.fn(),
         reorderQueue: jest.fn(),
@@ -223,10 +223,7 @@ describe('Feature: download-queue-priority, Property 5: Botões de limite desabi
         const arb = fc
             .integer({ min: 1, max: 20 })
             .chain((queueSize) =>
-                fc.tuple(
-                    fc.constant(queueSize),
-                    fc.integer({ min: 1, max: queueSize }),
-                ),
+                fc.tuple(fc.constant(queueSize), fc.integer({ min: 1, max: queueSize })),
             );
 
         fc.assert(
@@ -320,12 +317,13 @@ describe('Feature: download-queue-priority, Property 9: Aria-labels contêm nome
     it('aria-labels dos botões contêm o nome do download', () => {
         // Gerar nomes alfanuméricos não-vazios (evitar caracteres especiais que
         // poderiam causar problemas com regex ou formatação)
-        const nameArb = fc.stringOf(
-            fc.constantFrom(
+        const nameArb = fc.string({
+            unit: fc.constantFrom(
                 ...'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -_'.split(''),
             ),
-            { minLength: 1, maxLength: 50 },
-        );
+            minLength: 1,
+            maxLength: 50,
+        });
 
         fc.assert(
             fc.property(nameArb, (name) => {

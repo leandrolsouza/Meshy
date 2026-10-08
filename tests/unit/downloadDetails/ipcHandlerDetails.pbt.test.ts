@@ -4,7 +4,7 @@
  * Propriedades testadas:
  *   - Property 13: IPC handlers reject unknown infoHash
  *
- * Usa fast-check 3 com mínimo de 100 iterações por propriedade.
+ * Usa fast-check 4 com mínimo de 100 iterações por propriedade.
  */
 
 import * as fc from 'fast-check';
@@ -98,9 +98,7 @@ function getHandler(
     channel: string,
 ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
     const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
-    return call
-        ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
-        : undefined;
+    return call ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>) : undefined;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -145,7 +143,11 @@ describe('Feature: download-details-panel, Property 13: Unknown infoHash', () =>
     it('todos os 3 handlers retornam { success: false } para qualquer infoHash de 40 hex chars não gerenciado', async () => {
         await fc.assert(
             fc.asyncProperty(
-                fc.hexaString({ minLength: 40, maxLength: 40 }),
+                fc.string({
+                    unit: fc.constantFrom(...'0123456789abcdef'),
+                    minLength: 40,
+                    maxLength: 40,
+                }),
                 async (unknownInfoHash) => {
                     for (const channel of DETAIL_CHANNELS) {
                         const handler = getHandler(channel);
@@ -170,7 +172,11 @@ describe('Feature: download-details-panel, Property 13: Unknown infoHash', () =>
     it('get-metadata retorna TORRENT_NOT_FOUND para infoHash desconhecido', async () => {
         await fc.assert(
             fc.asyncProperty(
-                fc.hexaString({ minLength: 40, maxLength: 40 }),
+                fc.string({
+                    unit: fc.constantFrom(...'0123456789abcdef'),
+                    minLength: 40,
+                    maxLength: 40,
+                }),
                 async (unknownInfoHash) => {
                     const handler = getHandler('torrent:get-metadata');
                     const response = (await handler!(null, {
@@ -191,7 +197,11 @@ describe('Feature: download-details-panel, Property 13: Unknown infoHash', () =>
     it('get-peers retorna TORRENT_NOT_FOUND para infoHash desconhecido', async () => {
         await fc.assert(
             fc.asyncProperty(
-                fc.hexaString({ minLength: 40, maxLength: 40 }),
+                fc.string({
+                    unit: fc.constantFrom(...'0123456789abcdef'),
+                    minLength: 40,
+                    maxLength: 40,
+                }),
                 async (unknownInfoHash) => {
                     const handler = getHandler('torrent:get-peers');
                     const response = (await handler!(null, {
@@ -212,7 +222,11 @@ describe('Feature: download-details-panel, Property 13: Unknown infoHash', () =>
     it('get-pieces retorna TORRENT_NOT_FOUND para infoHash desconhecido', async () => {
         await fc.assert(
             fc.asyncProperty(
-                fc.hexaString({ minLength: 40, maxLength: 40 }),
+                fc.string({
+                    unit: fc.constantFrom(...'0123456789abcdef'),
+                    minLength: 40,
+                    maxLength: 40,
+                }),
                 async (unknownInfoHash) => {
                     const handler = getHandler('torrent:get-pieces');
                     const response = (await handler!(null, {

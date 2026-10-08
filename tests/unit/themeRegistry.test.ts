@@ -79,10 +79,13 @@ describe('Propriedade 6: Round-trip de serialização de tema', () => {
         .record({
             id: fc.string({ minLength: 1 }),
             displayName: fc.string({ minLength: 1 }),
-            tokenValues: fc.array(fc.hexaString({ minLength: 1 }), {
-                minLength: REQUIRED_TOKEN_KEYS.length,
-                maxLength: REQUIRED_TOKEN_KEYS.length,
-            }),
+            tokenValues: fc.array(
+                fc.string({ unit: fc.constantFrom(...'0123456789abcdef'), minLength: 1 }),
+                {
+                    minLength: REQUIRED_TOKEN_KEYS.length,
+                    maxLength: REQUIRED_TOKEN_KEYS.length,
+                },
+            ),
         })
         .map(({ id, displayName, tokenValues }) => {
             const tokens: Record<string, string> = {};
@@ -113,10 +116,13 @@ describe('Propriedade 7: Validação rejeita tokens incompletos', () => {
         .record({
             id: fc.string({ minLength: 1 }),
             displayName: fc.string({ minLength: 1 }),
-            tokenValues: fc.array(fc.hexaString({ minLength: 1 }), {
-                minLength: REQUIRED_TOKEN_KEYS.length,
-                maxLength: REQUIRED_TOKEN_KEYS.length,
-            }),
+            tokenValues: fc.array(
+                fc.string({ unit: fc.constantFrom(...'0123456789abcdef'), minLength: 1 }),
+                {
+                    minLength: REQUIRED_TOKEN_KEYS.length,
+                    maxLength: REQUIRED_TOKEN_KEYS.length,
+                },
+            ),
             // Gera subarray de índices para remover (pelo menos 1 chave removida)
             indicesToRemove: fc.subarray(
                 Array.from({ length: REQUIRED_TOKEN_KEYS.length }, (_, i) => i),

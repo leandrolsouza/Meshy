@@ -66,7 +66,8 @@ describe('isValidMagnetUri', () => {
         const MAGNET_PREFIX = 'magnet:?xt=urn:btih:';
 
         /** Arbitrary that generates exactly 40 hex characters */
-        const hexHash40 = fc.stringOf(fc.constantFrom(...'0123456789abcdefABCDEF'.split('')), {
+        const hexHash40 = fc.string({
+            unit: fc.constantFrom(...'0123456789abcdefABCDEF'.split('')),
             minLength: 40,
             maxLength: 40,
         });
@@ -75,19 +76,21 @@ describe('isValidMagnetUri', () => {
         const optionalQueryParams = fc.oneof(
             fc.constant(''),
             fc
-                .stringOf(
-                    fc.constantFrom(
+                .string({
+                    unit: fc.constantFrom(
                         ...'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789&=%.+:?_-'.split(
                             '',
                         ),
                     ),
-                    { minLength: 1, maxLength: 50 },
-                )
+                    minLength: 1,
+                    maxLength: 50,
+                })
                 .map((s) => `&${s}`),
         );
 
         /** Arbitrary that generates whitespace for padding */
-        const whitespace = fc.stringOf(fc.constantFrom(' ', '\t', '\n', '\r'), {
+        const whitespace = fc.string({
+            unit: fc.constantFrom(' ', '\t', '\n', '\r'),
             minLength: 0,
             maxLength: 5,
         });
@@ -126,7 +129,8 @@ describe('isValidMagnetUri', () => {
         });
 
         it('returns false when hash has fewer than 40 hex characters', () => {
-            const shortHash = fc.stringOf(fc.constantFrom(...'0123456789abcdef'.split('')), {
+            const shortHash = fc.string({
+                unit: fc.constantFrom(...'0123456789abcdef'.split('')),
                 minLength: 0,
                 maxLength: 39,
             });
@@ -139,7 +143,8 @@ describe('isValidMagnetUri', () => {
         });
 
         it('returns false when hash has more than 40 hex characters', () => {
-            const longHash = fc.stringOf(fc.constantFrom(...'0123456789abcdef'.split('')), {
+            const longHash = fc.string({
+                unit: fc.constantFrom(...'0123456789abcdef'.split('')),
                 minLength: 41,
                 maxLength: 80,
             });
@@ -189,10 +194,11 @@ describe('Property 1: Validação de arquivo .torrent', () => {
 
     /** Arbitrary that generates file paths ending with .torrent (case-insensitive) */
     const torrentExtension = fc.constantFrom('.torrent', '.TORRENT', '.Torrent', '.tOrReNt');
-    const fileBaseName = fc.stringOf(
-        fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789_-'.split('')),
-        { minLength: 1, maxLength: 30 },
-    );
+    const fileBaseName = fc.string({
+        unit: fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789_-'.split('')),
+        minLength: 1,
+        maxLength: 30,
+    });
     const torrentFilePath = fc
         .tuple(fileBaseName, torrentExtension)
         .map(([name, ext]) => name + ext);
@@ -311,24 +317,17 @@ describe('isValidTorrentFile', () => {
 
 // Property 1: Requisito 3.4
 describe('[PBT] Property 1: isValidTorrentFile — extensão .torrent (case-insensitive)', () => {
-    const fileBaseName = fc.stringOf(
-        fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789_-'.split('')),
-        { minLength: 1, maxLength: 30 },
-    );
+    const fileBaseName = fc.string({
+        unit: fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789_-'.split('')),
+        minLength: 1,
+        maxLength: 30,
+    });
 
     /** Gerador de extensões .torrent com variações de capitalização */
     const torrentExtension = fc.constantFrom('.torrent', '.TORRENT', '.Torrent', '.tOrReNt');
 
     /** Gerador de extensões que NÃO são .torrent */
-    const nonTorrentExtension = fc.constantFrom(
-        '.txt',
-        '.zip',
-        '.mp4',
-        '.pdf',
-        '.exe',
-        '.bin',
-        '',
-    );
+    const nonTorrentExtension = fc.constantFrom('.txt', '.zip', '.mp4', '.pdf', '.exe', '.bin', '');
 
     it('retorna true para qualquer caminho terminando com .torrent (case-insensitive)', () => {
         // Property 1: Requisito 3.4
@@ -602,10 +601,7 @@ describe('isValidSpeedLimit', () => {
 
 // ─── Importações para testes de Tracker URL ───────────────────────────────────
 
-import {
-    isValidTrackerUrl,
-    normalizeTrackerUrl,
-} from '../../shared/validators';
+import { isValidTrackerUrl, normalizeTrackerUrl } from '../../shared/validators';
 
 // ─── isValidTrackerUrl (testes unitários) ─────────────────────────────────────
 
@@ -711,7 +707,8 @@ describe('normalizeTrackerUrl', () => {
 describe('[PBT] Propriedade 1: URLs com protocolos válidos são aceitas; protocolos inválidos são rejeitados', () => {
     /** Gerador de hostnames válidos */
     const validHostname = fc
-        .stringOf(fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')), {
+        .string({
+            unit: fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')),
             minLength: 1,
             maxLength: 20,
         })
@@ -729,7 +726,8 @@ describe('[PBT] Propriedade 1: URLs com protocolos válidos são aceitas; protoc
         fc.constant('/announce'),
         fc.constant('/scrape'),
         fc
-            .stringOf(fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789/-_'.split('')), {
+            .string({
+                unit: fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789/-_'.split('')),
                 minLength: 1,
                 maxLength: 20,
             })
@@ -785,7 +783,8 @@ describe('[PBT] Propriedade 2: normalização é idempotente', () => {
         .tuple(
             fc.constantFrom('http', 'https', 'udp', 'HTTP', 'HTTPS', 'UDP', 'Http', 'Udp'),
             fc
-                .stringOf(fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')), {
+                .string({
+                    unit: fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')),
                     minLength: 1,
                     maxLength: 15,
                 })
@@ -796,8 +795,8 @@ describe('[PBT] Propriedade 2: normalização é idempotente', () => {
             ),
             fc.oneof(fc.constant(''), fc.constant('/announce'), fc.constant('/scrape')),
             fc.oneof(fc.constant(''), fc.constant('/'), fc.constant('//'), fc.constant('///')),
-            fc.stringOf(fc.constant(' '), { minLength: 0, maxLength: 3 }),
-            fc.stringOf(fc.constant(' '), { minLength: 0, maxLength: 3 }),
+            fc.string({ unit: fc.constant(' '), minLength: 0, maxLength: 3 }),
+            fc.string({ unit: fc.constant(' '), minLength: 0, maxLength: 3 }),
         )
         .map(
             ([proto, host, port, path, trailingSlashes, leadingSpaces, trailingSpaces]) =>
@@ -826,7 +825,8 @@ describe('[PBT] Propriedade 3: round-trip — isValidTrackerUrl(normalizeTracker
         .tuple(
             fc.constantFrom('http', 'https', 'udp', 'HTTP', 'HTTPS', 'UDP', 'Http', 'Udp'),
             fc
-                .stringOf(fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')), {
+                .string({
+                    unit: fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')),
                     minLength: 1,
                     maxLength: 15,
                 })
@@ -836,8 +836,8 @@ describe('[PBT] Propriedade 3: round-trip — isValidTrackerUrl(normalizeTracker
                 fc.integer({ min: 1, max: 65535 }).map((p) => `:${p}`),
             ),
             fc.oneof(fc.constant(''), fc.constant('/announce'), fc.constant('/scrape')),
-            fc.stringOf(fc.constant(' '), { minLength: 0, maxLength: 3 }),
-            fc.stringOf(fc.constant(' '), { minLength: 0, maxLength: 3 }),
+            fc.string({ unit: fc.constant(' '), minLength: 0, maxLength: 3 }),
+            fc.string({ unit: fc.constant(' '), minLength: 0, maxLength: 3 }),
         )
         .map(
             ([proto, host, port, path, leadingSpaces, trailingSpaces]) =>
@@ -1216,7 +1216,9 @@ describe('[PBT] Property 4: isValidThemeId — strings não-vazias são válidas
         fc.assert(
             fc.property(
                 fc.oneof(
-                    fc.string({ minLength: 1 }).map((s) => ({ value: s as unknown, expected: true })),
+                    fc
+                        .string({ minLength: 1 })
+                        .map((s) => ({ value: s as unknown, expected: true })),
                     fc.constant({ value: '' as unknown, expected: false }),
                     fc.integer().map((n) => ({ value: n as unknown, expected: false })),
                     fc.boolean().map((b) => ({ value: b as unknown, expected: false })),

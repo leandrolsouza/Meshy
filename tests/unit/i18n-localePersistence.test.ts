@@ -158,7 +158,9 @@ describe('Property 7: Unrecognized locale fallback', () => {
         await fc.assert(
             fc.asyncProperty(
                 // Generate strings that are empty or contain only whitespace
-                fc.stringOf(fc.constantFrom(' ', '\t', '\n', '\r')).filter((s) => s.trim() === ''),
+                fc
+                    .string({ unit: fc.constantFrom(' ', '\t', '\n', '\r') })
+                    .filter((s) => s.trim() === ''),
                 async (blankLocale) => {
                     const handler = getIpcHandler('settings:set');
                     const result = (await handler(null, { locale: blankLocale })) as {

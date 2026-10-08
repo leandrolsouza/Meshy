@@ -20,12 +20,13 @@ function makeIntl(locale: string, messages: Record<string, string>) {
 const placeholderNameArb = fc
     .tuple(
         fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz'.split('')),
-        fc.stringOf(
-            fc.constantFrom(
+        fc.string({
+            unit: fc.constantFrom(
                 ...'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split(''),
             ),
-            { minLength: 0, maxLength: 11 },
-        ),
+            minLength: 0,
+            maxLength: 11,
+        }),
     )
     .map(([first, rest]) => first + rest);
 
@@ -34,14 +35,15 @@ const placeholderNameArb = fc
  * Avoids ICU-special characters ({, }, #) to prevent parsing issues.
  */
 const safeValueArb = fc
-    .stringOf(
-        fc.constantFrom(
+    .string({
+        unit: fc.constantFrom(
             ...'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _-.!@$%&*()+='.split(
                 '',
             ),
         ),
-        { minLength: 1, maxLength: 30 },
-    )
+        minLength: 1,
+        maxLength: 30,
+    })
     .filter((s) => s.trim().length > 0);
 
 // ─── Property-Based Tests ─────────────────────────────────────────────────────
@@ -224,7 +226,8 @@ describe('Property 10: Error code resolution', () => {
         // Mix: pick from actual error codes OR generate random strings
         const mixedCodeArb = fc.oneof(
             fc.constantFrom(...allErrorCodeValues),
-            fc.stringOf(fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz.0123456789'.split('')), {
+            fc.string({
+                unit: fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz.0123456789'.split('')),
                 minLength: 3,
                 maxLength: 40,
             }),

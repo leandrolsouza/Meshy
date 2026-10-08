@@ -23,8 +23,6 @@ jest.mock('webtorrent', () => {
     return { __esModule: true, default: MockWebTorrent };
 });
 
-
-
 import { createTorrentEngine } from '../../main/torrentEngine';
 import type WebTorrent from 'webtorrent';
 import type { Torrent } from 'webtorrent';
@@ -341,7 +339,11 @@ describe('Property 6: Payload de progresso contém todos os campos obrigatórios
      * Some fields may be undefined to exercise the `?? 0` / `?? Infinity` fallback in torrentToInfo().
      */
     const fakeTorrentArb = fc.record({
-        infoHash: fc.hexaString({ minLength: 40, maxLength: 40 }),
+        infoHash: fc.string({
+            unit: fc.constantFrom(...'0123456789abcdef'),
+            minLength: 40,
+            maxLength: 40,
+        }),
         name: fc.oneof(fc.string({ minLength: 1 }), fc.constant(undefined)),
         length: fc.oneof(fc.nat(), fc.constant(undefined)),
         progress: fc.oneof(fc.double({ min: 0, max: 1, noNaN: true }), fc.constant(undefined)),
@@ -963,7 +965,7 @@ describe('TorrentEngine.restart() — fluxo completo', () => {
         setupMockWebTorrentForRestart(MockWebTorrent);
 
         // Escutar erros para evitar "unhandled error" (torrent sem status será re-adicionado)
-        engine.on('error', () => { });
+        engine.on('error', () => {});
 
         const newOptions = {
             ...DEFAULT_OPTIONS,
@@ -1034,7 +1036,7 @@ describe('TorrentEngine.restart() — fluxo completo', () => {
 
         // Setar status como 'paused' via pause()
         const torrent = client.torrents[0];
-        (torrent.pause as jest.Mock).mockImplementation(() => { });
+        (torrent.pause as jest.Mock).mockImplementation(() => {});
         await engine.pause(infoHash);
 
         setupMockWebTorrentForRestart(MockWebTorrent);
@@ -1439,9 +1441,7 @@ describe('TorrentEngine.addTorrentFile() — bloco catch de leitura de arquivo',
     let mockReadFile: jest.Mock;
 
     beforeEach(() => {
-        mockReadFile = (
-            jest.requireMock<{ readFile: jest.Mock }>('fs/promises')
-        ).readFile;
+        mockReadFile = jest.requireMock<{ readFile: jest.Mock }>('fs/promises').readFile;
         mockReadFile.mockReset();
     });
 
@@ -1500,9 +1500,7 @@ describe('TorrentEngine.remove() — cobertura de todos os caminhos', () => {
 
     it('chama destroy({destroyStore:false}) e resolve quando deleteFiles=false', async () => {
         const infoHash = 'a5'.repeat(20);
-        const destroyMock = jest.fn(
-            (_opts: unknown, cb?: (err?: Error | null) => void) => cb?.(),
-        );
+        const destroyMock = jest.fn((_opts: unknown, cb?: (err?: Error | null) => void) => cb?.());
         const fakeTorrent = makeFakeTorrent(infoHash, {
             destroy: destroyMock as unknown as Torrent['destroy'],
         });
@@ -1517,9 +1515,7 @@ describe('TorrentEngine.remove() — cobertura de todos os caminhos', () => {
 
     it('chama readdir e rm quando deleteFiles=true e a pasta está vazia', async () => {
         const infoHash = 'a6'.repeat(20);
-        const destroyMock = jest.fn(
-            (_opts: unknown, cb?: (err?: Error | null) => void) => cb?.(),
-        );
+        const destroyMock = jest.fn((_opts: unknown, cb?: (err?: Error | null) => void) => cb?.());
         const fakeTorrent = makeFakeTorrent(infoHash, {
             name: 'meu-torrent',
             destroy: destroyMock as unknown as Torrent['destroy'],
@@ -1534,17 +1530,14 @@ describe('TorrentEngine.remove() — cobertura de todos os caminhos', () => {
         await engine.remove(infoHash, true);
 
         expect(fsMock.readdir).toHaveBeenCalledWith(expect.stringContaining('meu-torrent'));
-        expect(fsMock.rm).toHaveBeenCalledWith(
-            expect.stringContaining('meu-torrent'),
-            { recursive: true },
-        );
+        expect(fsMock.rm).toHaveBeenCalledWith(expect.stringContaining('meu-torrent'), {
+            recursive: true,
+        });
     });
 
     it('não chama rm quando deleteFiles=true mas a pasta tem conteúdo', async () => {
         const infoHash = 'a7'.repeat(20);
-        const destroyMock = jest.fn(
-            (_opts: unknown, cb?: (err?: Error | null) => void) => cb?.(),
-        );
+        const destroyMock = jest.fn((_opts: unknown, cb?: (err?: Error | null) => void) => cb?.());
         const fakeTorrent = makeFakeTorrent(infoHash, {
             name: 'torrent-cheio',
             destroy: destroyMock as unknown as Torrent['destroy'],
@@ -1563,9 +1556,8 @@ describe('TorrentEngine.remove() — cobertura de todos os caminhos', () => {
 
     it('rejeita quando destroy retorna erro', async () => {
         const infoHash = 'a8'.repeat(20);
-        const destroyMock = jest.fn(
-            (_opts: unknown, cb?: (err?: Error | null) => void) =>
-                cb?.(new Error('Disco cheio ao destruir')),
+        const destroyMock = jest.fn((_opts: unknown, cb?: (err?: Error | null) => void) =>
+            cb?.(new Error('Disco cheio ao destruir')),
         );
         const fakeTorrent = makeFakeTorrent(infoHash, {
             destroy: destroyMock as unknown as Torrent['destroy'],
@@ -1580,9 +1572,7 @@ describe('TorrentEngine.remove() — cobertura de todos os caminhos', () => {
 
     it('resolve mesmo quando readdir rejeita (ignora erros de limpeza de pasta)', async () => {
         const infoHash = 'a9'.repeat(20);
-        const destroyMock = jest.fn(
-            (_opts: unknown, cb?: (err?: Error | null) => void) => cb?.(),
-        );
+        const destroyMock = jest.fn((_opts: unknown, cb?: (err?: Error | null) => void) => cb?.());
         const fakeTorrent = makeFakeTorrent(infoHash, {
             name: 'torrent-sem-pasta',
             destroy: destroyMock as unknown as Torrent['destroy'],
@@ -1590,9 +1580,7 @@ describe('TorrentEngine.remove() — cobertura de todos os caminhos', () => {
         const mockClient = makeMockClient();
         mockClient.torrents.push(fakeTorrent);
 
-        fsMock.readdir.mockRejectedValue(
-            Object.assign(new Error('ENOENT'), { code: 'ENOENT' }),
-        );
+        fsMock.readdir.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
 
         const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
 
@@ -1608,9 +1596,9 @@ describe('TorrentEngine.resume() — cobertura de caminhos ausentes', () => {
         const mockClient = makeMockClient();
         const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
 
-        await expect(
-            engine.resume('0000000000000000000000000000000000000001'),
-        ).rejects.toThrow(/Torrent não encontrado/);
+        await expect(engine.resume('0000000000000000000000000000000000000001')).rejects.toThrow(
+            /Torrent não encontrado/,
+        );
     });
 
     it('chama resumeTorrentNetwork e emite progress quando o torrent existe', async () => {
@@ -1629,9 +1617,7 @@ describe('TorrentEngine.resume() — cobertura de caminhos ausentes', () => {
 
         await engine.resume(infoHash);
 
-        expect(
-            (fakeTorrent as unknown as { resume: jest.Mock }).resume,
-        ).toHaveBeenCalled();
+        expect((fakeTorrent as unknown as { resume: jest.Mock }).resume).toHaveBeenCalled();
         expect(progressEvents).toHaveLength(1);
     });
 });
@@ -1697,9 +1683,9 @@ describe('TorrentEngine.getMetadata() — cobertura de caminhos ausentes', () =>
         const mockClient = makeMockClient();
         const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
 
-        expect(() =>
-            engine.getMetadata('0000000000000000000000000000000000000002'),
-        ).toThrow(/Torrent não encontrado/);
+        expect(() => engine.getMetadata('0000000000000000000000000000000000000002')).toThrow(
+            /Torrent não encontrado/,
+        );
     });
 
     it('retorna todos os campos null quando o torrent não tem metadados de criação', () => {
@@ -1725,7 +1711,8 @@ describe('TorrentEngine.getMetadata() — cobertura de caminhos ausentes', () =>
             by: 'qBittorrent/4.6.0',
             date: 1700000000000,
         };
-        (fakeTorrent as unknown as Record<string, unknown>).comment = 'Arquivo de teste de metadados';
+        (fakeTorrent as unknown as Record<string, unknown>).comment =
+            'Arquivo de teste de metadados';
         const mockClient = makeMockClient();
         mockClient.torrents.push(fakeTorrent);
 
@@ -1745,9 +1732,9 @@ describe('TorrentEngine.getPeers() — cobertura de caminhos ausentes', () => {
         const mockClient = makeMockClient();
         const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
 
-        expect(() =>
-            engine.getPeers('0000000000000000000000000000000000000003'),
-        ).toThrow(/Torrent não encontrado/);
+        expect(() => engine.getPeers('0000000000000000000000000000000000000003')).toThrow(
+            /Torrent não encontrado/,
+        );
     });
 
     it('retorna array vazio quando o torrent não tem wires (sem peers conectados)', () => {
@@ -1796,9 +1783,9 @@ describe('TorrentEngine.getPieces() — cobertura de caminhos ausentes', () => {
         const mockClient = makeMockClient();
         const engine = createTorrentEngine(DEFAULT_OPTIONS, mockClient);
 
-        expect(() =>
-            engine.getPieces('0000000000000000000000000000000000000004'),
-        ).toThrow(/Torrent não encontrado/);
+        expect(() => engine.getPieces('0000000000000000000000000000000000000004')).toThrow(
+            /Torrent não encontrado/,
+        );
     });
 
     it('retorna array vazio quando o torrent não tem informação de peças', () => {
@@ -1833,107 +1820,100 @@ describe('TorrentEngine.getPieces() — cobertura de caminhos ausentes', () => {
 
 // ─── _attachTorrentListeners — eventos done, error, download, upload ──────────
 
-describe(
-    'TorrentEngine._attachTorrentListeners — eventos de torrent (via addMagnetLink)',
-    () => {
-        it('marca status "completed" e emite "done" quando torrent dispara done', async () => {
-            const infoHash = 'b8'.repeat(20);
-            const magnetURI = `magnet:?xt=urn:btih:${infoHash}`;
-            const fakeTorrent = makeEventTorrent(infoHash);
-            const client = makeClientForAddMagnet(fakeTorrent);
-            const engine = createTorrentEngine(DEFAULT_OPTIONS, client);
+describe('TorrentEngine._attachTorrentListeners — eventos de torrent (via addMagnetLink)', () => {
+    it('marca status "completed" e emite "done" quando torrent dispara done', async () => {
+        const infoHash = 'b8'.repeat(20);
+        const magnetURI = `magnet:?xt=urn:btih:${infoHash}`;
+        const fakeTorrent = makeEventTorrent(infoHash);
+        const client = makeClientForAddMagnet(fakeTorrent);
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, client);
 
-            await engine.addMagnetLink(magnetURI);
+        await engine.addMagnetLink(magnetURI);
 
-            const doneEvents: string[] = [];
-            engine.on('done', (hash) => doneEvents.push(hash));
+        const doneEvents: string[] = [];
+        engine.on('done', (hash) => doneEvents.push(hash));
 
-            (fakeTorrent as unknown as EventEmitter).emit('done');
+        (fakeTorrent as unknown as EventEmitter).emit('done');
 
-            // statusMap e emissão de 'done' são síncronos no handler
-            expect(
-                engine.getAll().find((i) => i.infoHash === infoHash)?.status,
-            ).toBe('completed');
-            expect(doneEvents).toContain(infoHash);
-        });
+        // statusMap e emissão de 'done' são síncronos no handler
+        expect(engine.getAll().find((i) => i.infoHash === infoHash)?.status).toBe('completed');
+        expect(doneEvents).toContain(infoHash);
+    });
 
-        it('marca status "error" e emite "error" quando torrent dispara error (Error)', async () => {
-            const infoHash = 'b9'.repeat(20);
-            const magnetURI = `magnet:?xt=urn:btih:${infoHash}`;
-            const fakeTorrent = makeEventTorrent(infoHash);
-            const client = makeClientForAddMagnet(fakeTorrent);
-            const engine = createTorrentEngine(DEFAULT_OPTIONS, client);
+    it('marca status "error" e emite "error" quando torrent dispara error (Error)', async () => {
+        const infoHash = 'b9'.repeat(20);
+        const magnetURI = `magnet:?xt=urn:btih:${infoHash}`;
+        const fakeTorrent = makeEventTorrent(infoHash);
+        const client = makeClientForAddMagnet(fakeTorrent);
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, client);
 
-            await engine.addMagnetLink(magnetURI);
+        await engine.addMagnetLink(magnetURI);
 
-            const errorEvents: Array<{ hash: string; err: Error }> = [];
-            engine.on('error', (hash, err) => errorEvents.push({ hash, err }));
+        const errorEvents: Array<{ hash: string; err: Error }> = [];
+        engine.on('error', (hash, err) => errorEvents.push({ hash, err }));
 
-            const torrentError = new Error('Torrent corrompido');
-            (fakeTorrent as unknown as EventEmitter).emit('error', torrentError);
+        const torrentError = new Error('Torrent corrompido');
+        (fakeTorrent as unknown as EventEmitter).emit('error', torrentError);
 
-            expect(
-                engine.getAll().find((i) => i.infoHash === infoHash)?.status,
-            ).toBe('error');
-            expect(errorEvents).toHaveLength(1);
-            expect(errorEvents[0].hash).toBe(infoHash);
-            expect(errorEvents[0].err).toBe(torrentError);
-        });
+        expect(engine.getAll().find((i) => i.infoHash === infoHash)?.status).toBe('error');
+        expect(errorEvents).toHaveLength(1);
+        expect(errorEvents[0].hash).toBe(infoHash);
+        expect(errorEvents[0].err).toBe(torrentError);
+    });
 
-        it('converte string de erro em instância de Error quando torrent emite error com string', async () => {
-            const infoHash = 'c0'.repeat(20);
-            const magnetURI = `magnet:?xt=urn:btih:${infoHash}`;
-            const fakeTorrent = makeEventTorrent(infoHash);
-            const client = makeClientForAddMagnet(fakeTorrent);
-            const engine = createTorrentEngine(DEFAULT_OPTIONS, client);
+    it('converte string de erro em instância de Error quando torrent emite error com string', async () => {
+        const infoHash = 'c0'.repeat(20);
+        const magnetURI = `magnet:?xt=urn:btih:${infoHash}`;
+        const fakeTorrent = makeEventTorrent(infoHash);
+        const client = makeClientForAddMagnet(fakeTorrent);
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, client);
 
-            await engine.addMagnetLink(magnetURI);
+        await engine.addMagnetLink(magnetURI);
 
-            const receivedErrors: Error[] = [];
-            engine.on('error', (_hash, err) => receivedErrors.push(err));
+        const receivedErrors: Error[] = [];
+        engine.on('error', (_hash, err) => receivedErrors.push(err));
 
-            (fakeTorrent as unknown as EventEmitter).emit('error', 'string de erro pura');
+        (fakeTorrent as unknown as EventEmitter).emit('error', 'string de erro pura');
 
-            expect(receivedErrors).toHaveLength(1);
-            expect(receivedErrors[0]).toBeInstanceOf(Error);
-            expect(receivedErrors[0].message).toBe('string de erro pura');
-        });
+        expect(receivedErrors).toHaveLength(1);
+        expect(receivedErrors[0]).toBeInstanceOf(Error);
+        expect(receivedErrors[0].message).toBe('string de erro pura');
+    });
 
-        it('emite "progress" no engine quando torrent dispara "download"', async () => {
-            const infoHash = 'c1'.repeat(20);
-            const magnetURI = `magnet:?xt=urn:btih:${infoHash}`;
-            const fakeTorrent = makeEventTorrent(infoHash);
-            const client = makeClientForAddMagnet(fakeTorrent);
-            const engine = createTorrentEngine(DEFAULT_OPTIONS, client);
+    it('emite "progress" no engine quando torrent dispara "download"', async () => {
+        const infoHash = 'c1'.repeat(20);
+        const magnetURI = `magnet:?xt=urn:btih:${infoHash}`;
+        const fakeTorrent = makeEventTorrent(infoHash);
+        const client = makeClientForAddMagnet(fakeTorrent);
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, client);
 
-            await engine.addMagnetLink(magnetURI);
+        await engine.addMagnetLink(magnetURI);
 
-            const progressEvents: unknown[] = [];
-            engine.on('progress', (info) => progressEvents.push(info));
+        const progressEvents: unknown[] = [];
+        engine.on('progress', (info) => progressEvents.push(info));
 
-            (fakeTorrent as unknown as EventEmitter).emit('download');
+        (fakeTorrent as unknown as EventEmitter).emit('download');
 
-            expect(progressEvents).toHaveLength(1);
-        });
+        expect(progressEvents).toHaveLength(1);
+    });
 
-        it('emite "progress" no engine quando torrent dispara "upload"', async () => {
-            const infoHash = 'c2'.repeat(20);
-            const magnetURI = `magnet:?xt=urn:btih:${infoHash}`;
-            const fakeTorrent = makeEventTorrent(infoHash);
-            const client = makeClientForAddMagnet(fakeTorrent);
-            const engine = createTorrentEngine(DEFAULT_OPTIONS, client);
+    it('emite "progress" no engine quando torrent dispara "upload"', async () => {
+        const infoHash = 'c2'.repeat(20);
+        const magnetURI = `magnet:?xt=urn:btih:${infoHash}`;
+        const fakeTorrent = makeEventTorrent(infoHash);
+        const client = makeClientForAddMagnet(fakeTorrent);
+        const engine = createTorrentEngine(DEFAULT_OPTIONS, client);
 
-            await engine.addMagnetLink(magnetURI);
+        await engine.addMagnetLink(magnetURI);
 
-            const progressEvents: unknown[] = [];
-            engine.on('progress', (info) => progressEvents.push(info));
+        const progressEvents: unknown[] = [];
+        engine.on('progress', (info) => progressEvents.push(info));
 
-            (fakeTorrent as unknown as EventEmitter).emit('upload');
+        (fakeTorrent as unknown as EventEmitter).emit('upload');
 
-            expect(progressEvents).toHaveLength(1);
-        });
-    },
-);
+        expect(progressEvents).toHaveLength(1);
+    });
+});
 
 // ─── _attachTorrentListeners — warning com rate limiting ─────────────────────
 
@@ -1941,9 +1921,8 @@ describe('TorrentEngine._attachTorrentListeners — warning e rate limiting', ()
     let logWarnMock: jest.Mock;
 
     beforeEach(() => {
-        logWarnMock = (
-            jest.requireMock<{ default: { warn: jest.Mock } }>('electron-log').default
-        ).warn;
+        logWarnMock = jest.requireMock<{ default: { warn: jest.Mock } }>('electron-log').default
+            .warn;
         logWarnMock.mockClear();
     });
 

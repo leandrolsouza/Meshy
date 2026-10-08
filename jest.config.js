@@ -12,6 +12,14 @@ const config = {
         '**/*.spec.tsx',
     ],
     transform: {
+        '^.+\\.[cm]?js$': [
+            'babel-jest',
+            {
+                babelrc: false,
+                configFile: false,
+                plugins: ['@babel/plugin-transform-modules-commonjs'],
+            },
+        ],
         '^.+\\.tsx?$': [
             'ts-jest',
             {
@@ -19,6 +27,8 @@ const config = {
             },
         ],
     },
+    // React Intl 12 e suas dependências publicam somente ESM.
+    transformIgnorePatterns: ['node_modules/(?!(react-intl/|@formatjs/|intl-messageformat/))'],
     moduleNameMapper: {
         '\\.module\\.css$': 'identity-obj-proxy',
         '^@renderer/(.*)$': '<rootDir>/src/$1',

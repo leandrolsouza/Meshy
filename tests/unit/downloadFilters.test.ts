@@ -32,7 +32,11 @@ export function arbitraryTorrentStatus(): fc.Arbitrary<TorrentStatus> {
 /** Gera um DownloadItem com valores aleatórios para todos os campos obrigatórios */
 export function arbitraryDownloadItem(): fc.Arbitrary<DownloadItem> {
     return fc.record({
-        infoHash: fc.hexaString({ minLength: 40, maxLength: 40 }),
+        infoHash: fc.string({
+            unit: fc.constantFrom(...'0123456789abcdef'),
+            minLength: 40,
+            maxLength: 40,
+        }),
         name: fc.string({ minLength: 0, maxLength: 100 }),
         totalSize: fc.nat(),
         downloadedSize: fc.nat(),
@@ -54,7 +58,9 @@ export function arbitrarySearchTerm(): fc.Arbitrary<string> {
         fc.constant(''),
         fc.constant('   '),
         fc.string({ minLength: 0, maxLength: 50 }),
-        fc.stringOf(fc.constantFrom('.', '*', '?', '[', ']', '(', ')', '+', '^', '$', '\\', '|')),
+        fc.string({
+            unit: fc.constantFrom('.', '*', '?', '[', ']', '(', ')', '+', '^', '$', '\\', '|'),
+        }),
     );
 }
 

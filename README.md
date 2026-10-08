@@ -28,21 +28,21 @@ Meshy é um cliente BitTorrent desktop com interface moderna inspirada no VS Cod
 
 ### Stack
 
-| Camada       | Tecnologia                                                         |
-| ------------ | ------------------------------------------------------------------ |
-| Framework    | [Electron](https://www.electronjs.org/) 44                         |
-| Build        | [electron-vite](https://electron-vite.org/) 5 + Vite 8             |
-| UI           | [React](https://react.dev/) 19                                     |
-| Estado       | [Zustand](https://zustand-demo.pmnd.rs/) 5                         |
-| Torrent      | [WebTorrent](https://webtorrent.io/) 3                             |
-| Persistência | [electron-store](https://github.com/sindresorhus/electron-store) 8 |
-| i18n         | [react-intl](https://formatjs.io/docs/react-intl/) 7               |
-| Linguagem    | TypeScript 6 (strict mode)                                         |
-| Logging      | [electron-log](https://github.com/megahertz/electron-log) 5        |
-| Testes       | Jest 29 + ts-jest + @testing-library/react 16                      |
-| PBT          | [fast-check](https://fast-check.dev/) 3                            |
-| Linting      | ESLint 10 + typescript-eslint 8                                    |
-| Formatação   | Prettier 3                                                         |
+| Camada       | Tecnologia                                                          |
+| ------------ | ------------------------------------------------------------------- |
+| Framework    | [Electron](https://www.electronjs.org/) 44                          |
+| Build        | [electron-vite](https://electron-vite.org/) 5 + Vite 7              |
+| UI           | [React](https://react.dev/) 19                                      |
+| Estado       | [Zustand](https://zustand-demo.pmnd.rs/) 5                          |
+| Torrent      | [WebTorrent](https://webtorrent.io/) 3                              |
+| Persistência | [electron-store](https://github.com/sindresorhus/electron-store) 11 |
+| i18n         | [react-intl](https://formatjs.github.io/docs/react-intl/) 12        |
+| Linguagem    | TypeScript 7 (strict mode), API compatível 6 para Jest/ESLint       |
+| Logging      | [electron-log](https://github.com/megahertz/electron-log) 5         |
+| Testes       | Jest 30 + ts-jest + @testing-library/react 16                       |
+| PBT          | [fast-check](https://fast-check.dev/) 4                             |
+| Linting      | ESLint 10 + typescript-eslint 8                                     |
+| Formatação   | Prettier 3                                                          |
 
 **Pré-requisito:** Node.js >= 22.13
 
@@ -144,8 +144,12 @@ O projeto usa referências compostas com quatro configs:
 
 - `tsconfig.node.json` — main + preload + shared (target ES2022)
 - `tsconfig.web.json` — renderer + shared (target ES2020, JSX react-jsx)
-- `tsconfig.jest.json` — testes (CommonJS, resolução node)
-- `tsconfig.json` — raiz com referências; usado por `tsc --noEmit`
+- `tsconfig.jest.json` — testes (NodeNext, saída CommonJS, módulos isolados)
+- `tsconfig.json` — raiz com referências; `npm run typecheck` verifica os três projetos explicitamente
+
+`npx tsc` executa o TypeScript 7 nativo. O alias `typescript` fornece a API do
+TypeScript 6 para `ts-jest` e `typescript-eslint`; `npx tsc6` executa esse compilador
+compatível. Veja as [decisões da atualização de dependências](docs/DEPENDENCY_UPDATES.md).
 
 ---
 

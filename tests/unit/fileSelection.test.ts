@@ -130,7 +130,11 @@ const fileDescArb = fc.record({
 const fileArrayArb = fc.array(fileDescArb, { minLength: 1, maxLength: 20 });
 
 /** Generates a 40-char hex infoHash */
-const infoHashArb = fc.hexaString({ minLength: 40, maxLength: 40 });
+const infoHashArb = fc.string({
+    unit: fc.constantFrom(...'0123456789abcdef'),
+    minLength: 40,
+    maxLength: 40,
+});
 
 // ─── Property 1: Extração completa de informações de arquivo ──────────────────
 
@@ -362,8 +366,19 @@ function makeDMMockEngine(): TorrentEngine & EventEmitter {
         removeTracker: jest.fn(),
         restart: jest.fn().mockResolvedValue(undefined),
         isRestarting: jest.fn().mockReturnValue(false),
-        healthCheck: jest.fn().mockReturnValue({ healthy: true, restarting: false, activeTorrents: 0, totalPeers: 0, uptimeMs: 0 }),
-        getMetadata: jest.fn().mockReturnValue({ infoHash: 'a'.repeat(40), creator: null, comment: null, creationDate: null }),
+        healthCheck: jest.fn().mockReturnValue({
+            healthy: true,
+            restarting: false,
+            activeTorrents: 0,
+            totalPeers: 0,
+            uptimeMs: 0,
+        }),
+        getMetadata: jest.fn().mockReturnValue({
+            infoHash: 'a'.repeat(40),
+            creator: null,
+            comment: null,
+            creationDate: null,
+        }),
         getPeers: jest.fn().mockReturnValue([]),
         getPieces: jest.fn().mockReturnValue([]),
     });

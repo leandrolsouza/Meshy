@@ -9,25 +9,25 @@ próximo do arquivo alterado. Instruções explícitas do usuário têm precedê
 Leia os arquivos envolvidos e os testes existentes antes de editar. Use o código,
 `package.json`, `package-lock.json` e as configurações como referência do estado atual.
 O README contém informações históricas, como Electron 33 e factories sem classes;
-o manifesto atual usa Electron 41 e há implementações internas em classes.
+o manifesto atual usa Electron 44 e há implementações internas em classes.
 
 ## Projeto e fronteiras
 
 Meshy é um cliente BitTorrent desktop multiplataforma, com Electron, WebTorrent,
 React 19, Zustand, react-intl e TypeScript em modo strict.
 
-| Área | Responsabilidade | Instruções locais |
-| --- | --- | --- |
-| `main/` | Electron, engine, fila, persistência, IPC, logs e métricas | [main/AGENTS.md](main/AGENTS.md) |
-| `electron/` | Ponte segura entre main e renderer | [electron/AGENTS.md](electron/AGENTS.md) |
-| `shared/` | Tipos, códigos de erro, validação e formatação comuns | [shared/AGENTS.md](shared/AGENTS.md) |
-| `src/` | Renderer React, hooks, stores e estilos | [src/AGENTS.md](src/AGENTS.md) |
-| `src/components/` | Componentes, interação e acessibilidade | [components/AGENTS.md](src/components/AGENTS.md) |
-| `src/components/DownloadDetails/` | Abas, polling e visualização do torrent | [DownloadDetails/AGENTS.md](src/components/DownloadDetails/AGENTS.md) |
-| `src/locales/` | Catálogos e registro de idiomas | [locales/AGENTS.md](src/locales/AGENTS.md) |
-| `src/themes/` | Registro de temas e aplicação de tokens no DOM | [themes/AGENTS.md](src/themes/AGENTS.md) |
-| `tests/` | Jest, Testing Library e fast-check | [tests/AGENTS.md](tests/AGENTS.md) |
-| `docs/` | Documentação e roteiros de manutenção | [docs/AGENTS.md](docs/AGENTS.md) |
+| Área                              | Responsabilidade                                           | Instruções locais                                                     |
+| --------------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------- |
+| `main/`                           | Electron, engine, fila, persistência, IPC, logs e métricas | [main/AGENTS.md](main/AGENTS.md)                                      |
+| `electron/`                       | Ponte segura entre main e renderer                         | [electron/AGENTS.md](electron/AGENTS.md)                              |
+| `shared/`                         | Tipos, códigos de erro, validação e formatação comuns      | [shared/AGENTS.md](shared/AGENTS.md)                                  |
+| `src/`                            | Renderer React, hooks, stores e estilos                    | [src/AGENTS.md](src/AGENTS.md)                                        |
+| `src/components/`                 | Componentes, interação e acessibilidade                    | [components/AGENTS.md](src/components/AGENTS.md)                      |
+| `src/components/DownloadDetails/` | Abas, polling e visualização do torrent                    | [DownloadDetails/AGENTS.md](src/components/DownloadDetails/AGENTS.md) |
+| `src/locales/`                    | Catálogos e registro de idiomas                            | [locales/AGENTS.md](src/locales/AGENTS.md)                            |
+| `src/themes/`                     | Registro de temas e aplicação de tokens no DOM             | [themes/AGENTS.md](src/themes/AGENTS.md)                              |
+| `tests/`                          | Jest, Testing Library e fast-check                         | [tests/AGENTS.md](tests/AGENTS.md)                                    |
+| `docs/`                           | Documentação e roteiros de manutenção                      | [docs/AGENTS.md](docs/AGENTS.md)                                      |
 
 Fluxo principal: componentes/hooks → `window.meshy` → preload → handlers IPC →
 serviços do main. Contratos públicos ficam em `shared/types.ts`. O main envia
@@ -54,9 +54,9 @@ npm run format:check
 `npm start` executa o build existente em `out/`; não compila as fontes.
 `npm run build` gera bundles, mas não há script de instalador/distribuição no manifesto.
 
-O script `npm run typecheck` executa `tsc --noEmit` sobre uma configuração raiz com
-`files: []` e referências. Não o considere prova de que main e renderer foram
-verificados. Para verificar os projetos e os testes explicitamente:
+O script `npm run typecheck` verifica explicitamente os projetos node, web e testes
+com o compilador nativo TypeScript 7. O pacote `typescript` é um alias da API
+compatível TypeScript 6, necessária ao ts-jest e ao ESLint. Para verificar cada projeto:
 
 ```sh
 npx --no-install tsc --noEmit -p tsconfig.node.json

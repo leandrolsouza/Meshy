@@ -593,7 +593,7 @@ describe('registerIpcHandlers — tracker handlers', () => {
                 'udp://fail.example.com:6969',
             ]);
             (mockTorrentEngine.addTracker as jest.Mock)
-                .mockImplementationOnce(() => { }) // primeiro sucesso
+                .mockImplementationOnce(() => {}) // primeiro sucesso
                 .mockImplementationOnce(() => {
                     throw new Error('Tracker já presente');
                 }); // segundo falha
@@ -920,7 +920,9 @@ describe('Property 19: Evento de progresso IPC contém todos os itens ativos', (
     const ACTIVE_STATUSES: ReadonlySet<string> = new Set(['downloading', 'resolving-metadata']);
 
     /** Generate a hex string of exactly 40 chars (simulates an infoHash). */
-    const infoHashArb = fc.hexaString({ minLength: 40, maxLength: 40 }).map((s) => s.toLowerCase());
+    const infoHashArb = fc
+        .string({ unit: fc.constantFrom(...'0123456789abcdef'), minLength: 40, maxLength: 40 })
+        .map((s) => s.toLowerCase());
 
     /** Generate a single DownloadItem with a given infoHash. */
     const downloadItemArb = (hash: string) =>
@@ -949,10 +951,10 @@ describe('Property 19: Evento de progresso IPC contém todos os itens ativos', (
         .uniqueArray(infoHashArb, { minLength: 0, maxLength: 10 })
         .chain((hashes) =>
             hashes.length === 0
-                ? fc.constant([])
+                ? fc.constant<DownloadItem[]>([])
                 : fc
-                    .tuple(...hashes.map((h) => downloadItemArb(h)))
-                    .map((items) => items as DownloadItem[]),
+                      .tuple(...hashes.map((h) => downloadItemArb(h)))
+                      .map((items) => items as DownloadItem[]),
         );
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -2257,7 +2259,10 @@ describe('registerIpcHandlers — torrent:get-peers handler (Task 4.3)', () => {
         { address: '5.6.7.8:6881', client: 'qBittorrent', downloadSpeed: 512, uploadSpeed: 256 },
     ];
 
-    function setup(items: unknown[] = [{ infoHash: VALID_HASH, status: 'downloading' }], isRestarting = false) {
+    function setup(
+        items: unknown[] = [{ infoHash: VALID_HASH, status: 'downloading' }],
+        isRestarting = false,
+    ) {
         jest.clearAllMocks();
         const dm = makeMockDownloadManager();
         (dm.getAll as jest.Mock).mockReturnValue(items);
@@ -2340,7 +2345,10 @@ describe('registerIpcHandlers — torrent:get-pieces handler (Task 4.3)', () => 
     const VALID_HASH = 'c'.repeat(40);
     const VALID_PIECES = [true, false, true, true, false, true];
 
-    function setup(items: unknown[] = [{ infoHash: VALID_HASH, status: 'downloading' }], isRestarting = false) {
+    function setup(
+        items: unknown[] = [{ infoHash: VALID_HASH, status: 'downloading' }],
+        isRestarting = false,
+    ) {
         jest.clearAllMocks();
         const dm = makeMockDownloadManager();
         (dm.getAll as jest.Mock).mockReturnValue(items);
@@ -2430,7 +2438,7 @@ describe('registerIpcHandlers — withTimeout expiração de operação (Task 4.
         jest.clearAllMocks();
         const dm = makeMockDownloadManager();
         // pause nunca resolve — simula operação travada
-        (dm.pause as jest.Mock).mockReturnValue(new Promise<void>(() => { }));
+        (dm.pause as jest.Mock).mockReturnValue(new Promise<void>(() => {}));
 
         const sm = makeMockSettingsManager();
         const te = makeMockTorrentEngine();
@@ -2655,7 +2663,9 @@ describe('registerIpcHandlers — torrent:add-file-buffer tipos de buffer (Task 
     it('retorna erro quando addTorrentBuffer lança exceção', async () => {
         jest.clearAllMocks();
         const dm = makeMockDownloadManager();
-        (dm.addTorrentBuffer as jest.Mock).mockRejectedValue(new Error('Arquivo .torrent corrompido'));
+        (dm.addTorrentBuffer as jest.Mock).mockRejectedValue(
+            new Error('Arquivo .torrent corrompido'),
+        );
         const sm = makeMockSettingsManager();
         const te = makeMockTorrentEngine();
         (te as any).isRestarting = jest.fn().mockReturnValue(false);

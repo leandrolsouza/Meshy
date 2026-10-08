@@ -75,23 +75,19 @@ function makeMockEngine(magnetInfo: TorrentInfo = makeTorrentInfo()): TorrentEng
         removeTracker: jest.fn(),
         restart: jest.fn().mockResolvedValue(undefined),
         isRestarting: jest.fn().mockReturnValue(false),
-        healthCheck: jest
-            .fn()
-            .mockReturnValue({
-                healthy: true,
-                restarting: false,
-                activeTorrents: 0,
-                totalPeers: 0,
-                uptimeMs: 0,
-            }),
-        getMetadata: jest
-            .fn()
-            .mockReturnValue({
-                infoHash: 'a'.repeat(40),
-                creator: null,
-                comment: null,
-                creationDate: null,
-            }),
+        healthCheck: jest.fn().mockReturnValue({
+            healthy: true,
+            restarting: false,
+            activeTorrents: 0,
+            totalPeers: 0,
+            uptimeMs: 0,
+        }),
+        getMetadata: jest.fn().mockReturnValue({
+            infoHash: 'a'.repeat(40),
+            creator: null,
+            comment: null,
+            creationDate: null,
+        }),
         getPeers: jest.fn().mockReturnValue([]),
         getPieces: jest.fn().mockReturnValue([]),
     });
@@ -300,7 +296,11 @@ describe('DownloadManager — Property 2: Adição de torrent cresce a lista', (
         await fc.assert(
             fc.asyncProperty(
                 fc.integer({ min: 0, max: 10 }),
-                fc.hexaString({ minLength: 40, maxLength: 40 }),
+                fc.string({
+                    unit: fc.constantFrom(...'0123456789abcdef'),
+                    minLength: 40,
+                    maxLength: 40,
+                }),
                 async (preExistingCount, newHash) => {
                     const normalizedHash = newHash.toLowerCase();
 
@@ -367,7 +367,11 @@ describe('DownloadManager — Property 2: Adição de torrent cresce a lista', (
             await fc.assert(
                 fc.asyncProperty(
                     fc.integer({ min: 0, max: 10 }),
-                    fc.hexaString({ minLength: 40, maxLength: 40 }),
+                    fc.string({
+                        unit: fc.constantFrom(...'0123456789abcdef'),
+                        minLength: 40,
+                        maxLength: 40,
+                    }),
                     async (preExistingCount, newHash) => {
                         const normalizedHash = newHash.toLowerCase();
 
@@ -450,49 +454,13 @@ describe('DownloadManager — Property 3: Idempotência de adição (sem duplica
      */
     it('adding a duplicate torrent file does not change the list length', async () => {
         await fc.assert(
-            fc.asyncProperty(fc.hexaString({ minLength: 40, maxLength: 40 }), async (hash) => {
-                const normalizedHash = hash.toLowerCase();
-
-                mockExistsSync.mockReturnValue(true);
-                mockAccessSync.mockReturnValue(undefined);
-
-                const engine = makeMockEngine();
-                const settings = makeMockSettings();
-                const manager = createDownloadManager(engine, settings);
-
-                // First add — should succeed
-                const info = makeTorrentInfo({
-                    infoHash: normalizedHash,
-                    name: 'Test Torrent',
-                    status: 'downloading' as TorrentStatus,
-                });
-                (engine.addTorrentFile as jest.Mock).mockResolvedValueOnce(info);
-                await manager.addTorrentFile('/path/to/file.torrent');
-
-                const lengthBefore = manager.getAll().length;
-
-                // Second add — same infoHash, engine returns same info
-                (engine.addTorrentFile as jest.Mock).mockResolvedValueOnce(info);
-                try {
-                    await manager.addTorrentFile('/path/to/file.torrent');
-                } catch {
-                    // Expected: 'Torrent já existe na lista'
-                }
-
-                const lengthAfter = manager.getAll().length;
-
-                // List length must remain unchanged
-                return lengthAfter === lengthBefore;
-            }),
-            { numRuns: 100 },
-        );
-    });
-
-    it('adding a duplicate magnet link does not change the list length', async () => {
-        jest.useFakeTimers();
-        try {
-            await fc.assert(
-                fc.asyncProperty(fc.hexaString({ minLength: 40, maxLength: 40 }), async (hash) => {
+            fc.asyncProperty(
+                fc.string({
+                    unit: fc.constantFrom(...'0123456789abcdef'),
+                    minLength: 40,
+                    maxLength: 40,
+                }),
+                async (hash) => {
                     const normalizedHash = hash.toLowerCase();
 
                     mockExistsSync.mockReturnValue(true);
@@ -502,23 +470,21 @@ describe('DownloadManager — Property 3: Idempotência de adição (sem duplica
                     const settings = makeMockSettings();
                     const manager = createDownloadManager(engine, settings);
 
-                    const magnetUri = `magnet:?xt=urn:btih:${normalizedHash}`;
-
                     // First add — should succeed
                     const info = makeTorrentInfo({
                         infoHash: normalizedHash,
-                        name: normalizedHash,
-                        status: 'resolving-metadata' as TorrentStatus,
+                        name: 'Test Torrent',
+                        status: 'downloading' as TorrentStatus,
                     });
-                    (engine.addMagnetLink as jest.Mock).mockResolvedValueOnce(info);
-                    await manager.addMagnetLink(magnetUri);
+                    (engine.addTorrentFile as jest.Mock).mockResolvedValueOnce(info);
+                    await manager.addTorrentFile('/path/to/file.torrent');
 
                     const lengthBefore = manager.getAll().length;
 
-                    // Second add — same magnet link
-                    (engine.addMagnetLink as jest.Mock).mockResolvedValueOnce(info);
+                    // Second add — same infoHash, engine returns same info
+                    (engine.addTorrentFile as jest.Mock).mockResolvedValueOnce(info);
                     try {
-                        await manager.addMagnetLink(magnetUri);
+                        await manager.addTorrentFile('/path/to/file.torrent');
                     } catch {
                         // Expected: 'Torrent já existe na lista'
                     }
@@ -527,7 +493,59 @@ describe('DownloadManager — Property 3: Idempotência de adição (sem duplica
 
                     // List length must remain unchanged
                     return lengthAfter === lengthBefore;
-                }),
+                },
+            ),
+            { numRuns: 100 },
+        );
+    });
+
+    it('adding a duplicate magnet link does not change the list length', async () => {
+        jest.useFakeTimers();
+        try {
+            await fc.assert(
+                fc.asyncProperty(
+                    fc.string({
+                        unit: fc.constantFrom(...'0123456789abcdef'),
+                        minLength: 40,
+                        maxLength: 40,
+                    }),
+                    async (hash) => {
+                        const normalizedHash = hash.toLowerCase();
+
+                        mockExistsSync.mockReturnValue(true);
+                        mockAccessSync.mockReturnValue(undefined);
+
+                        const engine = makeMockEngine();
+                        const settings = makeMockSettings();
+                        const manager = createDownloadManager(engine, settings);
+
+                        const magnetUri = `magnet:?xt=urn:btih:${normalizedHash}`;
+
+                        // First add — should succeed
+                        const info = makeTorrentInfo({
+                            infoHash: normalizedHash,
+                            name: normalizedHash,
+                            status: 'resolving-metadata' as TorrentStatus,
+                        });
+                        (engine.addMagnetLink as jest.Mock).mockResolvedValueOnce(info);
+                        await manager.addMagnetLink(magnetUri);
+
+                        const lengthBefore = manager.getAll().length;
+
+                        // Second add — same magnet link
+                        (engine.addMagnetLink as jest.Mock).mockResolvedValueOnce(info);
+                        try {
+                            await manager.addMagnetLink(magnetUri);
+                        } catch {
+                            // Expected: 'Torrent já existe na lista'
+                        }
+
+                        const lengthAfter = manager.getAll().length;
+
+                        // List length must remain unchanged
+                        return lengthAfter === lengthBefore;
+                    },
+                ),
                 { numRuns: 100 },
             );
         } finally {
@@ -560,7 +578,11 @@ describe('DownloadManager — Property 8: Round-trip pausar/retomar preserva est
         try {
             await fc.assert(
                 fc.asyncProperty(
-                    fc.hexaString({ minLength: 40, maxLength: 40 }),
+                    fc.string({
+                        unit: fc.constantFrom(...'0123456789abcdef'),
+                        minLength: 40,
+                        maxLength: 40,
+                    }),
                     fc.string({ minLength: 1, maxLength: 100 }),
                     fc.integer({ min: 1, max: 10_000_000_000 }),
                     async (hash, torrentName, totalSize) => {
@@ -647,7 +669,11 @@ describe('DownloadManager — Property 9: Remoção elimina item da lista indepe
         try {
             await fc.assert(
                 fc.asyncProperty(
-                    fc.hexaString({ minLength: 40, maxLength: 40 }),
+                    fc.string({
+                        unit: fc.constantFrom(...'0123456789abcdef'),
+                        minLength: 40,
+                        maxLength: 40,
+                    }),
                     fc.boolean(),
                     async (hash, deleteFiles) => {
                         const normalizedHash = hash.toLowerCase();
@@ -718,7 +744,11 @@ describe('DownloadManager — Property 5: Atualização de metadados após resol
         try {
             await fc.assert(
                 fc.asyncProperty(
-                    fc.hexaString({ minLength: 40, maxLength: 40 }),
+                    fc.string({
+                        unit: fc.constantFrom(...'0123456789abcdef'),
+                        minLength: 40,
+                        maxLength: 40,
+                    }),
                     fc.string({ minLength: 1, maxLength: 200 }),
                     fc.integer({ min: 1, max: 10_000_000_000 }),
                     async (hash, resolvedName, resolvedTotalSize) => {
@@ -1155,7 +1185,13 @@ describe('DownloadManager — Property 16: Auto-retomada seletiva na restauraç�
         ];
 
         const arbPersistedItem = fc.record({
-            infoHash: fc.hexaString({ minLength: 40, maxLength: 40 }).map((h) => h.toLowerCase()),
+            infoHash: fc
+                .string({
+                    unit: fc.constantFrom(...'0123456789abcdef'),
+                    minLength: 40,
+                    maxLength: 40,
+                })
+                .map((h) => h.toLowerCase()),
             name: fc.string({ minLength: 1, maxLength: 50 }),
             totalSize: fc.integer({ min: 0, max: 10_000_000_000 }),
             downloadedSize: fc.integer({ min: 0, max: 10_000_000_000 }),
@@ -1301,7 +1337,13 @@ describe('DownloadManager — Property 15: Round-trip de persistência de sessã
         ];
 
         const arbPersistedItem = fc.record({
-            infoHash: fc.hexaString({ minLength: 40, maxLength: 40 }).map((h) => h.toLowerCase()),
+            infoHash: fc
+                .string({
+                    unit: fc.constantFrom(...'0123456789abcdef'),
+                    minLength: 40,
+                    maxLength: 40,
+                })
+                .map((h) => h.toLowerCase()),
             name: fc.string({ minLength: 1, maxLength: 100 }),
             totalSize: fc.integer({ min: 0, max: 10_000_000_000 }),
             downloadedSize: fc.integer({ min: 0, max: 10_000_000_000 }),
@@ -1413,7 +1455,13 @@ describe('DownloadManager — Property 17: Arquivos ausentes resultam em status 
         ];
 
         const arbPersistedItem = fc.record({
-            infoHash: fc.hexaString({ minLength: 40, maxLength: 40 }).map((h) => h.toLowerCase()),
+            infoHash: fc
+                .string({
+                    unit: fc.constantFrom(...'0123456789abcdef'),
+                    minLength: 40,
+                    maxLength: 40,
+                })
+                .map((h) => h.toLowerCase()),
             name: fc.string({ minLength: 1, maxLength: 50 }),
             totalSize: fc.integer({ min: 0, max: 10_000_000_000 }),
             downloadedSize: fc.integer({ min: 0, max: 10_000_000_000 }),
@@ -1718,7 +1766,11 @@ describe('DownloadManager — Propriedade 7: Após aplicar trackers globais, sup
         await fc.assert(
             fc.asyncProperty(
                 arbGlobalTrackers,
-                fc.hexaString({ minLength: 40, maxLength: 40 }),
+                fc.string({
+                    unit: fc.constantFrom(...'0123456789abcdef'),
+                    minLength: 40,
+                    maxLength: 40,
+                }),
                 async (globalTrackers, hash) => {
                     const normalizedHash = hash.toLowerCase();
 

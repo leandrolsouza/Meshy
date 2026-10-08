@@ -417,13 +417,11 @@ describe('Property 6: Lista global persiste entre sessões', () => {
             .record({
                 protocol: fc.constantFrom('udp', 'http', 'https'),
                 host: fc
-                    .stringOf(
-                        fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')),
-                        {
-                            minLength: 3,
-                            maxLength: 12,
-                        },
-                    )
+                    .string({
+                        unit: fc.constantFrom(...'abcdefghijklmnopqrstuvwxyz0123456789'.split('')),
+                        minLength: 3,
+                        maxLength: 12,
+                    })
                     .filter((h) => /^[a-z]/.test(h)),
                 port: fc.integer({ min: 1, max: 65535 }),
             })
@@ -517,8 +515,19 @@ function makeMockEngine(infoHash: string): TorrentEngine & EventEmitter {
         removeTracker: jest.fn(),
         restart: jest.fn().mockResolvedValue(undefined),
         isRestarting: jest.fn().mockReturnValue(false),
-        healthCheck: jest.fn().mockReturnValue({ healthy: true, restarting: false, activeTorrents: 0, totalPeers: 0, uptimeMs: 0 }),
-        getMetadata: jest.fn().mockReturnValue({ infoHash: 'a'.repeat(40), creator: null, comment: null, creationDate: null }),
+        healthCheck: jest.fn().mockReturnValue({
+            healthy: true,
+            restarting: false,
+            activeTorrents: 0,
+            totalPeers: 0,
+            uptimeMs: 0,
+        }),
+        getMetadata: jest.fn().mockReturnValue({
+            infoHash: 'a'.repeat(40),
+            creator: null,
+            comment: null,
+            creationDate: null,
+        }),
         getPeers: jest.fn().mockReturnValue([]),
         getPieces: jest.fn().mockReturnValue([]),
     });
@@ -554,10 +563,10 @@ describe('Property 11: Novos downloads usam a pasta de destino atual', () => {
                     const magnetUri = `magnet:?xt=urn:btih:${infoHash}`;
 
                     const silentLogger = {
-                        info: () => { },
-                        warn: () => { },
-                        error: () => { },
-                        debug: () => { },
+                        info: () => {},
+                        warn: () => {},
+                        error: () => {},
+                        debug: () => {},
                     };
 
                     const downloadManager = createDownloadManager(
@@ -622,10 +631,10 @@ describe('Property 12: Pasta inválida resulta em erro antes de iniciar download
                     const magnetUri = `magnet:?xt=urn:btih:${infoHash}`;
 
                     const silentLogger = {
-                        info: () => { },
-                        warn: () => { },
-                        error: () => { },
-                        debug: () => { },
+                        info: () => {},
+                        warn: () => {},
+                        error: () => {},
+                        debug: () => {},
                     };
 
                     const downloadManager = createDownloadManager(

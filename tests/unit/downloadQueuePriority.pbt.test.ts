@@ -79,7 +79,12 @@ function makeMockEngine(): TorrentEngine & EventEmitter {
             totalPeers: 0,
             uptimeMs: 0,
         }),
-        getMetadata: jest.fn().mockReturnValue({ infoHash: 'a'.repeat(40), creator: null, comment: null, creationDate: null }),
+        getMetadata: jest.fn().mockReturnValue({
+            infoHash: 'a'.repeat(40),
+            creator: null,
+            comment: null,
+            creationDate: null,
+        }),
         getPeers: jest.fn().mockReturnValue([]),
         getPieces: jest.fn().mockReturnValue([]),
     });
@@ -224,7 +229,11 @@ describe('Feature: download-queue-priority, Property 2: Inputs inválidos retorn
      * verificar que reorderQueue lança erro.
      */
     it('infoHash inexistente lança erro', async () => {
-        const nonExistentHashArb = fc.hexaString({ minLength: 40, maxLength: 40 });
+        const nonExistentHashArb = fc.string({
+            unit: fc.constantFrom(...'0123456789abcdef'),
+            minLength: 40,
+            maxLength: 40,
+        });
 
         await fc.assert(
             fc.asyncProperty(nonExistentHashArb, async (fakeHash) => {
@@ -264,28 +273,21 @@ describe('Feature: download-queue-priority, Property 2: Inputs inválidos retorn
 
     it('newIndex >= tamanho da fila lança erro', async () => {
         await fc.assert(
-            fc.asyncProperty(
-                fc.integer({ min: 2, max: 10 }),
-                async (queueSize) => {
-                    const engine = makeMockEngine();
-                    const settings = makeMockSettings();
-                    const manager = await createManagerWithQueuedItems(
-                        queueSize,
-                        engine,
-                        settings,
-                    );
+            fc.asyncProperty(fc.integer({ min: 2, max: 10 }), async (queueSize) => {
+                const engine = makeMockEngine();
+                const settings = makeMockSettings();
+                const manager = await createManagerWithQueuedItems(queueSize, engine, settings);
 
-                    const hash = manager.getQueueOrder()[0];
-                    // newIndex exatamente igual ao tamanho
-                    expect(() => manager.reorderQueue(hash, queueSize)).toThrow(
-                        'Posição inválida na fila',
-                    );
-                    // newIndex maior que o tamanho
-                    expect(() => manager.reorderQueue(hash, queueSize + 10)).toThrow(
-                        'Posição inválida na fila',
-                    );
-                },
-            ),
+                const hash = manager.getQueueOrder()[0];
+                // newIndex exatamente igual ao tamanho
+                expect(() => manager.reorderQueue(hash, queueSize)).toThrow(
+                    'Posição inválida na fila',
+                );
+                // newIndex maior que o tamanho
+                expect(() => manager.reorderQueue(hash, queueSize + 10)).toThrow(
+                    'Posição inválida na fila',
+                );
+            }),
             { numRuns: 100 },
         );
     });
@@ -308,9 +310,7 @@ describe('Feature: download-queue-priority, Property 7: Round-trip de persistên
         const queueArb = fc
             .integer({ min: 2, max: 10 })
             .chain((size) =>
-                fc.tuple(
-                    ...Array.from({ length: size }, (_, i) => fc.constant(makeHash(i + 1))),
-                ),
+                fc.tuple(...Array.from({ length: size }, (_, i) => fc.constant(makeHash(i + 1)))),
             );
 
         await fc.assert(
