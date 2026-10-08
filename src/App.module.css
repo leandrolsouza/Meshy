@@ -35,7 +35,7 @@
 
 .activityBar {
     grid-area: activitybar;
-    background-color: var(--color-activitybar-bg);
+    background-color: var(--color-surface);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -58,11 +58,11 @@
     transition:
         background-color var(--transition-fast),
         color var(--transition-fast);
-    opacity: 0.6;
+    opacity: 1;
 }
 
 .activityIcon:hover {
-    background-color: var(--color-activitybar-hover);
+    background-color: var(--color-hover);
     color: var(--color-text);
     opacity: 1;
 }
@@ -92,6 +92,7 @@
     background-color: var(--color-bg);
     overflow-y: auto;
     padding: var(--space-lg) var(--space-xl);
+    min-width: 0;
 }
 
 .downloadsView {

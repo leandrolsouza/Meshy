@@ -1,12 +1,14 @@
 import React, { useMemo, useCallback, useState, useRef } from 'react';
 import { useIntl } from 'react-intl';
-import { VscChevronDown, VscChevronRight } from 'react-icons/vsc';
+import { VscChevronDown, VscChevronRight, VscAdd, VscCloudDownload } from 'react-icons/vsc';
 import { useDownloads } from '../../hooks/useDownloads';
 import { useFilterStore } from '../../store/filterStore';
 import { applyFilters, groupByStatus } from '../../utils/downloadFilters';
 import type { StatusGroup } from '../../utils/downloadFilters';
 import { DownloadItem } from './DownloadItem';
 import { ConfirmDialog } from '../common/ConfirmDialog';
+import { SearchBar } from './SearchBar';
+import { ActionMenu } from '../common/ActionMenu';
 import { BatchActions } from './BatchActions';
 import styles from './DownloadList.module.css';
 
@@ -20,11 +22,17 @@ const MIN_OVERLAY_MS = 400;
  * Renderiza a lista completa de downloads ativos do store.
  *
  * Aplica o pipeline de filtragem (busca por nome, filtro por status e ordenação)
- * usando o estado do filterStore. Os controles de busca, filtro e ordenação
- * ficam no FilterSidebar (painel lateral). Aqui ficam apenas o botão de limpar
- * concluídos, a mensagem de estado vazio filtrado e a região aria-live.
+ * usando o estado do filterStore. O cabeçalho reúne busca, seleção e adição;
+ * filtros de status e ordenação ficam no painel lateral. As ações secundárias
+ * da lista continuam disponíveis em um popover.
  */
-export const DownloadList = React.memo(function DownloadList(): React.JSX.Element {
+export const DownloadList = React.memo(function DownloadList({
+    onAddTorrent,
+    children,
+}: {
+    onAddTorrent?: () => void;
+    children?: React.ReactNode;
+}): React.JSX.Element {
     const intl = useIntl();
     const { items, pause, resume, remove, reorderQueue } = useDownloads();
     const searchTerm = useFilterStore((s) => s.searchTerm);
@@ -223,20 +231,6 @@ export const DownloadList = React.memo(function DownloadList(): React.JSX.Elemen
         [items, remove, withBusy],
     );
 
-    // Estado vazio absoluto: nenhum download no store
-    if (items.length === 0) {
-        return (
-            <div className={styles.empty}>
-                <p className={styles.emptyTitle}>
-                    {intl.formatMessage({ id: 'downloads.empty.title' })}
-                </p>
-                <p className={styles.emptyHint}>
-                    {intl.formatMessage({ id: 'downloads.empty.hint' })}
-                </p>
-            </div>
-        );
-    }
-
     // Mensagem para a região aria-live
     const ariaMessage =
         filteredItems.length === 0
@@ -253,6 +247,65 @@ export const DownloadList = React.memo(function DownloadList(): React.JSX.Elemen
 
     return (
         <div className={styles.container}>
+            <header className={styles.toolbar}>
+                <div className={styles.heading}>
+                    <h1>{intl.formatMessage({ id: 'app.nav.downloads' })}</h1>
+                    <span>
+                        {intl.formatMessage({ id: 'downloads.total' }, { count: items.length })}
+                    </span>
+                </div>
+                <div className={styles.search}>
+                    <SearchBar />
+                </div>
+                <div className={styles.toolbarActions}>
+                    <button
+                        className="btn"
+                        type="button"
+                        disabled={batchBusy || isBusy || items.length === 0}
+                        aria-pressed={selectionMode}
+                        onClick={() => {
+                            setSelectionMode(!selectionMode);
+                            setSelectedHashes(new Set());
+                        }}
+                    >
+                        {intl.formatMessage({
+                            id: selectionMode ? 'batch.finish' : 'batch.select',
+                        })}
+                    </button>
+
+                    {completedCount > 0 && (
+                        <ActionMenu
+                            label={intl.formatMessage({ id: 'downloads.listActions' })}
+                            disabled={batchBusy || isBusy}
+                        >
+                            <button
+                                className="btn"
+                                onClick={() => setIsConfirmOpen(true)}
+                                aria-label={intl.formatMessage({
+                                    id: 'downloads.clearCompletedAriaLabel',
+                                })}
+                            >
+                                {intl.formatMessage(
+                                    { id: 'downloads.clearCompleted' },
+                                    { count: completedCount },
+                                )}
+                            </button>
+                        </ActionMenu>
+                    )}
+                    {onAddTorrent && (
+                        <button
+                            type="button"
+                            className="btn btn--primary"
+                            onClick={onAddTorrent}
+                            disabled={batchBusy || isBusy}
+                        >
+                            <VscAdd /> {intl.formatMessage({ id: 'app.nav.addTorrent' })}
+                        </button>
+                    )}
+                </div>
+            </header>
+            {children}
+
             {/* Overlay de loading durante operações de pause/resume/remove */}
             {isBusy && (
                 <div className={styles.busyOverlay} aria-live="assertive" role="status">
@@ -262,19 +315,7 @@ export const DownloadList = React.memo(function DownloadList(): React.JSX.Elemen
                     </span>
                 </div>
             )}
-            {/* Barra de ações inline (limpar concluídos) */}
-            <button
-                className="btn"
-                type="button"
-                disabled={batchBusy || isBusy}
-                aria-pressed={selectionMode}
-                onClick={() => {
-                    setSelectionMode(!selectionMode);
-                    setSelectedHashes(new Set());
-                }}
-            >
-                {intl.formatMessage({ id: selectionMode ? 'batch.finish' : 'batch.select' })}
-            </button>
+            {/* Ações em lote aparecem somente durante a seleção. */}
             {selectionMode && (
                 <BatchActions
                     visibleItems={filteredItems}
@@ -284,22 +325,6 @@ export const DownloadList = React.memo(function DownloadList(): React.JSX.Elemen
                     onBusy={setBatchBusy}
                 />
             )}
-            {completedCount > 0 && (
-                <div className={styles.actionsBar}>
-                    <button
-                        className="btn btn--danger"
-                        disabled={batchBusy || isBusy}
-                        onClick={() => setIsConfirmOpen(true)}
-                        aria-label={intl.formatMessage({ id: 'downloads.clearCompletedAriaLabel' })}
-                    >
-                        {intl.formatMessage(
-                            { id: 'downloads.clearCompleted' },
-                            { count: completedCount },
-                        )}
-                    </button>
-                </div>
-            )}
-
             {/* Região aria-live para anunciar contagem de resultados */}
             <div className={styles.ariaLive} aria-live="polite" role="status">
                 {ariaMessage}
@@ -324,7 +349,22 @@ export const DownloadList = React.memo(function DownloadList(): React.JSX.Elemen
                 </div>
             )}
 
-            {filteredItems.length === 0 ? (
+            {items.length === 0 ? (
+                <div className={styles.empty}>
+                    <VscCloudDownload className={styles.emptyIcon} aria-hidden="true" />
+                    <h2 className={styles.emptyTitle}>
+                        {intl.formatMessage({ id: 'downloads.empty.title' })}
+                    </h2>
+                    <p className={styles.emptyHint}>
+                        {intl.formatMessage({ id: 'downloads.empty.hint' })}
+                    </p>
+                    {onAddTorrent && (
+                        <button type="button" className="btn btn--primary" onClick={onAddTorrent}>
+                            <VscAdd /> {intl.formatMessage({ id: 'app.nav.addTorrent' })}
+                        </button>
+                    )}
+                </div>
+            ) : filteredItems.length === 0 ? (
                 // Estado vazio filtrado: filtros excluem todos os itens
                 <div className={styles.filteredEmpty}>
                     <p className={styles.emptyTitle}>

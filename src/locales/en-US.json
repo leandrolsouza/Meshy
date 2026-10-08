@@ -320,5 +320,16 @@
     "diagnostic.folderUnavailable": "The destination folder is unavailable or lacks read and write permission. Reconnect the disk or locate the files in another folder.",
     "diagnostic.trackersError": "No peers are connected and all queried trackers report errors. Check trackers and your connection. Other discovery methods may still be trying.",
     "diagnostic.noPeers": "No peers are connected right now. Wait or check your connection and trackers; this does not prove that there are no seeders.",
-    "diagnostic.noSelection": "No files are selected for download. Select the files you want."
+    "diagnostic.noSelection": "No files are selected for download. Select the files you want.",
+    "downloads.total": "{count, plural, one {# torrent} other {# torrents}}",
+    "downloads.listActions": "More list actions",
+    "downloads.actions.more": "More actions for {name}",
+    "downloads.actions.manageFiles": "Manage files",
+    "downloads.tabs.general": "General",
+    "downloads.tabs.peers": "Peers",
+    "downloads.tabs.pieces": "Pieces",
+    "downloads.tabs.speed": "Speed",
+    "downloads.tabs.files": "Files",
+    "downloads.tabs.trackers": "Trackers",
+    "downloads.filesEmpty": "No files available for this torrent."
 }

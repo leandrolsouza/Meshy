@@ -14,7 +14,7 @@ import styles from './FilterSidebar.module.css';
  * de busca na Activity Bar. Os controles são empilhados verticalmente
  * com seções rotuladas para clareza.
  */
-export function FilterSidebar(): React.JSX.Element {
+export function FilterSidebar({ showSearch = true }: { showSearch?: boolean }): React.JSX.Element {
     const intl = useIntl();
 
     return (
@@ -23,12 +23,14 @@ export function FilterSidebar(): React.JSX.Element {
             aria-label={intl.formatMessage({ id: 'filter.sidebar.ariaLabel' })}
         >
             {/* Busca por nome */}
-            <div className={styles.section}>
-                <span className={styles.sectionTitle}>
-                    {intl.formatMessage({ id: 'filter.sidebar.search' })}
-                </span>
-                <SearchBar />
-            </div>
+            {showSearch && (
+                <div className={styles.section}>
+                    <span className={styles.sectionTitle}>
+                        {intl.formatMessage({ id: 'filter.sidebar.search' })}
+                    </span>
+                    <SearchBar />
+                </div>
+            )}
 
             {/* Filtro por status */}
             <div className={styles.section}>

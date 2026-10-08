@@ -21,20 +21,26 @@
     padding-left: calc(var(--space-lg) - 2px);
 }
 
+.cardActive:hover {
+    border-left-color: var(--color-accent);
+}
+
 .header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: var(--space-sm);
+    gap: var(--space-md);
 }
 
 .name {
     font-weight: 600;
-    font-size: var(--font-size-sm);
+    font-size: 15px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 65%;
+    flex: 1;
+    min-width: 0;
     user-select: text;
 }
 
@@ -42,6 +48,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-md);
+    flex-shrink: 0;
 }
 
 .fileCount {
@@ -76,6 +83,8 @@
     margin-top: var(--space-md);
     padding-top: var(--space-sm);
     border-top: 1px solid var(--color-border-light);
+    align-items: center;
+    justify-content: flex-end;
 }
 
 /* ─── Action Error ─────────────────────────────────────────────────────── */
@@ -86,20 +95,6 @@
     font-size: var(--font-size-sm);
     color: var(--color-danger);
     user-select: text;
-}
-
-/* ─── Expanded File Selector Section ──────────────────────────────────────── */
-
-.fileSelectorSection {
-    margin-top: var(--space-md);
-    border-top: 1px solid var(--color-border-light);
-    padding-top: var(--space-md);
-    background-color: rgba(0, 0, 0, 0.1);
-    margin-left: calc(-1 * var(--space-lg));
-    margin-right: calc(-1 * var(--space-lg));
-    margin-bottom: calc(-1 * var(--space-lg));
-    padding: var(--space-md) var(--space-lg) var(--space-sm);
-    border-radius: 0 0 var(--card-radius) var(--card-radius);
 }
 
 .fileSelectorLoading {
@@ -124,20 +119,6 @@
     margin-bottom: calc(-1 * var(--space-lg));
     border-radius: 0 0 var(--card-radius) var(--card-radius);
     overflow: hidden;
-}
-
-/* ─── Expanded Tracker Panel Section ──────────────────────────────────────── */
-
-.trackerPanelSection {
-    margin-top: var(--space-md);
-    border-top: 1px solid var(--color-border-light);
-    padding-top: var(--space-md);
-    background-color: rgba(0, 0, 0, 0.1);
-    margin-left: calc(-1 * var(--space-lg));
-    margin-right: calc(-1 * var(--space-lg));
-    margin-bottom: calc(-1 * var(--space-lg));
-    padding: var(--space-md) var(--space-lg) var(--space-sm);
-    border-radius: 0 0 var(--card-radius) var(--card-radius);
 }
 
 /* ─── Context Menu ────────────────────────────────────────────────────────── */

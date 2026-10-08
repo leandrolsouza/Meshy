@@ -11,7 +11,18 @@ import '@testing-library/jest-dom';
 // App layout/navigation logic from child component dependencies.
 
 jest.mock('../../src/components/DownloadList/DownloadList', () => ({
-    DownloadList: () => <div data-testid="download-list">DownloadList</div>,
+    DownloadList: ({
+        children,
+        onAddTorrent,
+    }: {
+        children: React.ReactNode;
+        onAddTorrent: () => void;
+    }) => (
+        <div data-testid="download-list">
+            {children}
+            <button onClick={onAddTorrent}>Adicionar pelo cabeçalho</button>
+        </div>
+    ),
 }));
 
 jest.mock('../../src/components/AddTorrent/DropZone', () => ({
@@ -82,6 +93,13 @@ function renderApp() {
 describe('App — layout structure and Activity Bar navigation', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+    });
+
+    it('abre a adição de torrent pelo cabeçalho da lista', () => {
+        renderApp();
+        fireEvent.click(screen.getByRole('button', { name: 'Adicionar pelo cabeçalho' }));
+        expect(screen.getByTestId('add-torrent-modal')).toBeInTheDocument();
+        expect(screen.queryByTestId('download-list')).not.toBeInTheDocument();
     });
 
     // ── Structural elements ───────────────────────────────────────────────

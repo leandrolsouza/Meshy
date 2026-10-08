@@ -166,7 +166,7 @@ function App(): React.JSX.Element {
             {/* ── Filter Sidebar ─────────────────────────────────────── */}
             {isFilterSidebarOpen && (
                 <div className={styles.sidebarArea}>
-                    <FilterSidebar />
+                    <FilterSidebar showSearch={activeView !== 'downloads'} />
                 </div>
             )}
 
@@ -174,8 +174,9 @@ function App(): React.JSX.Element {
             <main className={styles.editorArea}>
                 {activeView === 'downloads' && (
                     <div className={styles.downloadsView}>
-                        <DropZone />
-                        <DownloadList />
+                        <DownloadList onAddTorrent={() => setActiveView('add-torrent')}>
+                            <DropZone />
+                        </DownloadList>
                     </div>
                 )}
                 {activeView === 'add-torrent' && (

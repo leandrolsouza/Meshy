@@ -320,5 +320,16 @@
     "diagnostic.folderUnavailable": "A pasta de destino está indisponível ou sem permissão de leitura e escrita. Reconecte o disco ou localize os arquivos em outra pasta.",
     "diagnostic.trackersError": "Nenhum peer conectado e todos os trackers consultados reportam erro. Confira os trackers e sua conexão. Outros métodos de descoberta podem continuar tentando.",
     "diagnostic.noPeers": "Nenhum peer conectado neste momento. Aguarde ou confira a conexão e os trackers; isso não comprova ausência de seeders.",
-    "diagnostic.noSelection": "Nenhum arquivo selecionado para baixar. Selecione os arquivos desejados."
+    "diagnostic.noSelection": "Nenhum arquivo selecionado para baixar. Selecione os arquivos desejados.",
+    "downloads.total": "{count, plural, one {# torrent} other {# torrents}}",
+    "downloads.listActions": "Mais ações da lista",
+    "downloads.actions.more": "Mais ações de {name}",
+    "downloads.actions.manageFiles": "Gerenciar arquivos",
+    "downloads.tabs.general": "Geral",
+    "downloads.tabs.peers": "Peers",
+    "downloads.tabs.pieces": "Peças",
+    "downloads.tabs.speed": "Velocidade",
+    "downloads.tabs.files": "Arquivos",
+    "downloads.tabs.trackers": "Trackers",
+    "downloads.filesEmpty": "Nenhum arquivo disponível para este torrent."
 }

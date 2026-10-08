@@ -6,8 +6,6 @@ import {
     VscDebugPause,
     VscPlay,
     VscTrash,
-    VscChevronDown,
-    VscChevronRight,
     VscFolderOpened,
     VscGoToFile,
     VscInfo,
@@ -18,6 +16,7 @@ import { SpeedDisplay } from '../common/SpeedDisplay';
 import { formatBytes } from '../../utils/formatters';
 import { resolveErrorMessage } from '../../utils/resolveErrorMessage';
 import { ConfirmDialog } from '../common/ConfirmDialog';
+import { ActionMenu } from '../common/ActionMenu';
 import { ManageFilesDialog } from './ManageFilesDialog';
 import { FileSelector } from '../FileSelector/FileSelector';
 import { TrackerPanel } from '../TrackerPanel/TrackerPanel';
@@ -127,14 +126,10 @@ export const DownloadItem = React.memo(function DownloadItem({
     const prevQueuePositionRef = useRef<number | undefined>(item.queuePosition);
     const [positionAnnouncement, setPositionAnnouncement] = useState<string>('');
 
-    // ── File selector expansion state (Task 6.1) ─────────────────────────────
-    const [expanded, setExpanded] = useState(false);
-
-    // ── Tracker panel expansion state (Task 8.5) ─────────────────────────────
-    const [trackersExpanded, setTrackersExpanded] = useState(false);
-
-    // ── Details panel expansion state (Task 15.1) ────────────────────────────
+    // Um único painel reúne arquivos, trackers e dados do torrent.
     const [detailsExpanded, setDetailsExpanded] = useState(false);
+    const [detailsTab, setDetailsTab] = useState('general');
+    const expanded = detailsExpanded && detailsTab === 'files';
 
     const [files, setFiles] = useState<TorrentFileInfo[]>([]);
     const [filesLoading, setFilesLoading] = useState(false);
@@ -267,19 +262,14 @@ export const DownloadItem = React.memo(function DownloadItem({
         [item.infoHash, intl],
     );
 
-    // ── Toggle expand/collapse ───────────────────────────────────────────────
-    const handleToggleExpand = useCallback(() => {
-        setExpanded((prev) => !prev);
+    const openDetailsTab = useCallback((tab: string) => {
+        setDetailsTab(tab);
+        setDetailsExpanded(true);
     }, []);
 
-    // ── Toggle tracker panel ─────────────────────────────────────────────────
-    const handleToggleTrackers = useCallback(() => {
-        setTrackersExpanded((prev) => !prev);
-    }, []);
-
-    // ── Toggle details panel (Task 15.1) ─────────────────────────────────────
     const handleToggleDetails = useCallback(() => {
-        setDetailsExpanded((prev) => !prev);
+        setDetailsExpanded((previous) => !previous);
+        setDetailsTab('general');
     }, []);
 
     // ── Auto-dismiss action error after 5 seconds (Task 5.3) ────────────────
@@ -483,7 +473,7 @@ export const DownloadItem = React.memo(function DownloadItem({
                         </button>
                     )}
                     {['no-peers', 'trackers-error'].includes(item.diagnostic) && canExpand && (
-                        <button className="btn" onClick={() => setTrackersExpanded(true)}>
+                        <button className="btn" onClick={() => openDetailsTab('trackers')}>
                             {intl.formatMessage({ id: 'diagnostic.trackers' })}
                         </button>
                     )}
@@ -491,14 +481,14 @@ export const DownloadItem = React.memo(function DownloadItem({
                         <button
                             className="btn"
                             onClick={() => {
-                                if (!expanded) void handleToggleExpand();
+                                openDetailsTab('files');
                             }}
                         >
                             {intl.formatMessage({ id: 'diagnostic.selectFiles' })}
                         </button>
                     )}
                     {item.diagnostic === 'stalled' && (
-                        <button className="btn" onClick={() => setDetailsExpanded(true)}>
+                        <button className="btn" onClick={() => openDetailsTab('general')}>
                             {intl.formatMessage({ id: 'diagnostic.details' })}
                         </button>
                     )}
@@ -532,44 +522,6 @@ export const DownloadItem = React.memo(function DownloadItem({
                         disabled={item.queuePosition === queueSize}
                     >
                         <VscArrowDown /> {intl.formatMessage({ id: 'downloads.queue.moveDown' })}
-                    </button>
-                )}
-                {canExpand && (
-                    <button
-                        className="btn"
-                        onClick={handleToggleExpand}
-                        aria-label={
-                            expanded
-                                ? intl.formatMessage({
-                                      id: 'downloads.actions.collapseFilesAriaLabel',
-                                  })
-                                : intl.formatMessage({
-                                      id: 'downloads.actions.expandFilesAriaLabel',
-                                  })
-                        }
-                        aria-expanded={expanded}
-                    >
-                        {expanded ? <VscChevronDown /> : <VscChevronRight />}{' '}
-                        {intl.formatMessage({ id: 'downloads.actions.expandFiles' })}
-                    </button>
-                )}
-                {canExpand && (
-                    <button
-                        className="btn"
-                        onClick={handleToggleTrackers}
-                        aria-label={
-                            trackersExpanded
-                                ? intl.formatMessage({
-                                      id: 'downloads.actions.collapseTrackersAriaLabel',
-                                  })
-                                : intl.formatMessage({
-                                      id: 'downloads.actions.expandTrackersAriaLabel',
-                                  })
-                        }
-                        aria-expanded={trackersExpanded}
-                    >
-                        {trackersExpanded ? <VscChevronDown /> : <VscChevronRight />}{' '}
-                        {intl.formatMessage({ id: 'downloads.actions.expandTrackers' })}
                     </button>
                 )}
                 {/* Botão de expansão do painel de detalhes (Task 15.1) */}
@@ -649,26 +601,35 @@ export const DownloadItem = React.memo(function DownloadItem({
                         <VscPlay /> {intl.formatMessage({ id: 'downloads.actions.resume' })}
                     </button>
                 )}
-                <button
-                    className="btn btn--danger"
-                    onClick={() => setIsConfirmDialogOpen(true)}
-                    disabled={!!item.fileOperation}
-                    aria-label={intl.formatMessage(
-                        { id: 'downloads.actions.removeAriaLabel' },
+                <ActionMenu
+                    label={intl.formatMessage(
+                        { id: 'downloads.actions.more' },
                         { name: item.name },
                     )}
+                    disabled={!!item.fileOperation}
                 >
-                    <VscTrash /> {intl.formatMessage({ id: 'common.remove' })}
-                </button>
+                    <button
+                        type="button"
+                        className="btn"
+                        disabled={item.status === 'resolving-metadata'}
+                        onClick={() => setFilesDialogOpen(true)}
+                    >
+                        {intl.formatMessage({ id: 'downloads.actions.manageFiles' })}
+                    </button>
+                    <button
+                        type="button"
+                        className="btn btn--danger"
+                        onClick={() => setIsConfirmDialogOpen(true)}
+                        aria-label={intl.formatMessage(
+                            { id: 'downloads.actions.removeAriaLabel' },
+                            { name: item.name },
+                        )}
+                    >
+                        <VscTrash /> {intl.formatMessage({ id: 'common.remove' })}
+                    </button>
+                </ActionMenu>
             </div>
 
-            <button
-                className="btn"
-                disabled={!!item.fileOperation || item.status === 'resolving-metadata'}
-                onClick={() => setFilesDialogOpen(true)}
-            >
-                {intl.formatMessage({ id: 'files.manage' })}
-            </button>
             {item.fileOperation && (
                 <p role="status">{intl.formatMessage({ id: 'files.working' })}</p>
             )}
@@ -692,48 +653,58 @@ export const DownloadItem = React.memo(function DownloadItem({
                     )}
                 </div>
             )}
-            {expanded && (
-                <div className={styles.fileSelectorSection}>
-                    {filesLoading && !files.length && (
-                        <div
-                            className={styles.fileSelectorLoading}
-                            role="status"
-                            aria-live="polite"
-                        >
-                            {intl.formatMessage({ id: 'downloads.filesLoading' })}
-                        </div>
-                    )}
-                    {filesError && (
-                        <div className={styles.fileSelectorError} role="alert">
-                            {filesError}
-                        </div>
-                    )}
-                    {files.length > 0 && (
-                        <FileSelector
-                            files={files}
-                            onSelectionChange={handleSelectionChange}
-                            disabled={!!item.fileOperation}
-                            loading={selectionLoading}
-                            error={selectionError}
-                        />
-                    )}
-                </div>
-            )}
-
-            {/* Expanded tracker panel section (Task 8.5) */}
-            {trackersExpanded && (
-                <div className={styles.trackerPanelSection}>
-                    <TrackerPanel infoHash={item.infoHash} />
-                </div>
-            )}
-
             {/* Details panel section (Task 15.1) */}
-            <div className={styles.detailsPanelSection}>
+            <div className={detailsExpanded ? styles.detailsPanelSection : undefined}>
                 <DetailsPanel
                     infoHash={item.infoHash}
                     status={item.status}
                     isExpanded={detailsExpanded}
                     onToggle={handleToggleDetails}
+                    selectedTab={detailsTab}
+                    onTabChange={setDetailsTab}
+                    tabLabels={{
+                        general: intl.formatMessage({ id: 'downloads.tabs.general' }),
+                        peers: intl.formatMessage({ id: 'downloads.tabs.peers' }),
+                        pieces: intl.formatMessage({ id: 'downloads.tabs.pieces' }),
+                        speed: intl.formatMessage({ id: 'downloads.tabs.speed' }),
+                    }}
+                    additionalTabs={[
+                        {
+                            id: 'files',
+                            label: intl.formatMessage({ id: 'downloads.tabs.files' }),
+                            content: (
+                                <div>
+                                    {filesLoading && !files.length && (
+                                        <p role="status" className={styles.fileSelectorLoading}>
+                                            {intl.formatMessage({ id: 'downloads.filesLoading' })}
+                                        </p>
+                                    )}
+                                    {filesError && (
+                                        <p role="alert" className={styles.fileSelectorError}>
+                                            {filesError}
+                                        </p>
+                                    )}
+                                    {!filesLoading && !filesError && files.length === 0 && (
+                                        <p>{intl.formatMessage({ id: 'downloads.filesEmpty' })}</p>
+                                    )}
+                                    {files.length > 0 && (
+                                        <FileSelector
+                                            files={files}
+                                            onSelectionChange={handleSelectionChange}
+                                            disabled={!!item.fileOperation}
+                                            loading={selectionLoading}
+                                            error={selectionError}
+                                        />
+                                    )}
+                                </div>
+                            ),
+                        },
+                        {
+                            id: 'trackers',
+                            label: intl.formatMessage({ id: 'downloads.tabs.trackers' }),
+                            content: <TrackerPanel infoHash={item.infoHash} />,
+                        },
+                    ]}
                 />
             </div>
 

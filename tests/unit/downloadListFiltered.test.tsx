@@ -93,6 +93,33 @@ beforeEach(() => {
 // manipulando o filterStore diretamente.
 
 describe('DownloadList — integração com pipeline de filtros', () => {
+    it('busca no cabeçalho filtra a lista e permite adicionar um torrent', () => {
+        const onAddTorrent = jest.fn();
+        renderWithIntl(<DownloadList onAddTorrent={onAddTorrent} />);
+        expect(screen.getByRole('heading', { name: 'Downloads' })).toBeInTheDocument();
+        fireEvent.change(screen.getByRole('textbox', { name: 'Buscar downloads por nome' }), {
+            target: { value: 'Ubuntu' },
+        });
+        expect(screen.getByTestId('item-aaa')).toBeInTheDocument();
+        expect(screen.queryByTestId('item-bbb')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Adicionar torrent' }));
+        expect(onAddTorrent).toHaveBeenCalledTimes(1);
+    });
+
+    it('estado vazio tem ação de adição e mantém seleção indisponível', () => {
+        (useDownloads as jest.Mock).mockReturnValue({
+            items: [],
+            pause: jest.fn(),
+            resume: jest.fn(),
+            remove: jest.fn(),
+        });
+        const onAddTorrent = jest.fn();
+        renderWithIntl(<DownloadList onAddTorrent={onAddTorrent} />);
+        expect(screen.getByRole('button', { name: 'Selecionar torrents' })).toBeDisabled();
+        const buttons = screen.getAllByRole('button', { name: 'Adicionar torrent' });
+        fireEvent.click(buttons[1]!);
+        expect(onAddTorrent).toHaveBeenCalledTimes(1);
+    });
     // ── Região aria-live atualiza com contagem de resultados ──────────────
 
     it('região aria-live exibe contagem de resultados para múltiplos itens', () => {

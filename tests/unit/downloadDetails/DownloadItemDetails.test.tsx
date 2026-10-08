@@ -10,7 +10,7 @@
  */
 
 import React from 'react';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { IntlProvider } from 'react-intl';
 import '@testing-library/jest-dom';
 import { DownloadItem } from '../../../src/components/DownloadList/DownloadItem';
@@ -36,6 +36,7 @@ const mockMeshy = {
     }),
     getPeers: jest.fn().mockResolvedValue({ success: true, data: [] }),
     getPieces: jest.fn().mockResolvedValue({ success: true, data: [] }),
+    getTrackers: jest.fn().mockResolvedValue({ success: true, data: [] }),
 };
 
 Object.defineProperty(window, 'meshy', {
@@ -92,6 +93,66 @@ const defaultProps = {
 describe('DownloadItem + DetailsPanel — integração', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+    });
+
+    it('carrega arquivos pela aba e mantém um único painel visível ao trocar de aba', async () => {
+        mockMeshy.getFiles.mockResolvedValueOnce({
+            success: true,
+            data: [
+                {
+                    index: 0,
+                    name: 'exemplo.bin',
+                    path: 'exemplo.bin',
+                    length: 100,
+                    downloaded: 25,
+                    selected: true,
+                },
+            ],
+        });
+        const { container } = renderWithIntl(
+            <DownloadItem item={createItem()} {...defaultProps} />,
+        );
+        fireEvent.click(screen.getByRole('button', { name: /detalhes/i }));
+        expect(mockMeshy.getFiles).not.toHaveBeenCalled();
+        const filesTab = screen.getByRole('tab', { name: 'Arquivos' });
+        fireEvent.click(filesTab);
+        await screen.findByText('exemplo.bin');
+        expect(mockMeshy.getFiles).toHaveBeenCalledWith(createItem().infoHash);
+        expect(filesTab).toHaveAttribute('aria-selected', 'true');
+        fireEvent.keyDown(filesTab, { key: 'ArrowRight' });
+        const trackersTab = screen.getByRole('tab', { name: 'Trackers' });
+        expect(trackersTab).toHaveFocus();
+        expect(trackersTab).toHaveAttribute('aria-selected', 'true');
+        await waitFor(() => expect(mockMeshy.getTrackers).toHaveBeenCalled());
+        const panels = Array.from(container.querySelectorAll('[role="tabpanel"]'));
+        expect(panels.filter((panel) => !panel.classList.contains('tabPanelHidden'))).toHaveLength(
+            1,
+        );
+        expect(container.querySelector('[id$="-panel-files"]')).toHaveTextContent('exemplo.bin');
+        fireEvent.click(screen.getByRole('button', { name: /detalhes/i }));
+        fireEvent.click(screen.getByRole('button', { name: /detalhes/i }));
+        expect(screen.getByRole('tab', { name: 'Geral' })).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('remoção no menu exige confirmação e mantém a escolha explícita sobre arquivos', () => {
+        const onRemove = jest.fn().mockResolvedValue(undefined);
+        renderWithIntl(<DownloadItem item={createItem()} {...defaultProps} onRemove={onRemove} />);
+        expect(
+            screen.queryByRole('button', { name: /remover test torrent/i }),
+        ).not.toBeInTheDocument();
+        const more = screen.getByRole('button', { name: 'Mais ações de Test Torrent' });
+        fireEvent.click(more);
+        expect(screen.getByRole('button', { name: 'Gerenciar arquivos' })).toHaveFocus();
+        fireEvent.click(screen.getByRole('button', { name: /remover test torrent/i }));
+        expect(onRemove).not.toHaveBeenCalled();
+        fireEvent.click(
+            within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancelar' }),
+        );
+        expect(more).toHaveFocus();
+        fireEvent.click(more);
+        fireEvent.click(screen.getByRole('button', { name: /remover test torrent/i }));
+        fireEvent.click(screen.getByRole('button', { name: 'Manter arquivos' }));
+        expect(onRemove).toHaveBeenCalledWith(createItem().infoHash, false);
     });
 
     describe('Botão de expansão visível (Req 1.1)', () => {
@@ -158,7 +219,14 @@ describe('DownloadItem + DetailsPanel — integração', () => {
             const button = screen.getByRole('button', { name: /detalhes/i });
             fireEvent.click(button);
             const tabs = screen.getAllByRole('tab');
-            expect(tabs.length).toBe(4);
+            expect(tabs.map((tab) => tab.textContent)).toEqual([
+                'Geral',
+                'Peers',
+                'Peças',
+                'Velocidade',
+                'Arquivos',
+                'Trackers',
+            ]);
         });
     });
 
@@ -271,10 +339,7 @@ describe('DownloadItem + DetailsPanel — integração', () => {
 
         it('botão está habilitado quando status é "metadata-failed"', () => {
             renderWithIntl(
-                <DownloadItem
-                    item={createItem({ status: 'metadata-failed' })}
-                    {...defaultProps}
-                />,
+                <DownloadItem item={createItem({ status: 'metadata-failed' })} {...defaultProps} />,
             );
             const button = screen.getByRole('button', { name: /detalhes/i });
             expect(button).not.toBeDisabled();

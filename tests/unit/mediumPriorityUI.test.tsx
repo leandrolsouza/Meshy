@@ -19,7 +19,18 @@ jest.mock('../../src/components/TrackerPanel/TrackerPanel', () => ({
     TrackerPanel: () => <div>Tracker details</div>,
 }));
 jest.mock('../../src/components/DownloadDetails/DetailsPanel', () => ({
-    DetailsPanel: () => null,
+    DetailsPanel: ({
+        selectedTab,
+        isExpanded,
+        additionalTabs,
+    }: {
+        selectedTab: string;
+        isExpanded: boolean;
+        additionalTabs: { id: string; content: React.ReactNode }[];
+    }) =>
+        isExpanded ? (
+            <div>{additionalTabs.find((tab) => tab.id === selectedTab)?.content}</div>
+        ) : null,
     isExpandable: () => true,
 }));
 const active: DownloadItem = {
