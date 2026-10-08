@@ -25,6 +25,10 @@ interface SettingsFieldRule {
  * Campos não listados aqui não são validados (ex: globalTrackers, autoApplyGlobalTrackers).
  */
 const settingsRules: Record<string, SettingsFieldRule> = {
+    closeToTray: {
+        validate: (value) => typeof value === 'boolean',
+        errorCode: ErrorCodes.INVALID_PARAMS,
+    },
     downloadSpeedLimit: {
         validate: isValidSpeedLimit,
         errorCode: ErrorCodes.INVALID_SPEED_LIMIT,

@@ -74,6 +74,8 @@ function makeMockSettingsManager(): SettingsManager {
             dhtEnabled: true,
             pexEnabled: true,
             utpEnabled: true,
+
+            closeToTray: false,
         } as AppSettings),
         set: jest.fn(),
         getDefaultDownloadFolder: jest.fn().mockReturnValue('/downloads'),
@@ -129,9 +131,7 @@ function getHandler(
     channel: string,
 ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
     const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
-    return call
-        ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
-        : undefined;
+    return call ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>) : undefined;
 }
 
 // ─── Setup ────────────────────────────────────────────────────────────────────

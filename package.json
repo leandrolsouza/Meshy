@@ -15,7 +15,9 @@
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
         "format": "prettier --write .",
-        "format:check": "prettier --check ."
+        "format:check": "prettier --check .",
+        "pack": "npm run build && node scripts/prepare-icons.cjs && electron-builder --dir --publish never",
+        "dist": "npm run build && node scripts/prepare-icons.cjs && electron-builder --publish never"
     },
     "keywords": [],
     "author": "",
@@ -45,6 +47,7 @@
         "@vitejs/plugin-react": "^5.2.0",
         "babel-jest": "^30.5.2",
         "electron": "^44.7.0",
+        "electron-builder": "^26.15.3",
         "electron-vite": "^5.0.0",
         "eslint": "^10.12.0",
         "eslint-config-prettier": "^10.1.8",

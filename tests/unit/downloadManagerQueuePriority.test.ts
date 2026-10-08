@@ -15,7 +15,11 @@ import { EventEmitter } from 'events';
 import { createDownloadManager } from '../../main/downloadManager';
 import type { TorrentEngine, TorrentInfo, TorrentStatus } from '../../main/torrentEngine';
 import type { SettingsManager } from '../../main/settingsManager';
-import type { DownloadItem, PersistedDownloadItem, PersistedStore } from '../../main/downloadManager';
+import type {
+    DownloadItem,
+    PersistedDownloadItem,
+    PersistedStore,
+} from '../../main/downloadManager';
 
 // ─── FS Mocks (hoisted by Jest) ───────────────────────────────────────────────
 
@@ -58,6 +62,10 @@ function makeMockEngine(): TorrentEngine & EventEmitter {
 
     const engine: TorrentEngine & EventEmitter = Object.assign(emitter, {
         addTorrentFile: jest.fn(),
+
+        detachTorrent: jest.fn().mockResolvedValue(undefined),
+
+        getTorrentFile: jest.fn(),
         addTorrentBuffer: jest.fn(),
         addMagnetLink: jest.fn(),
         pause: jest.fn().mockResolvedValue(undefined),
@@ -80,7 +88,12 @@ function makeMockEngine(): TorrentEngine & EventEmitter {
             totalPeers: 0,
             uptimeMs: 0,
         }),
-        getMetadata: jest.fn().mockReturnValue({ infoHash: 'a'.repeat(40), creator: null, comment: null, creationDate: null }),
+        getMetadata: jest.fn().mockReturnValue({
+            infoHash: 'a'.repeat(40),
+            creator: null,
+            comment: null,
+            creationDate: null,
+        }),
         getPeers: jest.fn().mockReturnValue([]),
         getPieces: jest.fn().mockReturnValue([]),
     });
@@ -431,9 +444,7 @@ describe('DownloadManager — persistSession com ordem da fila', () => {
 
         // Verificar que o store.set foi chamado com os itens queued na ordem correta
         const setCalls = (store.set as jest.Mock).mock.calls;
-        const downloadsCall = setCalls.find(
-            (call: [string, unknown]) => call[0] === 'downloads',
-        );
+        const downloadsCall = setCalls.find((call: [string, unknown]) => call[0] === 'downloads');
         expect(downloadsCall).toBeDefined();
 
         const persisted = downloadsCall![1] as PersistedDownloadItem[];
@@ -456,9 +467,7 @@ describe('DownloadManager — persistSession com ordem da fila', () => {
         manager.persistSession();
 
         const setCalls = (store.set as jest.Mock).mock.calls;
-        const downloadsCall = setCalls.find(
-            (call: [string, unknown]) => call[0] === 'downloads',
-        );
+        const downloadsCall = setCalls.find((call: [string, unknown]) => call[0] === 'downloads');
         const persisted = downloadsCall![1] as PersistedDownloadItem[];
 
         // O item ativo deve estar presente

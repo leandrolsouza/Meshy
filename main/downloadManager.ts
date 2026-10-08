@@ -4,6 +4,9 @@ import type { TorrentEngine, TorrentInfo } from './torrentEngine';
 import type { SettingsManager } from './settingsManager';
 import type { DiskSpaceService } from './diskSpace';
 import type { PreparedTorrent } from './torrentPreparation';
+import { createTorrentFilesService, isSafeTorrentPath, resolveTorrentFile } from './torrentFiles';
+import type { TorrentFilesService, FileMove } from './torrentFiles';
+import type { FileOperation } from '../shared/types';
 import { ErrorCodes } from '../shared/errorCodes';
 import type {
     DownloadItem,
@@ -34,6 +37,12 @@ export interface DownloadManager {
         excludeHash?: string,
     ): Promise<DiskSpaceInfo>;
     checkDiskSpace(): Promise<void>;
+    getFiles(infoHash: string): TorrentFileInfo[];
+    manageFiles(
+        infoHash: string,
+        operation: FileOperation,
+        destinationFolder?: string,
+    ): Promise<DownloadItem>;
     addTorrentFile(filePath: string): Promise<DownloadItem>;
     addTorrentBuffer(buffer: Buffer): Promise<DownloadItem>;
     addMagnetLink(magnetUri: string): Promise<DownloadItem>;
@@ -134,6 +143,9 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
     /** Tracks selected file indices per torrent for persistence */
     private readonly selectedFileIndicesMap = new Map<string, number[]>();
     private readonly confirmedMetadata = new Map<string, Buffer>();
+    private readonly fileCatalog = new Map<string, TorrentFileInfo[]>();
+    private readonly torrentFiles: TorrentFilesService;
+    private readonly recoverMetadata: ((magnetUri: string) => Promise<PreparedTorrent>) | undefined;
     /** Fila ordenada de infoHashes aguardando slot de download */
     private readonly queue: string[] = [];
     /** Limite de downloads simultâneos */
@@ -159,20 +171,27 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
      * Cada Promise representa a operação em andamento; a próxima operação
      * encadeia-se na anterior para evitar race conditions.
      */
-    private readonly opLocks = new Map<string, Promise<void>>();
+    private readonly opLocks = new Map<string, Promise<unknown>>();
 
     constructor(
         engine: TorrentEngine,
         settings: SettingsManager,
         store?: PersistedStore,
         log?: Logger,
-        options?: { disableCleanupTimer?: boolean; diskSpace?: DiskSpaceService },
+        options?: {
+            disableCleanupTimer?: boolean;
+            diskSpace?: DiskSpaceService;
+            torrentFiles?: TorrentFilesService;
+            recoverMetadata?: (magnetUri: string) => Promise<PreparedTorrent>;
+        },
     ) {
         super();
         // Evitar warnings de memory leak — o ipcHandler e notificationManager
         // registram listeners de 'update' e 'remove' por janela.
         this.setMaxListeners(0);
         this.engine = engine;
+        this.torrentFiles = options?.torrentFiles ?? createTorrentFilesService();
+        this.recoverMetadata = options?.recoverMetadata;
         this.settings = settings;
         this.store = store;
         this.log = log ?? defaultLogger;
@@ -331,7 +350,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
 
         this.engine.on('done', (infoHash: string) => {
             const existing = this.items.get(infoHash);
-            if (!existing) return;
+            if (!existing || existing.fileOperation) return;
 
             this._clearMetadataTimer(infoHash);
             const completedAt = Date.now();
@@ -359,7 +378,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             this.log.error('[DownloadManager] Torrent error:', infoHash.slice(0, 8), err.message);
 
             const existing = this.items.get(infoHash);
-            if (!existing) return;
+            if (!existing || existing.fileOperation) return;
 
             if (
                 (err as NodeJS.ErrnoException).code === 'ENOSPC' ||
@@ -453,6 +472,13 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                     };
                     this.originalMagnetUris.set(info.infoHash, prepared.magnetUri);
                     this.confirmedMetadata.set(info.infoHash, Buffer.from(prepared.buffer));
+                    this.fileCatalog.set(
+                        info.infoHash,
+                        prepared.preview.files.map((file) => ({
+                            ...file,
+                            selected: indices.includes(file.index),
+                        })),
+                    );
                     this.selectedFileIndicesMap.set(info.infoHash, indices);
                     this.items.set(info.infoHash, item);
                     if (!hasSlot && !complete) this.queue.push(info.infoHash);
@@ -493,6 +519,196 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                     this._processQueue();
                 }
             });
+        this.admission = work;
+        return work;
+    }
+
+    getFiles(infoHash: string): TorrentFileInfo[] {
+        if (!this.items.has(infoHash)) throw new Error(ErrorCodes.TORRENT_NOT_FOUND);
+        try {
+            const files = this.engine.getFiles(infoHash);
+            if (files.length)
+                this.fileCatalog.set(
+                    infoHash,
+                    files.map((file) => ({ ...file })),
+                );
+        } catch {
+            /* Sessões pausadas/concluídas podem não estar no engine. */
+        }
+        return (this.fileCatalog.get(infoHash) ?? []).map((file) => ({ ...file }));
+    }
+
+    manageFiles(
+        infoHash: string,
+        operation: FileOperation,
+        destinationFolder?: string,
+    ): Promise<DownloadItem> {
+        const work = this.admission
+            .catch(() => {})
+            .then(() =>
+                this._withLock(infoHash, async () => {
+                    const existing = this.items.get(infoHash);
+                    if (!existing) throw new Error(ErrorCodes.TORRENT_NOT_FOUND);
+                    if (this.engine.isRestarting?.()) throw new Error(ErrorCodes.ENGINE_RESTARTING);
+                    let metadata =
+                        this.confirmedMetadata.get(infoHash) ??
+                        this.engine.getTorrentFile?.(infoHash);
+                    let files = this.getFiles(infoHash);
+                    const magnetUri = this.originalMagnetUris.get(infoHash);
+                    if ((!metadata || !files.length) && magnetUri && this.recoverMetadata) {
+                        const recovered = await this.recoverMetadata(magnetUri);
+                        if (recovered.preview.infoHash !== infoHash)
+                            throw new Error(ErrorCodes.FILE_METADATA_UNAVAILABLE);
+                        metadata = recovered.buffer;
+                        const selected = this.selectedFileIndicesMap.get(infoHash);
+                        files = recovered.preview.files.map((file) => ({
+                            ...file,
+                            selected: selected ? selected.includes(file.index) : true,
+                        }));
+                        this.fileCatalog.set(infoHash, files);
+                    }
+                    if (!metadata || !files.length)
+                        throw new Error(ErrorCodes.FILE_METADATA_UNAVAILABLE);
+                    const target =
+                        operation === 'verify' ? existing.destinationFolder : destinationFolder;
+                    if (!target) throw new Error(ErrorCodes.INVALID_PARAMS);
+                    await this.torrentFiles.validate(target, files);
+                    if (this.engine.isRestarting?.()) throw new Error(ErrorCodes.ENGINE_RESTARTING);
+                    this.confirmedMetadata.set(infoHash, Buffer.from(metadata));
+                    const indices =
+                        this.selectedFileIndicesMap.get(infoHash) ??
+                        files.filter((file) => file.selected).map((file) => file.index);
+                    this.selectedFileIndicesMap.set(infoHash, indices);
+                    const paused: DownloadItem = {
+                        ...existing,
+                        status: 'paused',
+                        fileOperation: operation,
+                        downloadSpeed: 0,
+                        uploadSpeed: 0,
+                    };
+                    delete paused.pauseReason;
+                    delete paused.errorMessage;
+                    this.items.set(infoHash, paused);
+                    const queueIndex = this.queue.indexOf(infoHash);
+                    if (queueIndex !== -1) this.queue.splice(queueIndex, 1);
+                    this.queuedMagnetUris.delete(infoHash);
+                    this._clearMetadataTimer(infoHash);
+                    this.emit('update', paused);
+                    this.persistSession();
+                    let move: FileMove | undefined;
+                    let destinationCommitted = false;
+                    let keepOriginals = false;
+                    try {
+                        await this.engine.detachTorrent(infoHash);
+                        if (operation === 'move') {
+                            const sourcePaths = new Set(
+                                await Promise.all(
+                                    files.map((file) =>
+                                        resolveTorrentFile(existing.destinationFolder, file.path),
+                                    ),
+                                ),
+                            );
+                            for (const other of this.items.values()) {
+                                if (other.infoHash === infoHash) continue;
+                                for (const file of this.getFiles(other.infoHash)) {
+                                    try {
+                                        if (
+                                            sourcePaths.has(
+                                                await resolveTorrentFile(
+                                                    other.destinationFolder,
+                                                    file.path,
+                                                ),
+                                            )
+                                        )
+                                            keepOriginals = true;
+                                    } catch {
+                                        /* Pasta de outro torrent indisponível; não participa desta cópia. */
+                                    }
+                                }
+                            }
+                            const bytes = await this.torrentFiles.existingBytes(
+                                existing.destinationFolder,
+                                files,
+                            );
+                            await this._ensureDiskSpace(target, bytes, infoHash);
+                            move = await this.torrentFiles.copy(
+                                existing.destinationFolder,
+                                target,
+                                files,
+                            );
+                        }
+                        await this.engine.addTorrentBuffer(metadata, true, {
+                            destinationFolder: target,
+                            selectedFileIndices: indices,
+                            verifyExisting: true,
+                        });
+                        const verified = this.engine.getFiles(infoHash);
+                        this.fileCatalog.set(
+                            infoHash,
+                            verified.map((file) => ({ ...file })),
+                        );
+                        const selected = verified.filter((file) => file.selected);
+                        const totalSize = selected.reduce((sum, file) => sum + file.length, 0);
+                        const downloadedSize = selected.reduce(
+                            (sum, file) => sum + Math.min(file.length, file.downloaded),
+                            0,
+                        );
+                        const complete =
+                            selected.length > 0 &&
+                            selected.every((file) => file.downloaded >= file.length);
+                        const result: DownloadItem = {
+                            ...paused,
+                            destinationFolder: target,
+                            totalSize,
+                            downloadedSize,
+                            progress: complete ? 1 : totalSize > 0 ? downloadedSize / totalSize : 0,
+                            selectedFileCount: selected.length,
+                            totalFileCount: verified.length,
+                            status: complete ? 'completed' : 'paused',
+                        };
+                        delete result.fileOperation;
+                        if (complete) result.completedAt = existing.completedAt ?? Date.now();
+                        else {
+                            delete result.completedAt;
+                            delete result.elapsedMs;
+                        }
+                        this.items.set(infoHash, result);
+                        this.persistSession();
+                        destinationCommitted = true;
+                        if (move && (keepOriginals || !(await move.commit())))
+                            result.errorMessage = ErrorCodes.FILE_MOVE_SOURCE_RETAINED;
+                        this.persistSession();
+                        this.emit('update', result);
+                        return { ...result };
+                    } catch (error) {
+                        if (!destinationCommitted) {
+                            await this.engine.detachTorrent(infoHash).catch(() => {});
+                            await move
+                                ?.rollback()
+                                .catch((rollbackError) =>
+                                    this.log.warn(
+                                        '[DownloadManager] Cópia mantida após falha de recuperação:',
+                                        rollbackError,
+                                    ),
+                                );
+                            const failed = {
+                                ...existing,
+                                status: 'paused' as const,
+                                downloadSpeed: 0,
+                                uploadSpeed: 0,
+                            };
+                            delete failed.fileOperation;
+                            this.items.set(infoHash, failed);
+                            this.fileCatalog.set(infoHash, files);
+                            this.emit('update', failed);
+                            this.persistSession();
+                        }
+                        throw error;
+                    } finally {
+                        this._processQueue();
+                    }
+                }),
+            );
         this.admission = work;
         return work;
     }
@@ -1010,6 +1226,8 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
     // ── setFileSelection ───────────────────────────────────────────────────────
 
     setFileSelection(infoHash: string, selectedIndices: number[]): TorrentFileInfo[] {
+        if (this.items.get(infoHash)?.fileOperation)
+            throw new Error(ErrorCodes.FILE_OPERATION_BUSY);
         const updatedFiles = this.engine.setFileSelection(infoHash, selectedIndices);
 
         // Track selected indices for persistence
@@ -1216,6 +1434,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             this._clearMetadataTimer(infoHash);
             this.selectedFileIndicesMap.delete(infoHash);
             this.confirmedMetadata.delete(infoHash);
+            this.fileCatalog.delete(infoHash);
             this.items.delete(infoHash);
             this.emit('remove', infoHash);
 
@@ -1250,7 +1469,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
 
             // Enrich with file count info if available
             try {
-                const files = this.engine.getFiles(item.infoHash);
+                const files = this.getFiles(item.infoHash);
                 if (files.length > 0) {
                     const selectedFiles = files.filter((f) => f.selected);
                     return {
@@ -1409,6 +1628,30 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
             };
 
             this.items.set(item.infoHash, item);
+            if (
+                Array.isArray(persistedItem.files) &&
+                persistedItem.files.every(
+                    (file, index) =>
+                        file &&
+                        file.index === index &&
+                        isSafeTorrentPath(file.path) &&
+                        typeof file.name === 'string' &&
+                        Number.isSafeInteger(file.length) &&
+                        file.length >= 0 &&
+                        typeof file.downloaded === 'number' &&
+                        Number.isFinite(file.downloaded) &&
+                        file.downloaded >= 0 &&
+                        typeof file.selected === 'boolean',
+                )
+            ) {
+                this.fileCatalog.set(
+                    item.infoHash,
+                    persistedItem.files.map((file) => ({
+                        ...file,
+                        downloaded: Math.min(file.length, file.downloaded),
+                    })),
+                );
+            }
             this.emit('update', item);
 
             // Restaurar magnetUri original para persistência futura e re-add ao engine
@@ -1553,6 +1796,9 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
 
         const items = Array.from(this.items.values());
         const persisted: PersistedDownloadItem[] = items.map((item) => {
+            const files = this.getFiles(item.infoHash);
+            const metadata = this.engine.getTorrentFile?.(item.infoHash);
+            if (metadata) this.confirmedMetadata.set(item.infoHash, metadata);
             const magnetUri =
                 this.originalMagnetUris.get(item.infoHash) ??
                 this.queuedMagnetUris.get(item.infoHash);
@@ -1572,6 +1818,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
                 ...(magnetUri !== undefined ? { magnetUri } : {}),
                 ...(item.errorMessage !== undefined ? { errorMessage: item.errorMessage } : {}),
                 ...(item.pauseReason ? { pauseReason: item.pauseReason } : {}),
+                ...(files.length ? { files } : {}),
                 ...(this.confirmedMetadata.has(item.infoHash)
                     ? {
                           torrentFileBase64: this.confirmedMetadata
@@ -1621,7 +1868,7 @@ class DownloadManagerImpl extends EventEmitter implements DownloadManager {
      * anterior para o mesmo infoHash, garantindo que pause/resume não se
      * sobreponham. Se a operação anterior falhou, a próxima ainda executa.
      */
-    private _withLock(infoHash: string, fn: () => Promise<void>): Promise<void> {
+    private _withLock<T>(infoHash: string, fn: () => Promise<T>): Promise<T> {
         const prev = this.opLocks.get(infoHash) ?? Promise.resolve();
         const next = prev.catch(() => {}).then(fn);
         this.opLocks.set(infoHash, next);
@@ -1989,7 +2236,12 @@ export function createDownloadManager(
     settings: SettingsManager,
     store?: PersistedStore,
     log?: Logger,
-    options?: { disableCleanupTimer?: boolean; diskSpace?: DiskSpaceService },
+    options?: {
+        disableCleanupTimer?: boolean;
+        diskSpace?: DiskSpaceService;
+        torrentFiles?: TorrentFilesService;
+        recoverMetadata?: (magnetUri: string) => Promise<PreparedTorrent>;
+    },
 ): DownloadManager {
     return new DownloadManagerImpl(engine, settings, store, log, options);
 }

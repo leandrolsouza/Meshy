@@ -1,4 +1,5 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
+import { resolveErrorMessage } from '../../utils/resolveErrorMessage';
 import { useIntl } from 'react-intl';
 import type { AppSettings } from '../../../shared/types';
 import { ThemeSwitcher } from './ThemeSwitcher';
@@ -32,6 +33,23 @@ export function GeneralSettings({
     onUpdateSettings,
 }: GeneralSettingsProps): React.JSX.Element {
     const intl = useIntl();
+    const [systemBusy, setSystemBusy] = useState(false);
+    const [systemError, setSystemError] = useState<string | null>(null);
+    const [registered, setRegistered] = useState(false);
+    const registerMagnet = async () => {
+        setSystemBusy(true);
+        setSystemError(null);
+        setRegistered(false);
+        try {
+            const response = await window.meshy.registerMagnetHandler();
+            if (response.success) setRegistered(true);
+            else setSystemError(resolveErrorMessage(intl, response.error));
+        } catch {
+            setSystemError(intl.formatMessage({ id: 'error.system.protocolRegistration' }));
+        } finally {
+            setSystemBusy(false);
+        }
+    };
 
     const handleNotificationsChange = useCallback(
         (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -85,6 +103,36 @@ export function GeneralSettings({
             </div>
 
             {/* Notificações nativas */}
+            <div className={styles.fieldGroup}>
+                <label className={styles.checkboxLabel}>
+                    <input
+                        type="checkbox"
+                        checked={settings.closeToTray ?? false}
+                        onChange={(event) =>
+                            void onUpdateSettings({ closeToTray: event.target.checked })
+                        }
+                    />
+                    {intl.formatMessage({ id: 'settings.general.closeToTray' })}
+                </label>
+                <p>{intl.formatMessage({ id: 'settings.general.closeToTrayHelp' })}</p>
+            </div>
+            <div className={styles.fieldGroup}>
+                <button
+                    type="button"
+                    className="btn"
+                    disabled={systemBusy}
+                    onClick={() => void registerMagnet()}
+                >
+                    {intl.formatMessage({ id: 'settings.general.registerMagnet' })}
+                </button>
+                <p>{intl.formatMessage({ id: 'settings.general.associationsHelp' })}</p>
+                {registered && (
+                    <p role="status">
+                        {intl.formatMessage({ id: 'settings.general.magnetRegistered' })}
+                    </p>
+                )}
+                {systemError && <p role="alert">{systemError}</p>}
+            </div>
             <div className={styles.fieldGroup}>
                 <label className={styles.checkboxLabel}>
                     <input

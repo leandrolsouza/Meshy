@@ -47,6 +47,13 @@ export const ErrorCodes = {
     PREPARATION_CANCELLED: 'error.torrent.preparationCancelled',
     PREPARATION_EXPIRED: 'error.torrent.preparationExpired',
     METADATA_TIMEOUT: 'error.torrent.metadataTimeout',
+    FILE_OPERATION_BUSY: 'error.files.busy',
+    FILE_METADATA_UNAVAILABLE: 'error.files.metadataUnavailable',
+    FILE_PATH_UNSAFE: 'error.files.unsafePath',
+    FILE_DESTINATION_CONFLICT: 'error.files.destinationConflict',
+    FILE_SOURCE_MISSING: 'error.files.sourceMissing',
+    FILE_MOVE_SOURCE_RETAINED: 'error.files.sourceRetained',
+    PROTOCOL_REGISTRATION_FAILED: 'error.system.protocolRegistration',
 
     // Rate limiting
     RATE_LIMITED: 'error.rateLimit',

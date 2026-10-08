@@ -68,6 +68,8 @@ function makeMockSettingsManager(): SettingsManager {
             dhtEnabled: true,
             pexEnabled: true,
             utpEnabled: true,
+
+            closeToTray: false,
         } as AppSettings),
         set: jest.fn(),
         getDefaultDownloadFolder: jest.fn().mockReturnValue('/downloads'),

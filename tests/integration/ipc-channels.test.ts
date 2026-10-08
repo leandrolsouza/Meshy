@@ -41,6 +41,10 @@ const { ipcMain: mockIpcMain, dialog: mockDialog } = require('electron') as {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const EXPECTED_CHANNELS = [
+    'torrent:manage-files',
+    'app:get-external-torrents',
+    'app:acknowledge-external-torrent',
+    'app:register-magnet-handler',
     'torrent:prepare',
     'torrent:cancel-preparation',
     'torrent:disk-space',
@@ -129,6 +133,8 @@ function makeMockSettingsManager(): SettingsManager {
         dhtEnabled: true,
         pexEnabled: true,
         utpEnabled: true,
+
+        closeToTray: false,
     };
     return {
         get: jest.fn().mockReturnValue(settings),
@@ -531,6 +537,8 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                     dhtEnabled: true,
                     pexEnabled: true,
                     utpEnabled: true,
+
+                    closeToTray: false,
                 });
             }
         });
@@ -549,6 +557,8 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                 dhtEnabled: true,
                 pexEnabled: true,
                 utpEnabled: true,
+
+                closeToTray: false,
             };
             (settingsManager.get as jest.Mock).mockReturnValue(updatedSettings);
 
@@ -578,6 +588,8 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                 dhtEnabled: true,
                 pexEnabled: true,
                 utpEnabled: true,
+
+                closeToTray: false,
             };
             (settingsManager.get as jest.Mock).mockReturnValue(updatedSettings);
 
@@ -607,6 +619,8 @@ describe('Integration: IPC Channels (Requirements 8.1, 8.5)', () => {
                 dhtEnabled: true,
                 pexEnabled: true,
                 utpEnabled: true,
+
+                closeToTray: false,
             };
             (settingsManager.get as jest.Mock).mockReturnValue(updatedSettings);
 

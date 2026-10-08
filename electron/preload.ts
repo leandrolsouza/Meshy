@@ -14,6 +14,20 @@ import type {
 // ─── Expose API via contextBridge ────────────────────────────────────────────
 
 const meshyAPI: MeshyAPI = {
+    manageFiles: (infoHash, operation, destinationFolder) =>
+        ipcRenderer.invoke('torrent:manage-files', { infoHash, operation, destinationFolder }),
+    getExternalTorrentRequests: () => ipcRenderer.invoke('app:get-external-torrents'),
+    acknowledgeExternalTorrentRequest: (id) =>
+        ipcRenderer.invoke('app:acknowledge-external-torrent', { id }),
+    registerMagnetHandler: () => ipcRenderer.invoke('app:register-magnet-handler'),
+    onExternalTorrentRequests(callback) {
+        const listener = (
+            _event: Electron.IpcRendererEvent,
+            requests: import('../shared/types').ExternalTorrentRequest[],
+        ) => callback(requests);
+        ipcRenderer.on('app:external-torrents', listener);
+        return () => ipcRenderer.removeListener('app:external-torrents', listener);
+    },
     prepareTorrent: (requestId, source) =>
         ipcRenderer.invoke('torrent:prepare', { requestId, source }),
     cancelTorrentPreparation: (requestId) =>

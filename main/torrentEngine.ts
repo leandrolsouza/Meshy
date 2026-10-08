@@ -49,6 +49,7 @@ export interface TorrentEngineOptions {
 export interface TorrentAddOptions {
     destinationFolder: string;
     selectedFileIndices?: number[];
+    verifyExisting?: boolean;
 }
 
 export interface TorrentInfo {
@@ -84,6 +85,8 @@ export interface TorrentEngine {
     pause(infoHash: string): Promise<void>;
     resume(infoHash: string): Promise<void>;
     remove(infoHash: string, deleteFiles: boolean): Promise<void>;
+    detachTorrent(infoHash: string): Promise<void>;
+    getTorrentFile(infoHash: string): Buffer | undefined;
     setDownloadSpeedLimit(kbps: number): void;
     setUploadSpeedLimit(kbps: number): void;
     getAll(): TorrentInfo[];
@@ -286,7 +289,10 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
                     resolve(torrentToInfo(ready, status));
                 }
             };
-            const timer = setTimeout(() => finish(new Error('Adição do torrent expirou')), 20_000);
+            const timer = setTimeout(
+                () => finish(new Error('Adição do torrent expirou')),
+                options?.verifyExisting ? 30 * 60_000 : 20_000,
+            );
             try {
                 torrent = this.client.add(
                     buffer,
@@ -294,6 +300,7 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
                         path: options?.destinationFolder ?? this.downloadPath,
                         paused,
                         deselect: options?.selectedFileIndices !== undefined,
+                        skipVerify: false,
                     } as TorrentOptions,
                     (ready) => finish(undefined, ready),
                 );
@@ -456,6 +463,26 @@ class TorrentEngineImpl extends EventEmitter implements TorrentEngine {
                 resolve();
             });
         });
+    }
+
+    /** Fecha store e rede sem remover dados ou a pasta escolhida pelo usuário. */
+    async detachTorrent(infoHash: string): Promise<void> {
+        const torrent = this._getTorrent(infoHash);
+        if (torrent) {
+            await new Promise<void>((resolve, reject) =>
+                torrent.destroy({ destroyStore: false }, (error) =>
+                    error ? reject(error) : resolve(),
+                ),
+            );
+        }
+        this.statusMap.delete(infoHash);
+        this.selectionMap.delete(infoHash);
+        this.pendingMagnets.delete(infoHash);
+    }
+
+    getTorrentFile(infoHash: string): Buffer | undefined {
+        const metadata = this._getTorrent(infoHash)?.torrentFile;
+        return metadata ? Buffer.from(metadata) : undefined;
     }
 
     // ── setDownloadSpeedLimit ───────────────────────────────────────────────────

@@ -62,6 +62,7 @@ export interface DownloadItem {
     errorMessage?: string; // mensagem de erro (quando status === 'error')
     queuePosition?: number; // posição na fila (1-based), undefined para não-enfileirados
     pauseReason?: 'disk-space';
+    fileOperation?: FileOperation;
 }
 
 // ─── PersistedDownloadItem ────────────────────────────────────────────────────
@@ -86,6 +87,13 @@ export interface PersistedDownloadItem {
     torrentFileBase64?: string;
     selectedFileCount?: number;
     totalFileCount?: number;
+    files?: TorrentFileInfo[];
+}
+
+export type FileOperation = 'locate' | 'move' | 'verify';
+export interface ExternalTorrentRequest {
+    id: string;
+    source: TorrentSource;
 }
 
 /** Metadados temporários: preparar não inicia o download dos arquivos. */
@@ -125,6 +133,7 @@ export interface AppSettings {
     dhtEnabled: boolean; // DHT — Distributed Hash Table (padrão: true)
     pexEnabled: boolean; // PEX — Peer Exchange (padrão: true)
     utpEnabled: boolean; // uTP — Micro Transport Protocol (padrão: true)
+    closeToTray: boolean; // continuar baixando ao fechar a janela (padrão: false)
 }
 
 // ─── TorrentMetadata ──────────────────────────────────────────────────────────
@@ -175,6 +184,15 @@ export interface MeshyAPI {
         destinationFolder: string,
         selectedIndices: number[],
     ): Promise<IPCResponse<DownloadItem>>;
+    manageFiles(
+        infoHash: string,
+        operation: FileOperation,
+        destinationFolder?: string,
+    ): Promise<IPCResponse<DownloadItem>>;
+    getExternalTorrentRequests(): Promise<IPCResponse<ExternalTorrentRequest[]>>;
+    acknowledgeExternalTorrentRequest(id: string): Promise<IPCResponse<void>>;
+    onExternalTorrentRequests(callback: (requests: ExternalTorrentRequest[]) => void): () => void;
+    registerMagnetHandler(): Promise<IPCResponse<void>>;
     // Commands
     addTorrentFile(filePath: string): Promise<IPCResponse<DownloadItem>>;
     addTorrentFileBuffer(buffer: Uint8Array): Promise<IPCResponse<DownloadItem>>;

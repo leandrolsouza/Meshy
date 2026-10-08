@@ -18,6 +18,7 @@ import { SpeedDisplay } from '../common/SpeedDisplay';
 import { formatBytes } from '../../utils/formatters';
 import { resolveErrorMessage } from '../../utils/resolveErrorMessage';
 import { ConfirmDialog } from '../common/ConfirmDialog';
+import { ManageFilesDialog } from './ManageFilesDialog';
 import { FileSelector } from '../FileSelector/FileSelector';
 import { TrackerPanel } from '../TrackerPanel/TrackerPanel';
 import { DetailsPanel, isExpandable } from '../DownloadDetails/DetailsPanel';
@@ -99,6 +100,7 @@ export const DownloadItem = React.memo(function DownloadItem({
     const isWaiting = item.status === 'queued' || item.status === 'resolving-metadata';
     const isQueued = item.status === 'queued';
     const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+    const [filesDialogOpen, setFilesDialogOpen] = useState(false);
 
     // ── Estado de operação em andamento (desabilita botões durante IPC) ──────
     const [isBusy, setIsBusy] = useState(false);
@@ -561,11 +563,11 @@ export const DownloadItem = React.memo(function DownloadItem({
                     <button
                         className="btn"
                         onClick={() => {
-                            if (isBusy) return;
+                            if (isBusy || item.fileOperation) return;
                             setIsBusy(true);
                             onPause(item.infoHash).finally(() => setIsBusy(false));
                         }}
-                        disabled={isBusy}
+                        disabled={isBusy || !!item.fileOperation}
                         aria-label={intl.formatMessage(
                             { id: 'downloads.actions.pauseAriaLabel' },
                             { name: item.name },
@@ -578,11 +580,11 @@ export const DownloadItem = React.memo(function DownloadItem({
                     <button
                         className="btn"
                         onClick={() => {
-                            if (isBusy) return;
+                            if (isBusy || item.fileOperation) return;
                             setIsBusy(true);
                             onResume(item.infoHash).finally(() => setIsBusy(false));
                         }}
-                        disabled={isBusy}
+                        disabled={isBusy || !!item.fileOperation}
                         aria-label={intl.formatMessage(
                             { id: 'downloads.actions.resumeAriaLabel' },
                             { name: item.name },
@@ -594,6 +596,7 @@ export const DownloadItem = React.memo(function DownloadItem({
                 <button
                     className="btn btn--danger"
                     onClick={() => setIsConfirmDialogOpen(true)}
+                    disabled={!!item.fileOperation}
                     aria-label={intl.formatMessage(
                         { id: 'downloads.actions.removeAriaLabel' },
                         { name: item.name },
@@ -602,6 +605,20 @@ export const DownloadItem = React.memo(function DownloadItem({
                     <VscTrash /> {intl.formatMessage({ id: 'common.remove' })}
                 </button>
             </div>
+
+            <button
+                className="btn"
+                disabled={!!item.fileOperation || item.status === 'resolving-metadata'}
+                onClick={() => setFilesDialogOpen(true)}
+            >
+                {intl.formatMessage({ id: 'files.manage' })}
+            </button>
+            {item.fileOperation && (
+                <p role="status">{intl.formatMessage({ id: 'files.working' })}</p>
+            )}
+            {filesDialogOpen && (
+                <ManageFilesDialog item={item} onClose={() => setFilesDialogOpen(false)} />
+            )}
 
             {/* Action error display (Task 5.3) */}
             {actionError && (
@@ -639,6 +656,7 @@ export const DownloadItem = React.memo(function DownloadItem({
                         <FileSelector
                             files={files}
                             onSelectionChange={handleSelectionChange}
+                            disabled={!!item.fileOperation}
                             loading={selectionLoading}
                             error={selectionError}
                         />

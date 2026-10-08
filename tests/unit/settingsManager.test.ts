@@ -29,6 +29,13 @@ function makeManager(storeData: Record<string, unknown> = {}) {
 // ─── get() ────────────────────────────────────────────────────────────────────
 
 describe('SettingsManager.get()', () => {
+    it('sessões antigas usam fechar normalmente; preferência de bandeja pode ser persistida', () => {
+        const manager = makeManager();
+        expect(manager.get().closeToTray).toBe(false);
+        manager.set({ closeToTray: true });
+        expect(manager.get().closeToTray).toBe(true);
+        expect(makeManager({ closeToTray: 'invalid' }).get().closeToTray).toBe(false);
+    });
     it('returns default speed limits of 0 when store is empty', () => {
         const manager = makeManager();
         const settings = manager.get();
@@ -60,6 +67,7 @@ describe('SettingsManager.get()', () => {
         expect(Object.keys(settings).sort()).toEqual(
             [
                 'autoApplyGlobalTrackers',
+                'closeToTray',
                 'destinationFolder',
                 'dhtEnabled',
                 'downloadSpeedLimit',
@@ -500,6 +508,10 @@ function makeMockEngine(infoHash: string): TorrentEngine & EventEmitter {
 
     const engine: TorrentEngine & EventEmitter = Object.assign(emitter, {
         addTorrentFile: jest.fn().mockResolvedValue(info),
+
+        detachTorrent: jest.fn().mockResolvedValue(undefined),
+
+        getTorrentFile: jest.fn(),
         addTorrentBuffer: jest.fn().mockResolvedValue(info),
         addMagnetLink: jest.fn().mockResolvedValue(info),
         pause: jest.fn().mockResolvedValue(undefined),

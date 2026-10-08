@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog } from 'electron';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { createSettingsManager } from './settingsManager';
 import { createTorrentEngine } from './torrentEngine';
 import { createDownloadManager } from './downloadManager';
@@ -10,11 +10,24 @@ import { logger } from './logger';
 import { metrics } from './metrics';
 import { createTorrentPreparation } from './torrentPreparation';
 import { createDiskSpaceService } from './diskSpace';
+import { createExternalTorrentInbox } from './externalTorrents';
+import { createBackgroundController } from './backgroundController';
+import { randomUUID } from 'crypto';
 
 import ElectronStore from 'electron-store';
 
 // Module-level references so the before-quit handler can access them
 let downloadManager: DownloadManager | null = null;
+let desktopReady = false;
+let showMainWindow = () => {};
+let background: ReturnType<typeof createBackgroundController> | undefined;
+const externalTorrents = createExternalTorrentInbox(() => {
+    if (!desktopReady) return;
+    showMainWindow();
+    const window = BrowserWindow.getAllWindows()[0];
+    if (window && !window.isDestroyed())
+        window.webContents.send('app:external-torrents', externalTorrents.getPending());
+});
 
 // ─── Crash handlers ───────────────────────────────────────────────────────────
 //
@@ -173,12 +186,20 @@ function createMainWindow(): BrowserWindow {
 // Multiple processes otherwise restore the same session and duplicate discovery.
 const ownsInstance = app.requestSingleInstanceLock();
 if (!ownsInstance) app.quit();
-app.on('second-instance', () => {
-    const window = BrowserWindow.getAllWindows()[0];
-    if (window?.isMinimized()) window.restore();
-    window?.show();
-    window?.focus();
+app.on('second-instance', (_event, args, cwd) => {
+    externalTorrents.enqueueArguments(args, cwd);
+    if (desktopReady) showMainWindow();
 });
+// macOS entrega estes eventos antes de ready em lançamentos pelo Finder/navegador.
+app.on('open-url', (event, url) => {
+    event.preventDefault();
+    externalTorrents.enqueueArguments([url]);
+});
+app.on('open-file', (event, filePath) => {
+    event.preventDefault();
+    externalTorrents.enqueueArguments([filePath]);
+});
+if (ownsInstance) externalTorrents.enqueueArguments(process.argv.slice(process.defaultApp ? 2 : 1));
 
 app.whenReady()
     .then(async () => {
@@ -211,16 +232,27 @@ app.whenReady()
             set: (key: string, value: unknown) => downloadsStore.set(key, value),
         } as import('./downloadManager').PersistedStore;
 
+        const preparation = createTorrentPreparation({
+            getNetworkOptions: () => settingsManager.get(),
+        });
         downloadManager = createDownloadManager(
             torrentEngine,
             settingsManager,
             persistedStore,
             undefined,
-            { diskSpace: createDiskSpaceService() },
+            {
+                diskSpace: createDiskSpaceService(),
+                recoverMetadata: async (magnetUri) => {
+                    const requestId = randomUUID();
+                    try {
+                        await preparation.prepare(requestId, { kind: 'magnet', magnetUri });
+                        return preparation.get(requestId);
+                    } finally {
+                        preparation.cancel(requestId);
+                    }
+                },
+            },
         );
-        const preparation = createTorrentPreparation({
-            getNetworkOptions: () => settingsManager.get(),
-        });
         const diskTimer = setInterval(() => {
             void downloadManager
                 ?.checkDiskSpace()
@@ -241,6 +273,8 @@ app.whenReady()
 
         // ── Register before-quit handler to persist session ────────────────────────
         app.on('before-quit', () => {
+            desktopReady = false;
+            background?.dispose();
             clearInterval(diskTimer);
             preparation.dispose();
             downloadManager?.persistSession();
@@ -251,7 +285,15 @@ app.whenReady()
         const mainWindow = createMainWindow();
 
         // Register IPC handlers ONCE (global — survives window close/reopen on macOS).
-        registerIpcHandlers(downloadManager, settingsManager, torrentEngine, preparation);
+        registerIpcHandlers(downloadManager, settingsManager, torrentEngine, preparation, {
+            inbox: externalTorrents,
+            registerMagnetHandler: () =>
+                process.defaultApp && process.argv[1]
+                    ? app.setAsDefaultProtocolClient('magnet', process.execPath, [
+                          resolve(process.argv[1]),
+                      ])
+                    : app.setAsDefaultProtocolClient('magnet'),
+        });
 
         // Attach per-window resources (progress interval, error forwarding).
         attachWindowEvents(downloadManager, torrentEngine, mainWindow);
@@ -261,15 +303,29 @@ app.whenReady()
 
         // Inicializar notificações nativas do OS com referência à janela principal
         createNotificationManager(downloadManager, settingsManager, { mainWindow });
-
-        app.on('activate', () => {
-            if (BrowserWindow.getAllWindows().length === 0) {
+        showMainWindow = () => {
+            let window = BrowserWindow.getAllWindows()[0];
+            if (!window) {
                 const newWindow = createMainWindow();
                 // Only attach per-window events — IPC handlers are already registered.
                 attachWindowEvents(downloadManager!, torrentEngine, newWindow);
                 attachRendererCrashHandler(newWindow);
+                background?.attachWindow(newWindow);
+                window = newWindow;
             }
+            if (window.isMinimized()) window.restore();
+            window.show();
+            window.focus();
+        };
+        background = createBackgroundController({
+            manager: downloadManager,
+            settings: settingsManager,
+            iconPath: join(__dirname, '../../icon.png'),
+            showWindow: () => showMainWindow(),
         });
+        background.attachWindow(mainWindow);
+        desktopReady = true;
+        app.on('activate', () => showMainWindow());
     })
     .catch((err: unknown) => {
         // Captura qualquer erro não tratado durante a inicialização do app.

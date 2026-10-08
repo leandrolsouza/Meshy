@@ -12,6 +12,7 @@ import { useDownloadStore } from './store/downloadStore';
 import { DownloadList } from './components/DownloadList/DownloadList';
 import { DropZone } from './components/AddTorrent/DropZone';
 import { AddTorrentModal } from './components/AddTorrent/AddTorrentModal';
+import { ExternalTorrentImporter } from './components/AddTorrent/ExternalTorrentImporter';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
 import { FilterSidebar } from './components/DownloadList/FilterSidebar';
 import { applyTheme } from './themes/themeApplier';
@@ -187,6 +188,7 @@ function App(): React.JSX.Element {
                 )}
             </main>
 
+            <ExternalTorrentImporter />
             {/* ── Status Bar ────────────────────────────────────────────── */}
             <footer className={styles.statusBar}>
                 <span>

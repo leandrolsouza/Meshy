@@ -76,11 +76,18 @@ const arbFolderPath = fc.string({
 });
 
 /** Gera caminhos de arquivo relativos seguros para testes */
-const arbFilePath = fc.string({
-    unit: fc.constantFrom('a', 'b', 'c', '.', '/', '_', '-', 'm', 'p', '4'),
-    minLength: 1,
-    maxLength: 50,
-});
+const arbFileSegment = fc
+    .tuple(
+        fc.constantFrom('a', 'b', 'c', 'm', 'p', '4'),
+        fc.string({
+            unit: fc.constantFrom('a', 'b', 'c', '.', '_', '-', 'm', 'p', '4'),
+            maxLength: 8,
+        }),
+    )
+    .map(([first, rest]) => first + rest);
+const arbFilePath = fc
+    .array(arbFileSegment, { minLength: 1, maxLength: 5 })
+    .map((parts) => parts.join('/'));
 
 /** Gera status de torrent (todos os possíveis) */
 const arbTorrentStatus: fc.Arbitrary<TorrentStatus> = fc.constantFrom(
@@ -107,6 +114,12 @@ const arbNonCompletedStatus: fc.Arbitrary<TorrentStatus> = fc.constantFrom(
 
 /** Gera strings de erro do shell (não vazias) */
 const arbShellError = fc.string({ minLength: 1, maxLength: 100 });
+
+// O filesystem destes handlers é virtual; contenção/symlinks têm testes próprios.
+jest.mock('fs/promises', () => ({
+    realpath: jest.fn(async (folder: string) => require('path').resolve(folder)),
+    lstat: jest.fn(async () => ({ isSymbolicLink: () => false })),
+}));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -177,6 +190,8 @@ function makeMockSettingsManager(): SettingsManager {
             dhtEnabled: true,
             pexEnabled: true,
             utpEnabled: true,
+
+            closeToTray: false,
         } as AppSettings),
         set: jest.fn(),
         getDefaultDownloadFolder: jest.fn().mockReturnValue('/downloads'),
@@ -297,7 +312,7 @@ describe('Property-Based Tests: open-destination IPC handlers', () => {
                     const handler = getHandler('torrent:open-file')!;
                     const response = (await handler(null, { infoHash })) as any;
 
-                    const expectedPath = path.join(destinationFolder, filePath);
+                    const expectedPath = path.resolve(destinationFolder, filePath);
 
                     expect(response.success).toBe(true);
                     expect(mockShellOpenPath).toHaveBeenCalledWith(expectedPath);

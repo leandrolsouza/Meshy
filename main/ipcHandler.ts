@@ -1,6 +1,6 @@
 import { ipcMain, dialog, shell, BrowserWindow } from 'electron';
 import { existsSync, accessSync, constants as fsConstants } from 'fs';
-import { join, resolve, basename } from 'path';
+import { resolve, basename } from 'path';
 import type { DownloadManager } from './downloadManager';
 import type { SettingsManager } from './settingsManager';
 import type { TorrentEngine } from './torrentEngine';
@@ -32,6 +32,8 @@ import { validateSettingsPayload } from './settingsValidator';
 import { randomBytes } from 'crypto';
 import type { TorrentPreparation } from './torrentPreparation';
 import type { TorrentSource } from '../shared/types';
+import type { ExternalTorrentInbox } from './externalTorrents';
+import { resolveTorrentFile } from './torrentFiles';
 
 export type { IPCResponse } from '../shared/types';
 
@@ -223,6 +225,7 @@ export function attachWindowEvents(
         logger.error('[IPC] Engine error:', infoHash.slice(0, 8), err.message, stack);
         if (
             !mainWindow.isDestroyed() &&
+            !downloadManager.getAll().find((item) => item.infoHash === infoHash)?.fileOperation &&
             !downloadManager.getAll().find((item) => item.infoHash === infoHash)?.pauseReason
         ) {
             mainWindow.webContents.send('torrent:error', { infoHash, message: err.message });
@@ -255,6 +258,7 @@ export function registerIpcHandlers(
     settingsManager: SettingsManager,
     torrentEngine?: TorrentEngine,
     preparation?: TorrentPreparation,
+    desktop?: { inbox: ExternalTorrentInbox; registerMagnetHandler: () => boolean },
 ): void {
     // ── Wrapper para tracking automático de métricas ──────────────────────────
     // Intercepta ipcMain.handle para medir latência e contar erros de cada canal.
@@ -386,6 +390,51 @@ export function registerIpcHandlers(
         }
     });
     const confirming = new Set<string>();
+    trackedHandle('app:get-external-torrents', async () => ok(desktop?.inbox.getPending() ?? []));
+    trackedHandle('app:acknowledge-external-torrent', async (_event, payload) => {
+        const result = validatePayload<{ id: string }>(payload, {
+            id: { type: 'string', nonEmpty: true },
+        });
+        if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
+        desktop?.inbox.acknowledge(result.data.id);
+        return ok(undefined);
+    });
+    trackedHandle('app:register-magnet-handler', async () => {
+        try {
+            return desktop?.registerMagnetHandler()
+                ? ok(undefined)
+                : fail(ErrorCodes.PROTOCOL_REGISTRATION_FAILED);
+        } catch (error) {
+            return failWithLog('app:register-magnet-handler', error);
+        }
+    });
+    trackedHandle('torrent:manage-files', async (_event, payload) => {
+        const result = validatePayload<{ infoHash: string }>(payload, infoHashHexSchema);
+        if (!result.valid) return fail(ErrorCodes.INVALID_PARAMS);
+        const { operation, destinationFolder } = payload as Record<string, unknown>;
+        if (
+            !['locate', 'move', 'verify'].includes(String(operation)) ||
+            (operation !== 'verify' &&
+                (typeof destinationFolder !== 'string' || !destinationFolder.trim()))
+        )
+            return fail(ErrorCodes.INVALID_PARAMS);
+        if (
+            downloadManager.getAll().find((item) => item.infoHash === result.data.infoHash)
+                ?.fileOperation
+        )
+            return fail(ErrorCodes.FILE_OPERATION_BUSY);
+        try {
+            return ok(
+                await downloadManager.manageFiles(
+                    result.data.infoHash,
+                    operation as import('../shared/types').FileOperation,
+                    typeof destinationFolder === 'string' ? resolve(destinationFolder) : undefined,
+                ),
+            );
+        } catch (error) {
+            return failWithLog('torrent:manage-files', error);
+        }
+    });
     trackedHandle('torrent:confirm', async (_event, payload) => {
         let requestId: string | undefined;
         let ownsConfirmation = false;
@@ -662,15 +711,6 @@ export function registerIpcHandlers(
 
                 // Capturar configurações anteriores ANTES de persistir (para detecção de mudança)
                 const previousSettings = settingsManager.get();
-
-                settingsManager.set(partial);
-
-                // Notificar o downloadManager sobre a mudança no limite de downloads simultâneos
-                if (partial.maxConcurrentDownloads !== undefined) {
-                    downloadManager.setMaxConcurrentDownloads(partial.maxConcurrentDownloads);
-                }
-
-                // Verificar se configurações de rede mudaram e acionar restart
                 const networkChanged =
                     (partial.dhtEnabled !== undefined &&
                         partial.dhtEnabled !== previousSettings.dhtEnabled) ||
@@ -678,6 +718,20 @@ export function registerIpcHandlers(
                         partial.pexEnabled !== previousSettings.pexEnabled) ||
                     (partial.utpEnabled !== undefined &&
                         partial.utpEnabled !== previousSettings.utpEnabled);
+
+                if (
+                    networkChanged &&
+                    torrentEngine &&
+                    downloadManager.getAll().some((item) => item.fileOperation)
+                )
+                    return fail(ErrorCodes.FILE_OPERATION_BUSY);
+
+                settingsManager.set(partial);
+
+                // Notificar o downloadManager sobre a mudança no limite de downloads simultâneos
+                if (partial.maxConcurrentDownloads !== undefined) {
+                    downloadManager.setMaxConcurrentDownloads(partial.maxConcurrentDownloads);
+                }
 
                 if (networkChanged && torrentEngine) {
                     const currentSettings = settingsManager.get();
@@ -761,11 +815,12 @@ export function registerIpcHandlers(
                     return ok([]);
                 }
 
-                if (!torrentEngine) {
+                if (!torrentEngine && !downloadManager.getFiles) {
                     return fail(ErrorCodes.ENGINE_NOT_AVAILABLE);
                 }
 
-                const files = torrentEngine.getFiles(infoHash);
+                const files =
+                    downloadManager.getFiles?.(infoHash) ?? torrentEngine!.getFiles(infoHash);
                 return ok(files);
             } catch (err) {
                 return failWithLog('torrent:get-files', err);
@@ -1135,11 +1190,12 @@ export function registerIpcHandlers(
                 }
 
                 // Obter a lista de arquivos do torrent
-                if (!torrentEngine) {
+                if (!torrentEngine && !downloadManager.getFiles) {
                     return fail(ErrorCodes.ENGINE_NOT_AVAILABLE);
                 }
 
-                const files = torrentEngine.getFiles(infoHash);
+                const files =
+                    downloadManager.getFiles?.(infoHash) ?? torrentEngine!.getFiles(infoHash);
 
                 // Encontrar o primeiro arquivo selecionado
                 const selectedFile = files.find((file) => file.selected === true);
@@ -1149,7 +1205,10 @@ export function registerIpcHandlers(
                 }
 
                 // Construir o caminho completo do arquivo
-                const fullPath = join(item.destinationFolder, selectedFile.path);
+                const fullPath = await resolveTorrentFile(
+                    item.destinationFolder,
+                    selectedFile.path,
+                );
 
                 // Verificar se o arquivo existe
                 if (!existsSync(fullPath)) {

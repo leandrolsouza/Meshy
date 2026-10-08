@@ -73,6 +73,8 @@ function makeMockSettingsManager(): SettingsManager {
             dhtEnabled: true,
             pexEnabled: true,
             utpEnabled: true,
+
+            closeToTray: false,
         } as AppSettings),
         set: jest.fn(),
         getDefaultDownloadFolder: jest.fn().mockReturnValue('/downloads'),
@@ -104,6 +106,10 @@ afterEach(() => {
 
 describe('registerIpcHandlers — IPC channel registration (Requirement 8.1)', () => {
     const EXPECTED_CHANNELS = [
+        'torrent:manage-files',
+        'app:get-external-torrents',
+        'app:acknowledge-external-torrent',
+        'app:register-magnet-handler',
         'torrent:prepare',
         'torrent:cancel-preparation',
         'torrent:disk-space',
@@ -1319,6 +1325,8 @@ describe('registerIpcHandlers — detecção de mudança de rede e restart', () 
             dhtEnabled: true,
             pexEnabled: true,
             utpEnabled: true,
+
+            closeToTray: false,
         });
 
         registerIpcHandlers(dm, sm, te as any);
@@ -1349,6 +1357,8 @@ describe('registerIpcHandlers — detecção de mudança de rede e restart', () 
             dhtEnabled: true,
             pexEnabled: true,
             utpEnabled: true,
+
+            closeToTray: false,
         });
 
         registerIpcHandlers(dm, sm, te as any);
@@ -1379,6 +1389,8 @@ describe('registerIpcHandlers — detecção de mudança de rede e restart', () 
             dhtEnabled: true,
             pexEnabled: true,
             utpEnabled: true,
+
+            closeToTray: false,
         });
 
         registerIpcHandlers(dm, sm, te as any);
@@ -1410,6 +1422,8 @@ describe('registerIpcHandlers — detecção de mudança de rede e restart', () 
             dhtEnabled: true,
             pexEnabled: true,
             utpEnabled: true,
+
+            closeToTray: false,
         });
 
         registerIpcHandlers(dm, sm, te as any);
@@ -1441,6 +1455,8 @@ describe('registerIpcHandlers — detecção de mudança de rede e restart', () 
             dhtEnabled: true,
             pexEnabled: true,
             utpEnabled: true,
+
+            closeToTray: false,
         });
 
         registerIpcHandlers(dm, sm, te as any);
@@ -1477,6 +1493,8 @@ describe('registerIpcHandlers — detecção de mudança de rede e restart', () 
                     dhtEnabled: true,
                     pexEnabled: true,
                     utpEnabled: true,
+
+                    closeToTray: false,
                 };
             }
             return {
@@ -1492,6 +1510,8 @@ describe('registerIpcHandlers — detecção de mudança de rede e restart', () 
                 dhtEnabled: false,
                 pexEnabled: true,
                 utpEnabled: true,
+
+                closeToTray: false,
             };
         });
 
@@ -1527,6 +1547,8 @@ describe('registerIpcHandlers — detecção de mudança de rede e restart', () 
             dhtEnabled: true,
             pexEnabled: true,
             utpEnabled: true,
+
+            closeToTray: false,
         });
 
         // Registrar sem torrentEngine

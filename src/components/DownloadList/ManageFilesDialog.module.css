@@ -1,0 +1,30 @@
+.panel {
+    background: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 24px;
+    width: min(580px, 90vw);
+    max-height: 90vh;
+    overflow: auto;
+}
+.panel h2 {
+    overflow-wrap: anywhere;
+}
+.operations {
+    border: 1px solid var(--color-border);
+}
+.operations label {
+    display: flex;
+    gap: 8px;
+    padding: 6px;
+}
+.actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 20px;
+}
+.error {
+    color: var(--color-danger);
+}

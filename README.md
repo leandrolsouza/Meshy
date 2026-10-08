@@ -20,6 +20,9 @@ Meshy é um cliente BitTorrent desktop com interface moderna inspirada no VS Cod
 - Revisão antes de iniciar: arquivos, tamanho selecionado e pasta por download
 - Verificação de espaço livre considerando downloads ativos e enfileirados no mesmo volume
 - Pausa por falta de espaço, preservando dados e seleção para retomada manual
+- Localizar, mover e verificar arquivos existentes, com retomada apenas do conteúdo pendente
+- Abrir magnets e arquivos `.torrent` pelo sistema, sempre passando pela revisão
+- Opção para continuar baixando na bandeja, com controles para pausar, retomar e encerrar
 - Limites configuráveis de velocidade de download e upload e máximo de downloads simultâneos
 - Progresso, velocidade e contagem de peers em tempo real (atualização a cada segundo)
 - Persistência de sessão — downloads são restaurados ao reabrir o app
@@ -36,6 +39,24 @@ tem sua própria confirmação. A seleção e a pasta são preservadas ao reabri
 A proteção de disco mantém uma margem de 64 MiB e verifica o espaço antes de iniciar ou retomar,
 inclusive ao sair da fila. Durante a transferência, há uma nova verificação a cada cinco segundos;
 um erro `ENOSPC` também provoca a pausa. Libere espaço ou reduza a seleção antes de retomar.
+
+Use **Arquivos…** no torrent para verificar integridade, localizar uma pasta reorganizada ou
+mover os dados para outro disco. A operação pausa o torrent; ao terminar, retome para baixar o
+conteúdo pendente. Para localizar `Pacote/arquivo.bin`, escolha a pasta que contém `Pacote`.
+Movimentos não sobrescrevem arquivos no destino. Os originais só são removidos após a cópia,
+verificação e persistência do novo destino; arquivos compartilhados com outros torrents são mantidos.
+O catálogo de arquivos também é preservado para abrir downloads concluídos após reiniciar.
+
+Em **Configurações → Geral**, habilite **Continuar baixando ao fechar a janela** para usar a
+bandeja. A opção começa desativada. O menu da bandeja oferece mostrar a janela, pausar todos,
+retomar pausados e encerrar o aplicativo. **Abrir magnets com o Meshy** solicita o registro do
+protocolo; o sistema pode pedir confirmação para escolher o aplicativo padrão.
+
+Magnets e `.torrent` abertos pelo sistema entram na mesma revisão, inclusive quando chegam
+durante a inicialização ou enquanto outro torrent está sendo revisado. As associações de arquivos
+são declaradas no instalador; execute o aplicativo instalado e escolha Meshy em **Abrir com** ou
+nas configurações de aplicativos padrão. O funcionamento em desenvolvimento varia por sistema.
+Veja a [documentação de integração do Electron](https://www.electronjs.org/docs/latest/tutorial/launch-app-from-url-in-another-app).
 
 ### Stack
 
@@ -125,6 +146,13 @@ Para executar o build gerado:
 ```bash
 npm start
 ```
+
+Para empacotar sem instalador, use `npm run pack`. Para gerar o instalador da plataforma atual,
+use `npm run dist`. Ambos compilam as fontes, preparam o ícone e geram artefatos em `dist/`,
+sem publicar releases. A configuração fica em `electron-builder.json`: NSIS no Windows,
+DMG no macOS e DEB/AppImage no Linux, com protocolo `magnet` e associação `.torrent`.
+Builds de distribuição recompilam dependências nativas e podem precisar de rede e ferramentas
+da plataforma. Cada instalador deve ser validado no sistema correspondente antes de publicar.
 
 ---
 

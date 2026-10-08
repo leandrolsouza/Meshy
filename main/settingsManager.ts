@@ -15,6 +15,7 @@ export type { AppSettings } from '../shared/types';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface PersistedSettings {
+    closeToTray: boolean;
     destinationFolder: string;
     downloadSpeedLimit: number;
     uploadSpeedLimit: number;
@@ -143,6 +144,7 @@ export function createSettingsManager(options: CreateSettingsManagerOptions = {}
                 dhtEnabled: store.get('dhtEnabled') ?? true,
                 pexEnabled: store.get('pexEnabled') ?? true,
                 utpEnabled: store.get('utpEnabled') ?? true,
+                closeToTray: store.get('closeToTray') ?? false,
             };
         },
 
@@ -160,6 +162,7 @@ export function createSettingsManager(options: CreateSettingsManagerOptions = {}
                 'dhtEnabled',
                 'pexEnabled',
                 'utpEnabled',
+                'closeToTray',
             ];
 
             for (const key of settableKeys) {
@@ -217,6 +220,9 @@ export function createSettingsManager(options: CreateSettingsManagerOptions = {}
  * Loga um warning para cada correção aplicada.
  */
 function sanitizeOnLoad(store: SettingsStore, getDownloadsPath: () => string, log: Logger): void {
+    const closeToTray = store.get('closeToTray');
+    if (closeToTray !== undefined && typeof closeToTray !== 'boolean')
+        store.set('closeToTray', false);
     // downloadSpeedLimit: inteiro >= 0
     const dl = store.get('downloadSpeedLimit');
     if (dl !== undefined && !isValidSpeedLimit(dl)) {
@@ -300,6 +306,7 @@ function createElectronStore(): SettingsStore {
     const store = new ElectronStoreDefault<PersistedSettings>({
         name: 'settings',
         defaults: {
+            closeToTray: false,
             destinationFolder: '',
             downloadSpeedLimit: 0,
             uploadSpeedLimit: 0,

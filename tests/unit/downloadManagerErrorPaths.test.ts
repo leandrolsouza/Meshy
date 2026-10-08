@@ -61,6 +61,8 @@ function makeMockEngine(magnetInfo: TorrentInfo = makeTorrentInfo()): TorrentEng
 
     return Object.assign(emitter, {
         addTorrentFile: jest.fn(),
+        detachTorrent: jest.fn().mockResolvedValue(undefined),
+        getTorrentFile: jest.fn(),
         addTorrentBuffer: jest.fn(),
         addMagnetLink: jest.fn().mockResolvedValue(magnetInfo),
         pause: jest.fn().mockResolvedValue(undefined),

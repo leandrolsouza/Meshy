@@ -50,6 +50,12 @@ const { ipcMain: mockIpcMain } = require('electron') as {
     ipcMain: { handle: jest.Mock };
 };
 
+// O filesystem destes handlers é virtual; contenção/symlinks têm testes próprios.
+jest.mock('fs/promises', () => ({
+    realpath: jest.fn(async (folder: string) => require('path').resolve(folder)),
+    lstat: jest.fn(async () => ({ isSymbolicLink: () => false })),
+}));
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const VALID_INFO_HASH = 'a'.repeat(40);
@@ -122,6 +128,8 @@ function makeMockSettingsManager(): SettingsManager {
             dhtEnabled: true,
             pexEnabled: true,
             utpEnabled: true,
+
+            closeToTray: false,
         } as AppSettings),
         set: jest.fn(),
         getDefaultDownloadFolder: jest.fn().mockReturnValue('/downloads'),
@@ -132,10 +140,7 @@ function makeMockSettingsManager(): SettingsManager {
     } as unknown as SettingsManager;
 }
 
-function makeMockTorrentEngine(
-    files: TorrentFileInfo[] = [],
-    isRestarting = false,
-) {
+function makeMockTorrentEngine(files: TorrentFileInfo[] = [], isRestarting = false) {
     return {
         getTrackers: jest.fn().mockReturnValue([]),
         addTracker: jest.fn(),
@@ -155,9 +160,7 @@ function getHandler(
     channel: string,
 ): ((_event: unknown, payload: unknown) => Promise<unknown>) | undefined {
     const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === channel);
-    return call
-        ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>)
-        : undefined;
+    return call ? (call[1] as (_event: unknown, payload: unknown) => Promise<unknown>) : undefined;
 }
 
 // ─── Testes ───────────────────────────────────────────────────────────────────
@@ -339,7 +342,7 @@ describe('torrent:open-file', () => {
         expect(response.success).toBe(true);
 
         // Verifica que shell.openPath foi chamado com path.join(destinationFolder, file.path)
-        const expectedPath = require('path').join(DESTINATION_FOLDER, 'My Torrent/video.mp4');
+        const expectedPath = require('path').resolve(DESTINATION_FOLDER, 'My Torrent/video.mp4');
         expect(mockShellOpenPath).toHaveBeenCalledWith(expectedPath);
     });
 

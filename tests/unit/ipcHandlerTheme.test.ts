@@ -59,6 +59,8 @@ function makeMockSettingsManager(): SettingsManager {
         dhtEnabled: true,
         pexEnabled: true,
         utpEnabled: true,
+
+        closeToTray: false,
     };
     return {
         get: jest.fn().mockReturnValue(settings),
