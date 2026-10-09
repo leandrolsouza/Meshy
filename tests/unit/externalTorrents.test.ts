@@ -1,6 +1,17 @@
 import { createExternalTorrentInbox } from '../../main/externalTorrents';
 import { resolve } from 'path';
 const magnet = `magnet:?xt=urn:btih:${'a'.repeat(40)}`;
+
+test('entrega o magnet do navegador com trackers literais para revisão', () => {
+    const show = jest.fn();
+    const inbox = createExternalTorrentInbox(show);
+    const browserMagnet = `${magnet}&dn=Archive_(2026)&tr=udp://tracker.example.test:6969/announce`;
+    inbox.enqueueArguments(['electron.exe', 'C:/Meshy', browserMagnet]);
+    expect(inbox.getPending()).toEqual([
+        { id: expect.any(String), source: { kind: 'magnet', magnetUri: browserMagnet } },
+    ]);
+    expect(show).toHaveBeenCalledTimes(1);
+});
 test('guarda magnets/arquivos de cold start até confirmar ou cancelar, sem iniciar downloads', () => {
     const show = jest.fn();
     const inbox = createExternalTorrentInbox(show);

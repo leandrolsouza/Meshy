@@ -5,7 +5,11 @@ import { usePolling } from '../../hooks/usePolling';
 import { resolveErrorMessage } from '../../utils/resolveErrorMessage';
 import styles from './LightModeButton.module.css';
 
-export function LightModeButton(): React.JSX.Element | null {
+export function LightModeButton({
+    appearance = 'default',
+}: {
+    appearance?: 'default' | 'statusbar';
+}): React.JSX.Element | null {
     const intl = useIntl();
     const [status, setStatus] = useState<BandwidthStatus | null>(null);
     const [busy, setBusy] = useState(false);
@@ -58,7 +62,7 @@ export function LightModeButton(): React.JSX.Element | null {
     };
     if (!window.meshy.getBandwidthStatus) return null;
     return (
-        <div className={styles.control}>
+        <div className={appearance === 'statusbar' ? styles.statusBarControl : styles.control}>
             <button
                 className="btn"
                 type="button"

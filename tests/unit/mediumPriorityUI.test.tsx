@@ -192,8 +192,8 @@ test('modo leve só exibe sucesso confirmado e trata falha sem ativar', async ()
         success: false,
         error: 'error.operation.failed',
     });
-    renderIntl(<LightModeButton />);
-    const button = screen.getByRole('button', { name: 'Modo leve' });
+    renderIntl(<LightModeButton appearance="statusbar" />);
+    const button = screen.getByRole('button', { name: 'Limitar velocidade' });
     await waitFor(() => expect(button).toBeEnabled());
     fireEvent.click(button);
     await screen.findByRole('alert');

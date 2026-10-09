@@ -3,32 +3,13 @@
 .app {
     display: grid;
     grid-template-areas:
-        'titlebar titlebar titlebar'
         'activitybar sidebar editor'
         'statusbar statusbar statusbar';
     grid-template-columns: var(--activitybar-width) auto 1fr;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: minmax(0, 1fr) auto;
     width: 100vw;
     height: 100vh;
     overflow: hidden;
-}
-
-/* ─── Title Bar ───────────────────────────────────────────────────────────── */
-
-.titleBar {
-    grid-area: titlebar;
-    background-color: var(--color-titlebar-bg);
-    padding: 0 var(--space-lg);
-    display: flex;
-    align-items: center;
-    height: 30px;
-    -webkit-app-region: drag;
-}
-
-.titleBarText {
-    font-size: var(--font-size-xs);
-    color: var(--color-text);
-    font-weight: 400;
 }
 
 /* ─── Activity Bar ────────────────────────────────────────────────────────── */
@@ -110,8 +91,23 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 var(--space-lg);
-    height: 24px;
+    padding: 2px var(--space-lg);
+    min-height: 28px;
+    flex-wrap: wrap;
     font-size: var(--font-size-xs);
-    gap: var(--space-lg);
+    gap: var(--space-xs) var(--space-lg);
+}
+
+.statusBarControls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: var(--space-xs) var(--space-lg);
+    margin-left: auto;
+    min-width: 0;
+}
+
+.statusBarSpeeds {
+    white-space: nowrap;
 }

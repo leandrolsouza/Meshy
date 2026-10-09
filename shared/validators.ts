@@ -6,8 +6,10 @@
 // ─── Magnet URI ───────────────────────────────────────────────────────────────
 export const MAX_TORRENT_BYTES = 8 * 1024 * 1024;
 
-// The hash must be exactly 40 hex chars; any additional query params must start with '&'
-const MAGNET_REGEX = /^magnet:\?xt=urn:btih:[a-fA-F0-9]{40}(&[a-zA-Z0-9&=%.+:?_-]*)?$/i;
+// O hash continua exigindo 40 caracteres hexadecimais. A query também admite
+// caracteres reservados de URI usados em trackers, nomes e seleção de arquivos.
+const MAGNET_REGEX =
+    /^magnet:\?xt=urn:btih:[a-fA-F0-9]{40}(&[a-zA-Z0-9&=%.+:?_/~,!'()*[\]@$;-]*)?$/i;
 
 /**
  * Valida se uma string é um magnet URI válido.

@@ -31,10 +31,9 @@ type ActiveView = 'downloads' | 'add-torrent' | 'settings';
  * Root application component with VS Code-style layout.
  *
  * Layout structure:
- * - Title Bar: application name "Meshy"
  * - Activity Bar: navigation icons for downloads, add torrent, settings
  * - Editor Area: conditional rendering based on activeView
- * - Status Bar: active download count and aggregated speed
+ * - Status Bar: active download count, bandwidth control and aggregated speed
  *
  * On mount, calls `window.meshy.getAll()` to populate the store with the
  * current download state from the main process.
@@ -105,14 +104,6 @@ function App(): React.JSX.Element {
 
     return (
         <div className={styles.app}>
-            {/* ── Title Bar ─────────────────────────────────────────────── */}
-            <header className={styles.titleBar}>
-                <span className={styles.titleBarText}>
-                    {intl.formatMessage({ id: 'app.title' })}
-                </span>
-                <LightModeButton />
-            </header>
-
             {/* ── Activity Bar ──────────────────────────────────────────── */}
             <nav
                 className={styles.activityBar}
@@ -200,13 +191,16 @@ function App(): React.JSX.Element {
                         { count: activeDownloadCount },
                     )}
                 </span>
-                <span>
-                    <VscArrowDown style={{ verticalAlign: 'middle' }} />{' '}
-                    {formatBytes(totalDownloadSpeed)}/s
-                    {' · '}
-                    <VscArrowUp style={{ verticalAlign: 'middle' }} />{' '}
-                    {formatBytes(totalUploadSpeed)}/s
-                </span>
+                <div className={styles.statusBarControls}>
+                    <LightModeButton appearance="statusbar" />
+                    <span className={styles.statusBarSpeeds}>
+                        <VscArrowDown style={{ verticalAlign: 'middle' }} />{' '}
+                        {formatBytes(totalDownloadSpeed)}/s
+                        {' · '}
+                        <VscArrowUp style={{ verticalAlign: 'middle' }} />{' '}
+                        {formatBytes(totalUploadSpeed)}/s
+                    </span>
+                </div>
             </footer>
         </div>
     );

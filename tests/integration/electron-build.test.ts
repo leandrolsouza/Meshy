@@ -57,5 +57,11 @@ describe('build Electron', () => {
         const api = exposeInMainWorld.mock.calls[0][1] as MeshyAPI;
         await api.getAll();
         expect(invoke).toHaveBeenCalledWith('torrent:get-all');
+        await api.registerMagnetHandler();
+        expect(invoke).toHaveBeenCalledWith('app:register-magnet-handler');
+        await api.getMagnetHandlerStatus();
+        expect(invoke).toHaveBeenCalledWith('app:get-magnet-handler-status');
+        await api.openMagnetDefaultApps();
+        expect(invoke).toHaveBeenCalledWith('app:open-magnet-default-apps');
     });
 });

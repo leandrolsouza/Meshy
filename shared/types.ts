@@ -206,6 +206,12 @@ export type PieceStatus = boolean[];
 
 export type IPCResponse<T> = { success: true; data: T } | { success: false; error: string };
 
+export interface MagnetHandlerStatus {
+    isDefault: boolean;
+    canOpenDefaultApps: boolean;
+    applicationName: string;
+}
+
 // ─── MeshyAPI ─────────────────────────────────────────────────────────────────
 
 export interface MeshyAPI {
@@ -237,7 +243,9 @@ export interface MeshyAPI {
     getExternalTorrentRequests(): Promise<IPCResponse<ExternalTorrentRequest[]>>;
     acknowledgeExternalTorrentRequest(id: string): Promise<IPCResponse<void>>;
     onExternalTorrentRequests(callback: (requests: ExternalTorrentRequest[]) => void): () => void;
-    registerMagnetHandler(): Promise<IPCResponse<void>>;
+    registerMagnetHandler(): Promise<IPCResponse<MagnetHandlerStatus>>;
+    getMagnetHandlerStatus(): Promise<IPCResponse<MagnetHandlerStatus>>;
+    openMagnetDefaultApps(): Promise<IPCResponse<void>>;
     // Commands
     addTorrentFile(filePath: string): Promise<IPCResponse<DownloadItem>>;
     addTorrentFileBuffer(buffer: Uint8Array): Promise<IPCResponse<DownloadItem>>;

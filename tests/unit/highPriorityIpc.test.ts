@@ -21,7 +21,17 @@ function setup() {
         getFiles: jest.fn(() => []),
     };
     const inbox = createExternalTorrentInbox(jest.fn());
-    const registerMagnetHandler = jest.fn(() => true);
+    const registerMagnetHandler = jest.fn(async () => ({
+        isDefault: false,
+        canOpenDefaultApps: true,
+        applicationName: 'Meshy (Dev)',
+    }));
+    const getMagnetHandlerStatus = jest.fn(async () => ({
+        isDefault: true,
+        canOpenDefaultApps: true,
+        applicationName: 'Meshy (Dev)',
+    }));
+    const openMagnetDefaultApps = jest.fn(async () => {});
     const settings = {
         get: jest.fn(() => ({ dhtEnabled: true, pexEnabled: true, utpEnabled: true })),
         set: jest.fn(),
@@ -32,14 +42,23 @@ function setup() {
         settings as unknown as SettingsManager,
         engine as unknown as TorrentEngine,
         undefined,
-        { inbox, registerMagnetHandler },
+        { inbox, registerMagnetHandler, getMagnetHandlerStatus, openMagnetDefaultApps },
     );
     const handler = (name: string) =>
         (ipcMain.handle as jest.Mock).mock.calls.find(([channel]) => channel === name)![1] as (
             _event: unknown,
             payload?: unknown,
         ) => Promise<{ success: boolean; error?: string; data?: unknown }>;
-    return { manager, settings, engine, inbox, registerMagnetHandler, handler };
+    return {
+        manager,
+        settings,
+        engine,
+        inbox,
+        registerMagnetHandler,
+        getMagnetHandlerStatus,
+        openMagnetDefaultApps,
+        handler,
+    };
 }
 test('operações de arquivos validam hash, modo e destino antes de chamar o manager', async () => {
     const { manager, handler } = setup();
@@ -75,7 +94,7 @@ test('entradas externas não são consumidas por leitura e só saem mediante ack
 });
 test('falha ao registrar protocolo retorna erro e não apresenta sucesso', async () => {
     const { handler, registerMagnetHandler } = setup();
-    registerMagnetHandler.mockReturnValueOnce(false);
+    registerMagnetHandler.mockRejectedValueOnce(new Error('error.system.protocolRegistration'));
     expect(await handler('app:register-magnet-handler')(null)).toMatchObject({
         success: false,
         error: 'error.system.protocolRegistration',
@@ -88,6 +107,20 @@ test('preferência de bandeja aceita apenas booleano', () => {
             typeof validateSettingsPayload
         >[0]),
     ).toBe('error.params.invalid');
+});
+
+test('IPC distingue registro de padrão e abre apenas as configurações de associação', async () => {
+    const { handler, openMagnetDefaultApps } = setup();
+    expect(await handler('app:register-magnet-handler')(null)).toMatchObject({
+        success: true,
+        data: { isDefault: false, canOpenDefaultApps: true },
+    });
+    expect(await handler('app:get-magnet-handler-status')(null)).toMatchObject({
+        success: true,
+        data: { isDefault: true },
+    });
+    expect(await handler('app:open-magnet-default-apps')(null)).toMatchObject({ success: true });
+    expect(openMagnetDefaultApps).toHaveBeenCalledTimes(1);
 });
 
 test('mudança de rede não interrompe arquivos em recuperação nem persiste antes de rejeitar', async () => {

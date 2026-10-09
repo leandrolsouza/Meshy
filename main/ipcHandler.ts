@@ -18,6 +18,7 @@ import type {
     TorrentMetadata,
     PeerInfo,
     PieceStatus,
+    MagnetHandlerStatus,
 } from '../shared/types';
 import { isValidTorrentFile, hasTorrentMagicBytes, MAX_TORRENT_BYTES } from './validators';
 import { isValidTrackerUrl } from '../shared/validators';
@@ -267,7 +268,9 @@ export function registerIpcHandlers(
     preparation?: TorrentPreparation,
     desktop?: {
         inbox: ExternalTorrentInbox;
-        registerMagnetHandler: () => boolean;
+        registerMagnetHandler: () => Promise<MagnetHandlerStatus>;
+        getMagnetHandlerStatus: () => Promise<MagnetHandlerStatus>;
+        openMagnetDefaultApps: () => Promise<void>;
         bandwidth?: BandwidthController;
         diagnostics?: DownloadDiagnostics;
     },
@@ -509,11 +512,27 @@ export function registerIpcHandlers(
     });
     trackedHandle('app:register-magnet-handler', async () => {
         try {
-            return desktop?.registerMagnetHandler()
-                ? ok(undefined)
-                : fail(ErrorCodes.PROTOCOL_REGISTRATION_FAILED);
+            if (!desktop) return fail(ErrorCodes.PROTOCOL_REGISTRATION_FAILED);
+            return ok(await desktop.registerMagnetHandler());
         } catch (error) {
             return failWithLog('app:register-magnet-handler', error);
+        }
+    });
+    trackedHandle('app:get-magnet-handler-status', async () => {
+        try {
+            if (!desktop) return fail(ErrorCodes.PROTOCOL_REGISTRATION_FAILED);
+            return ok(await desktop.getMagnetHandlerStatus());
+        } catch (error) {
+            return failWithLog('app:get-magnet-handler-status', error);
+        }
+    });
+    trackedHandle('app:open-magnet-default-apps', async () => {
+        try {
+            if (!desktop) return fail(ErrorCodes.PROTOCOL_REGISTRATION_FAILED);
+            await desktop.openMagnetDefaultApps();
+            return ok(undefined);
+        } catch (error) {
+            return failWithLog('app:open-magnet-default-apps', error);
         }
     });
     trackedHandle('torrent:manage-files', async (_event, payload) => {

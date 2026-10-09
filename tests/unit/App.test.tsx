@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { IntlProvider } from 'react-intl';
 import '@testing-library/jest-dom';
 
@@ -35,6 +35,10 @@ jest.mock('../../src/components/AddTorrent/AddTorrentModal', () => ({
 
 jest.mock('../../src/components/Settings/SettingsPanel', () => ({
     SettingsPanel: () => <div data-testid="settings-panel">SettingsPanel</div>,
+}));
+
+jest.mock('../../src/components/common/LightModeButton', () => ({
+    LightModeButton: () => <button>Limitar velocidade</button>,
 }));
 
 // ─── Mock themeApplier e themeRegistry ────────────────────────────────────────
@@ -104,11 +108,10 @@ describe('App — layout structure and Activity Bar navigation', () => {
 
     // ── Structural elements ───────────────────────────────────────────────
 
-    it('renders all structural elements: Title Bar, Activity Bar, Editor Area, Status Bar', () => {
+    it('mantém navegação, conteúdo e rodapé sem a faixa de título redundante', () => {
         renderApp();
 
-        // Title Bar — header with "Meshy" text
-        expect(screen.getByText('Meshy')).toBeInTheDocument();
+        expect(screen.queryByRole('banner')).not.toBeInTheDocument();
 
         // Activity Bar — nav with aria-label
         expect(screen.getByRole('navigation', { name: 'Navegação principal' })).toBeInTheDocument();
@@ -118,6 +121,18 @@ describe('App — layout structure and Activity Bar navigation', () => {
 
         // Status Bar — footer with download count
         expect(screen.getByRole('contentinfo')).toBeInTheDocument();
+    });
+
+    it('mantém o controle de velocidade no rodapé ao trocar de tela', () => {
+        renderApp();
+        const footer = screen.getByRole('contentinfo');
+        const control = within(footer).getByRole('button', { name: 'Limitar velocidade' });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Configurações' }));
+        expect(within(footer).getByRole('button', { name: 'Limitar velocidade' })).toBe(control);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Adicionar torrent' }));
+        expect(within(footer).getByRole('button', { name: 'Limitar velocidade' })).toBe(control);
     });
 
     // ── Default view ──────────────────────────────────────────────────────
@@ -272,7 +287,7 @@ describe('App — inicialização de tema', () => {
         renderApp();
 
         // Aguarda o efeito assíncrono executar
-        await screen.findByText('Meshy');
+        await waitFor(() => expect(mockApplyTheme).toHaveBeenCalled());
 
         expect(mockMeshy.getSettings).toHaveBeenCalled();
         expect(mockApplyTheme).toHaveBeenCalledWith('dracula');
@@ -286,7 +301,7 @@ describe('App — inicialização de tema', () => {
 
         renderApp();
 
-        await screen.findByText('Meshy');
+        await waitFor(() => expect(mockApplyTheme).toHaveBeenCalled());
 
         expect(mockApplyTheme).toHaveBeenCalledWith('vs-code-dark');
     });
@@ -299,7 +314,7 @@ describe('App — inicialização de tema', () => {
 
         renderApp();
 
-        await screen.findByText('Meshy');
+        await waitFor(() => expect(mockApplyTheme).toHaveBeenCalled());
 
         expect(mockApplyTheme).toHaveBeenCalledWith('vs-code-dark');
     });
@@ -310,7 +325,7 @@ describe('App — inicialização de tema', () => {
 
         renderApp();
 
-        await screen.findByText('Meshy');
+        await waitFor(() => expect(mockApplyTheme).toHaveBeenCalled());
 
         expect(mockApplyTheme).toHaveBeenCalledWith('vs-code-dark');
         expect(consoleSpy).toHaveBeenCalledWith(
@@ -329,7 +344,7 @@ describe('App — inicialização de tema', () => {
 
         renderApp();
 
-        await screen.findByText('Meshy');
+        await waitFor(() => expect(mockApplyTheme).toHaveBeenCalled());
 
         expect(mockApplyTheme).toHaveBeenCalledWith('vs-code-dark');
     });

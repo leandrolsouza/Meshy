@@ -69,7 +69,23 @@ beforeEach(() => {
             data: { ...item, status: 'paused', progress: 0.5 },
         })),
         selectFolder: jest.fn(async () => ({ success: true, data: '/new-drive' })),
-        registerMagnetHandler: jest.fn(async () => ({ success: true, data: undefined })),
+        registerMagnetHandler: jest.fn(async () => ({
+            success: true,
+            data: {
+                isDefault: false,
+                canOpenDefaultApps: true,
+                applicationName: 'Meshy (Dev)',
+            },
+        })),
+        getMagnetHandlerStatus: jest.fn(async () => ({
+            success: true,
+            data: {
+                isDefault: true,
+                canOpenDefaultApps: true,
+                applicationName: 'Meshy (Dev)',
+            },
+        })),
+        openMagnetDefaultApps: jest.fn(async () => ({ success: true, data: undefined })),
     } as unknown as Window['meshy'];
 });
 afterEach(() => useDownloadStore.getState().setItems([]));
@@ -184,6 +200,44 @@ test('preferência de bandeja persiste via settings e registro de magnet é aç�
     expect(update).toHaveBeenCalledWith({ closeToTray: true });
     expect(window.meshy.registerMagnetHandler).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Abrir magnets com o Meshy' }));
-    await screen.findByText(/Registro solicitado/);
+    await screen.findByText(/outro aplicativo ainda está definido/);
     expect(window.meshy.registerMagnetHandler).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Escolher aplicativo padrão' }));
+    await waitFor(() => expect(window.meshy.openMagnetDefaultApps).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Conferir associação' })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Conferir associação' }));
+    await screen.findByText(/Meshy \(Dev\) está definido para abrir magnets/);
+    expect(
+        screen.queryByRole('button', { name: 'Escolher aplicativo padrão' }),
+    ).not.toBeInTheDocument();
+});
+
+test('falha de registro permanece legível e não apresenta confirmação de sucesso', async () => {
+    jest.mocked(window.meshy.registerMagnetHandler).mockResolvedValueOnce({
+        success: false,
+        error: 'error.system.protocolRegistration',
+    });
+    const view = (notificationsEnabled: boolean) => (
+        <IntlProvider locale="pt-BR" messages={ptBR}>
+            <GeneralSettings
+                settings={settings}
+                currentThemeId="vs-code-dark"
+                notificationsEnabled={notificationsEnabled}
+                onThemeChange={jest.fn()}
+                onSelectFolder={jest.fn()}
+                onNotificationsChange={jest.fn()}
+                onUpdateSettings={jest.fn(async () => true)}
+            />
+        </IntlProvider>
+    );
+    const rendered = render(view(true));
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir magnets com o Meshy' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+        ptBR['error.system.protocolRegistration'],
+    );
+    rendered.rerender(view(false));
+    expect(screen.getByRole('alert')).toHaveTextContent(ptBR['error.system.protocolRegistration']);
+    expect(screen.queryByRole('status')).not.toHaveTextContent(/foi registrado/);
 });

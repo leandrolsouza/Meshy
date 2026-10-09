@@ -1,7 +1,7 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { resolveErrorMessage } from '../../utils/resolveErrorMessage';
 import { useIntl } from 'react-intl';
-import type { AppSettings } from '../../../shared/types';
+import type { AppSettings, IPCResponse, MagnetHandlerStatus } from '../../../shared/types';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { LanguageSelector } from './LanguageSelector';
 import styles from './SettingsPanel.module.css';
@@ -35,19 +35,42 @@ export function GeneralSettings({
     const intl = useIntl();
     const [systemBusy, setSystemBusy] = useState(false);
     const [systemError, setSystemError] = useState<string | null>(null);
-    const [registered, setRegistered] = useState(false);
-    const registerMagnet = async () => {
+    const [registered, setRegistered] = useState<MagnetHandlerStatus | null>(null);
+    const pending = useRef(false);
+    const generation = useRef(0);
+    const registerButton = useRef<HTMLButtonElement>(null);
+    useEffect(() => {
+        if (registered?.isDefault && document.activeElement === document.body)
+            registerButton.current?.focus();
+    }, [registered?.isDefault]);
+    useEffect(
+        () => () => {
+            generation.current++;
+        },
+        [],
+    );
+    const runSystemAction = async (
+        operation: () => Promise<IPCResponse<MagnetHandlerStatus | void>>,
+        reset = false,
+    ) => {
+        if (pending.current) return;
+        pending.current = true;
+        const current = ++generation.current;
         setSystemBusy(true);
         setSystemError(null);
-        setRegistered(false);
+        if (reset) setRegistered(null);
         try {
-            const response = await window.meshy.registerMagnetHandler();
-            if (response.success) setRegistered(true);
-            else setSystemError(resolveErrorMessage(intl, response.error));
+            const response = await operation();
+            if (current !== generation.current) return;
+            if (response.success) {
+                if (response.data) setRegistered(response.data);
+            } else setSystemError(resolveErrorMessage(intl, response.error));
         } catch {
-            setSystemError(intl.formatMessage({ id: 'error.system.protocolRegistration' }));
+            if (current === generation.current)
+                setSystemError(intl.formatMessage({ id: 'error.system.protocolRegistration' }));
         } finally {
-            setSystemBusy(false);
+            pending.current = false;
+            if (current === generation.current) setSystemBusy(false);
         }
     };
 
@@ -118,20 +141,60 @@ export function GeneralSettings({
             </div>
             <div className={styles.fieldGroup}>
                 <button
+                    ref={registerButton}
                     type="button"
                     className="btn"
                     disabled={systemBusy}
-                    onClick={() => void registerMagnet()}
+                    onClick={() =>
+                        void runSystemAction(() => window.meshy.registerMagnetHandler(), true)
+                    }
                 >
                     {intl.formatMessage({ id: 'settings.general.registerMagnet' })}
                 </button>
                 <p>{intl.formatMessage({ id: 'settings.general.associationsHelp' })}</p>
                 {registered && (
-                    <p role="status">
-                        {intl.formatMessage({ id: 'settings.general.magnetRegistered' })}
+                    <p role="status" className={styles.systemFeedback}>
+                        {intl.formatMessage(
+                            {
+                                id: registered.isDefault
+                                    ? 'settings.general.magnetDefault'
+                                    : 'settings.general.magnetRegistered',
+                            },
+                            { application: registered.applicationName },
+                        )}
                     </p>
                 )}
-                {systemError && <p role="alert">{systemError}</p>}
+                {registered && !registered.isDefault && (
+                    <div className={styles.systemActions}>
+                        {registered.canOpenDefaultApps && (
+                            <button
+                                type="button"
+                                className="btn"
+                                disabled={systemBusy}
+                                onClick={() =>
+                                    void runSystemAction(() => window.meshy.openMagnetDefaultApps())
+                                }
+                            >
+                                {intl.formatMessage({ id: 'settings.general.openDefaultApps' })}
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            className="btn"
+                            disabled={systemBusy}
+                            onClick={() =>
+                                void runSystemAction(() => window.meshy.getMagnetHandlerStatus())
+                            }
+                        >
+                            {intl.formatMessage({ id: 'settings.general.checkMagnetDefault' })}
+                        </button>
+                    </div>
+                )}
+                {systemError && (
+                    <p role="alert" className={styles.systemFeedback}>
+                        {systemError}
+                    </p>
+                )}
             </div>
             <div className={styles.fieldGroup}>
                 <label className={styles.checkboxLabel}>

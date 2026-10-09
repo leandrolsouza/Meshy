@@ -1,5 +1,5 @@
-import { app, BrowserWindow, dialog } from 'electron';
-import { join, resolve } from 'path';
+import { app, BrowserWindow, dialog, shell } from 'electron';
+import { join } from 'path';
 import { createSettingsManager } from './settingsManager';
 import { createTorrentEngine } from './torrentEngine';
 import { createDownloadManager } from './downloadManager';
@@ -15,6 +15,7 @@ import { createBackgroundController } from './backgroundController';
 import { randomUUID } from 'crypto';
 import { createBandwidthController } from './bandwidthController';
 import { createDownloadDiagnostics } from './downloadDiagnostics';
+import { createMagnetAssociation } from './magnetAssociation';
 
 import ElectronStore from 'electron-store';
 
@@ -111,6 +112,8 @@ function createMainWindow(): BrowserWindow {
     const window = new BrowserWindow({
         width: 1200,
         height: 800,
+        // Mantém os menus e atalhos acessíveis por Alt no Windows/Linux.
+        autoHideMenuBar: true,
         icon: join(__dirname, '../../icon.png'),
         webPreferences: {
             preload: join(__dirname, '../preload/index.js'),
@@ -298,16 +301,17 @@ app.whenReady()
         const mainWindow = createMainWindow();
 
         // Register IPC handlers ONCE (global — survives window close/reopen on macOS).
+        const magnetAssociation = createMagnetAssociation({
+            app,
+            openExternal: (url) => shell.openExternal(url),
+        });
         registerIpcHandlers(downloadManager, settingsManager, torrentEngine, preparation, {
             bandwidth,
             diagnostics,
             inbox: externalTorrents,
-            registerMagnetHandler: () =>
-                process.defaultApp && process.argv[1]
-                    ? app.setAsDefaultProtocolClient('magnet', process.execPath, [
-                          resolve(process.argv[1]),
-                      ])
-                    : app.setAsDefaultProtocolClient('magnet'),
+            registerMagnetHandler: () => magnetAssociation.register(),
+            getMagnetHandlerStatus: () => magnetAssociation.getStatus(),
+            openMagnetDefaultApps: () => magnetAssociation.openDefaultApps(),
         });
 
         // Attach per-window resources (progress interval, error forwarding).

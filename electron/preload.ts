@@ -25,6 +25,8 @@ const meshyAPI: MeshyAPI = {
     acknowledgeExternalTorrentRequest: (id) =>
         ipcRenderer.invoke('app:acknowledge-external-torrent', { id }),
     registerMagnetHandler: () => ipcRenderer.invoke('app:register-magnet-handler'),
+    getMagnetHandlerStatus: () => ipcRenderer.invoke('app:get-magnet-handler-status'),
+    openMagnetDefaultApps: () => ipcRenderer.invoke('app:open-magnet-default-apps'),
     onExternalTorrentRequests(callback) {
         const listener = (
             _event: Electron.IpcRendererEvent,

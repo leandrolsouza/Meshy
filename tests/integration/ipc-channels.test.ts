@@ -49,6 +49,8 @@ const EXPECTED_CHANNELS = [
     'app:get-external-torrents',
     'app:acknowledge-external-torrent',
     'app:register-magnet-handler',
+    'app:get-magnet-handler-status',
+    'app:open-magnet-default-apps',
     'torrent:prepare',
     'torrent:cancel-preparation',
     'torrent:disk-space',

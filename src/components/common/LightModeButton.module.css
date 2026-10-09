@@ -18,3 +18,39 @@
     font-size: var(--font-size-xs);
     max-width: 240px;
 }
+
+.statusBarControl {
+    composes: control;
+    flex-wrap: wrap;
+    color: inherit;
+}
+
+.statusBarControl button {
+    min-height: 24px;
+    color: inherit;
+    border-color: transparent;
+    background: transparent;
+    white-space: nowrap;
+}
+
+.statusBarControl button:hover,
+.statusBarControl button[aria-pressed='true'] {
+    border-color: transparent;
+    background: color-mix(in srgb, currentColor 15%, transparent);
+}
+
+.statusBarControl button:focus-visible {
+    outline-color: currentColor;
+    outline-offset: -2px;
+}
+
+.statusBarControl .mode {
+    color: inherit;
+    white-space: nowrap;
+}
+
+.statusBarControl .error {
+    background: var(--color-surface);
+    padding: 2px var(--space-xs);
+    border-radius: var(--radius-sm);
+}

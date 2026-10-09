@@ -32,6 +32,24 @@ describe('isValidMagnetUri', () => {
         expect(isValidMagnetUri(`magnet:?xt=urn:btih:${'A'.repeat(40)}`)).toBe(true);
     });
 
+    it.each([
+        '&tr=udp://tracker.example.test:6969/announce',
+        '&tr=https://tracker.example.test/announce&tr=udp://other.example.test:80/announce',
+        '&dn=Archive_(2026)!&so=0,2-4',
+        '&x.pe=[2001:db8::1]:6881',
+    ])('aceita parâmetros de URI de magnets recebidos do navegador: %s', (query) => {
+        expect(isValidMagnetUri(`magnet:?xt=urn:btih:${VALID_HASH}${query}`)).toBe(true);
+    });
+
+    it.each(['\u0000', '\n', '\r', ' ', '"', '<', '>', '#'])(
+        'rejeita caracteres inválidos na query: %j',
+        (character) => {
+            expect(isValidMagnetUri(`magnet:?xt=urn:btih:${VALID_HASH}&dn=a${character}b`)).toBe(
+                false,
+            );
+        },
+    );
+
     it('rejects empty string', () => {
         expect(isValidMagnetUri('')).toBe(false);
     });
@@ -115,15 +133,12 @@ describe('isValidMagnetUri', () => {
             );
         });
 
-        it('returns false for any arbitrary string that does not match the magnet pattern', () => {
-            const VALID_MAGNET_REGEX =
-                /^magnet:\?xt=urn:btih:[a-fA-F0-9]{40}(&[a-zA-Z0-9&=%.+:?_-]*)?$/i;
+        it('rejeita textos arbitrários e protocolos diferentes de magnet', () => {
             fc.assert(
-                fc.property(fc.string(), (s) => {
-                    const result = isValidMagnetUri(s);
-                    const expected = VALID_MAGNET_REGEX.test(s.trim());
-                    expect(result).toBe(expected);
-                }),
+                fc.property(
+                    fc.string().filter((s) => !s.trim().toLowerCase().startsWith('magnet:')),
+                    (s) => expect(isValidMagnetUri(s)).toBe(false),
+                ),
                 { numRuns: 100 },
             );
         });
