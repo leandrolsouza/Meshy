@@ -28,7 +28,7 @@
 }
 
 .icon {
-    font-size: 20px;
+    flex-shrink: 0;
     color: var(--color-text-secondary);
     display: flex;
     align-items: center;

@@ -34,7 +34,7 @@
 }
 
 .emptyIcon {
-    font-size: 40px;
+    flex-shrink: 0;
     color: var(--color-primary);
 }
 

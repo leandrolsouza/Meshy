@@ -1,13 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useIntl } from 'react-intl';
-import {
-    VscCloudDownload,
-    VscSearch,
-    VscAdd,
-    VscSettingsGear,
-    VscArrowDown,
-    VscArrowUp,
-} from 'react-icons/vsc';
+import { VscArrowDown, VscArrowUp } from 'react-icons/vsc';
 import { useDownloadStore } from './store/downloadStore';
 import { DownloadList } from './components/DownloadList/DownloadList';
 import { DropZone } from './components/AddTorrent/DropZone';
@@ -15,6 +8,7 @@ import { AddTorrentModal } from './components/AddTorrent/AddTorrentModal';
 import { ExternalTorrentImporter } from './components/AddTorrent/ExternalTorrentImporter';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
 import { LightModeButton } from './components/common/LightModeButton';
+import { MeshyIcon } from './components/common/MeshyIcon';
 import { FilterSidebar } from './components/DownloadList/FilterSidebar';
 import { applyTheme } from './themes/themeApplier';
 import { DEFAULT_THEME_ID } from './themes/themeRegistry';
@@ -117,7 +111,7 @@ function App(): React.JSX.Element {
                     aria-label={intl.formatMessage({ id: 'app.nav.downloads' })}
                     title={intl.formatMessage({ id: 'app.nav.downloads' })}
                 >
-                    <VscCloudDownload />
+                    <MeshyIcon name="downloads" size={24} />
                 </button>
                 <button
                     className={
@@ -128,7 +122,7 @@ function App(): React.JSX.Element {
                     title={intl.formatMessage({ id: 'app.nav.searchAndFilter' })}
                     aria-expanded={isFilterSidebarOpen}
                 >
-                    <VscSearch />
+                    <MeshyIcon name="search" size={24} />
                 </button>
                 <button
                     className={
@@ -140,7 +134,7 @@ function App(): React.JSX.Element {
                     aria-label={intl.formatMessage({ id: 'app.nav.addTorrent' })}
                     title={intl.formatMessage({ id: 'app.nav.addTorrent' })}
                 >
-                    <VscAdd />
+                    <MeshyIcon name="add-torrent" size={24} />
                 </button>
                 <button
                     className={
@@ -150,7 +144,7 @@ function App(): React.JSX.Element {
                     aria-label={intl.formatMessage({ id: 'app.nav.settings' })}
                     title={intl.formatMessage({ id: 'app.nav.settings' })}
                 >
-                    <VscSettingsGear />
+                    <MeshyIcon name="settings" size={24} />
                 </button>
             </nav>
 

@@ -1,12 +1,13 @@
 import React, { useMemo, useCallback, useState, useRef } from 'react';
 import { useIntl } from 'react-intl';
-import { VscChevronDown, VscChevronRight, VscAdd, VscCloudDownload } from 'react-icons/vsc';
+import { VscChevronDown, VscChevronRight } from 'react-icons/vsc';
 import { useDownloads } from '../../hooks/useDownloads';
 import { useFilterStore } from '../../store/filterStore';
 import { applyFilters, groupByStatus } from '../../utils/downloadFilters';
 import type { StatusGroup } from '../../utils/downloadFilters';
 import { DownloadItem } from './DownloadItem';
 import { ConfirmDialog } from '../common/ConfirmDialog';
+import { MeshyIcon } from '../common/MeshyIcon';
 import { SearchBar } from './SearchBar';
 import { ActionMenu } from '../common/ActionMenu';
 import { BatchActions } from './BatchActions';
@@ -299,7 +300,8 @@ export const DownloadList = React.memo(function DownloadList({
                             onClick={onAddTorrent}
                             disabled={batchBusy || isBusy}
                         >
-                            <VscAdd /> {intl.formatMessage({ id: 'app.nav.addTorrent' })}
+                            <MeshyIcon name="add-torrent" />{' '}
+                            {intl.formatMessage({ id: 'app.nav.addTorrent' })}
                         </button>
                     )}
                 </div>
@@ -351,7 +353,7 @@ export const DownloadList = React.memo(function DownloadList({
 
             {items.length === 0 ? (
                 <div className={styles.empty}>
-                    <VscCloudDownload className={styles.emptyIcon} aria-hidden="true" />
+                    <MeshyIcon name="empty-downloads" size={96} className={styles.emptyIcon} />
                     <h2 className={styles.emptyTitle}>
                         {intl.formatMessage({ id: 'downloads.empty.title' })}
                     </h2>
@@ -360,7 +362,8 @@ export const DownloadList = React.memo(function DownloadList({
                     </p>
                     {onAddTorrent && (
                         <button type="button" className="btn btn--primary" onClick={onAddTorrent}>
-                            <VscAdd /> {intl.formatMessage({ id: 'app.nav.addTorrent' })}
+                            <MeshyIcon name="add-torrent" />{' '}
+                            {intl.formatMessage({ id: 'app.nav.addTorrent' })}
                         </button>
                     )}
                 </div>

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useIntl } from 'react-intl';
-import { VscCloudUpload } from 'react-icons/vsc';
+import { MeshyIcon } from '../common/MeshyIcon';
 import type { TorrentSource } from '../../../shared/types';
 import { isValidMagnetUri, MAX_TORRENT_BYTES } from '../../../shared/validators';
 import { AddTorrentModal } from './AddTorrentModal';
@@ -106,7 +106,7 @@ export function DropZone(): React.JSX.Element {
                 aria-label={intl.formatMessage({ id: 'dropZone.ariaLabel' })}
             >
                 <div className={styles.icon}>
-                    <VscCloudUpload />
+                    <MeshyIcon name="import-torrent" size={24} />
                 </div>
                 <span className={styles.text}>
                     {intl.formatMessage({ id: loading ? 'dropZone.loading' : 'dropZone.text' })}

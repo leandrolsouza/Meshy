@@ -30,6 +30,7 @@
     justify-content: center;
     width: 48px;
     height: 48px;
+    padding: 0;
     background: none;
     border: none;
     border-left: 2px solid transparent;
@@ -42,10 +43,20 @@
     opacity: 1;
 }
 
+.activityIcon svg {
+    box-sizing: content-box;
+    padding: 8px;
+    border-radius: var(--radius-lg);
+    transition: background-color var(--transition-fast);
+}
+
 .activityIcon:hover {
-    background-color: var(--color-hover);
     color: var(--color-text);
     opacity: 1;
+}
+
+.activityIcon:hover svg {
+    background-color: var(--color-hover);
 }
 
 .activityIcon:focus-visible {
@@ -55,9 +66,18 @@
 
 .activityIconActive {
     composes: activityIcon;
-    color: var(--color-text);
-    border-left: 2px solid var(--color-text);
+    color: var(--color-primary);
+    border-left: 2px solid var(--color-primary);
     opacity: 1;
+}
+
+.activityIconActive svg,
+.activityIconActive:hover svg {
+    background-color: var(--color-selection);
+}
+
+.activityIconActive:hover {
+    color: var(--color-primary);
 }
 
 /* ─── Editor Area ─────────────────────────────────────────────────────────── */
